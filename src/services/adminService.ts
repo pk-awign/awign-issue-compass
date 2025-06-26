@@ -1,0 +1,700 @@
+import { supabase } from '@/integrations/supabase/client';
+import { User } from '@/types/issue';
+import { Issue } from '@/types/issue';
+import { TicketService } from './ticketService';
+
+export interface TicketAnalytics {
+  totalTickets: number;
+  openTickets: number;
+  inProgressTickets: number;
+  resolvedTickets: number;
+  closedTickets: number;
+  sev1Tickets: number;
+  sev2Tickets: number;
+  sev3Tickets: number;
+  assignedTickets: number;
+  unassignedTickets: number;
+  slaBreachedTickets: number;
+  avgResolutionHours: number;
+  cityBreakdown: Array<{ city: string; count: number }>;
+  centreBreakdown: Array<{ centreCode: string; count: number }>;
+  resolverBreakdown: Array<{ resolver: string; count: number }>;
+}
+
+export class AdminService {
+  static async initializeSampleUsers(): Promise<boolean> {
+    try {
+      // Check if sample users already exist
+      const { data: existingUsers, error: existingUsersError } = await supabase
+        .from('users')
+        .select('*')
+        .limit(1);
+
+      if (existingUsersError) {
+        console.error('Error checking existing users:', existingUsersError);
+        throw existingUsersError;
+      }
+
+      if (existingUsers && existingUsers.length > 0) {
+        console.log('Sample users already exist. Skipping initialization.');
+        return true; // Sample users already exist
+      }
+
+      // Sample user data with pin_hash and pin
+      const sampleUsers = [
+        {
+          name: 'Mumbai Supervisor',
+          role: 'resolver',
+          city: 'Mumbai',
+          centre_code: 'MUM001',
+          mobile_number: '9876543210',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '1234',
+        },
+        {
+          name: 'Delhi City Owner',
+          role: 'approver',
+          city: 'Delhi',
+          centre_code: 'DEL001',
+          mobile_number: '9876543211',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '2345',
+        },
+        {
+          name: 'Kolkata Invigilator',
+          role: 'invigilator',
+          city: 'Kolkata',
+          centre_code: 'KOL001',
+          mobile_number: '9876543212',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '3456',
+        },
+        {
+          name: 'Chennai Operations Head',
+          role: 'super_admin',
+          city: 'Chennai',
+          centre_code: 'CHE001',
+          mobile_number: '9876543213',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '4567',
+        },
+        {
+          name: 'Bangalore Public User',
+          role: 'invigilator',
+          city: 'Bangalore',
+          mobile_number: '9876543214',
+          is_active: false,
+          pin_hash: 'default_pin_hash',
+          pin: '5678',
+        },
+        {
+          name: 'Jaipur Invigilator',
+          role: 'invigilator',
+          city: 'Jaipur',
+          centre_code: 'JAI001',
+          mobile_number: '9876543215',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '6789',
+        },
+        {
+          name: 'Pune Supervisor',
+          role: 'resolver',
+          city: 'Pune',
+          centre_code: 'PUN001',
+          mobile_number: '9876543216',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '7890',
+        },
+        {
+          name: 'Hyderabad City Owner',
+          role: 'approver',
+          city: 'Hyderabad',
+          centre_code: 'HYD001',
+          mobile_number: '9876543217',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '8901',
+        },
+        {
+          name: 'Ahmedabad Operations Head',
+          role: 'super_admin',
+          city: 'Ahmedabad',
+          centre_code: 'AMD001',
+          mobile_number: '9876543218',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '9012',
+        },
+        {
+          name: 'Lucknow Public User',
+          role: 'invigilator',
+          city: 'Lucknow',
+          mobile_number: '9876543219',
+          is_active: false,
+          pin_hash: 'default_pin_hash',
+          pin: '0123',
+        },
+      ];
+
+      // Insert sample users into the database
+      const { data, error } = await supabase
+        .from('users')
+        .insert(sampleUsers);
+
+      if (error) {
+        console.error('Error initializing sample users:', error);
+        throw error;
+      }
+
+      console.log('Sample users initialized successfully:', data);
+      return true;
+    } catch (error) {
+      console.error('Error in initializeSampleUsers:', error);
+      return false;
+    }
+  }
+
+  static async createUser(userData: Omit<User, 'id'>): Promise<boolean> {
+    try {
+      const insertData: any = {
+        name: userData.name,
+        role: this.mapUserRoleToDatabaseRole(userData.role),
+        city: userData.city,
+        centre_code: userData.centreCode,
+        mobile_number: userData.mobile,
+        is_active: userData.isActive !== undefined ? userData.isActive : true,
+        pin_hash: 'default_pin_hash', // This will be replaced with actual PIN hashing
+      };
+
+      // Add PIN if provided
+      if ('pin' in userData && userData.pin) {
+        insertData.pin = userData.pin; // Store PIN directly (in production, this should be hashed)
+      } else {
+        // Generate a default PIN if not provided
+        insertData.pin = '0000';
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .insert([insertData]);
+
+      if (error) {
+        console.error('Error creating user:', error);
+        return false;
+      }
+
+      console.log('User created successfully:', data);
+      return true;
+    } catch (error) {
+      console.error('Error in createUser:', error);
+      return false;
+    }
+  }
+
+  static async updateUser(userId: string, userData: Partial<User & { pin?: string }>): Promise<boolean> {
+    try {
+      const updateData: any = {};
+      
+      if (userData.name) updateData.name = userData.name;
+      if (userData.role) updateData.role = this.mapUserRoleToDatabaseRole(userData.role);
+      if (userData.city) updateData.city = userData.city;
+      if (userData.centreCode) updateData.centre_code = userData.centreCode;
+      if (userData.mobile) updateData.mobile_number = userData.mobile;
+      if (userData.isActive !== undefined) updateData.is_active = userData.isActive;
+      
+      // Add PIN if provided
+      if (userData.pin) {
+        updateData.pin = userData.pin; // Store PIN directly (in production, this should be hashed)
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Error updating user:', error);
+        return false;
+      }
+
+      console.log('User updated successfully:', data);
+      return true;
+    } catch (error) {
+      console.error('Error in updateUser:', error);
+      return false;
+    }
+  }
+
+  static async toggleUserStatus(userId: string, isActive: boolean): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ is_active: isActive })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Error toggling user status:', error);
+        return false;
+      }
+
+      console.log('User status updated successfully:', data);
+      return true;
+    } catch (error) {
+      console.error('Error in toggleUserStatus:', error);
+      return false;
+    }
+  }
+
+  static async grantUserPermissions(userId: string, permissions: string[]): Promise<boolean> {
+    try {
+      // Delete existing permissions for this user
+      await supabase
+        .from('user_permissions')
+        .delete()
+        .eq('user_id', userId);
+
+      // Insert new permissions
+      if (permissions.length > 0) {
+        const permissionRecords = permissions.map(permission => ({
+          user_id: userId,
+          permission: permission
+        }));
+
+        const { data, error } = await supabase
+          .from('user_permissions')
+          .insert(permissionRecords);
+
+        if (error) {
+          console.error('Error granting permissions:', error);
+          return false;
+        }
+      }
+
+      console.log('Permissions updated successfully');
+      return true;
+    } catch (error) {
+      console.error('Error in grantUserPermissions:', error);
+      return false;
+    }
+  }
+
+  static async getAllUsers(): Promise<User[]> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+      }
+
+      // Map the database users to our User type with proper role mapping
+      return (data || []).map(user => ({
+        id: user.id,
+        name: user.name,
+        role: this.mapDatabaseRoleToUserRole(user.role),
+        city: user.city || '',
+        centreCode: user.centre_code || '',
+        mobile: user.mobile_number || '',
+        pin: user.pin, // Include PIN in user data (for display purposes only)
+        isActive: user.is_active,
+        lastActivity: user.last_activity_at ? new Date(user.last_activity_at) : undefined,
+        lastLogin: user.last_login_at ? new Date(user.last_login_at) : undefined
+      }));
+    } catch (error) {
+      console.error('Error in getAllUsers:', error);
+      return [];
+    }
+  }
+
+  static async getAllTickets(): Promise<Issue[]> {
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching tickets:', error);
+        throw error;
+      }
+
+      // Get all users to map IDs to names
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, role');
+
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+      }
+
+      const userMap = new Map();
+      if (users) {
+        users.forEach(user => {
+          userMap.set(user.id, { name: user.name, role: user.role });
+        });
+      }
+
+      // Map database tickets to Issue type
+      return (data || []).map(ticket => ({
+        id: ticket.id,
+        ticketNumber: ticket.ticket_number,
+        centreCode: ticket.centre_code,
+        city: ticket.city,
+        resourceId: ticket.resource_id,
+        issueCategory: ticket.issue_category as any,
+        issueDescription: ticket.issue_description,
+        issueDate: this.parseIssueDate(ticket.issue_date),
+        severity: ticket.severity as any,
+        status: ticket.status as any,
+        isAnonymous: ticket.is_anonymous,
+        submittedBy: ticket.submitted_by,
+        submittedByUserId: ticket.submitted_by_user_id,
+        submittedAt: new Date(ticket.submitted_at),
+        assignedResolver: ticket.assigned_resolver,
+        assignedApprover: ticket.assigned_approver,
+        comments: [],
+        resolutionNotes: ticket.resolution_notes,
+        resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
+        // Add user details for assigned users
+        assignedResolverDetails: userMap.get(ticket.assigned_resolver),
+        assignedApproverDetails: userMap.get(ticket.assigned_approver),
+      }));
+    } catch (error) {
+      console.error('Error in getAllTickets:', error);
+      return [];
+    }
+  }
+
+  static async getUsersByRole(role: 'resolver' | 'approver'): Promise<User[]> {
+    try {
+      // Map the new role names to database role names
+      const dbRole = this.mapUserRoleToDatabaseRole(role);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', dbRole)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching users by role:', error);
+        throw error;
+      }
+
+      // Map the database users to our User type
+      return (data || []).map(user => ({
+        id: user.id,
+        name: user.name,
+        role: this.mapDatabaseRoleToUserRole(user.role),
+        city: user.city || '',
+        centreCode: user.centre_code || '',
+        mobile: user.mobile_number || '',
+        isActive: user.is_active,
+        lastActivity: user.last_activity_at ? new Date(user.last_activity_at) : undefined,
+        lastLogin: user.last_login_at ? new Date(user.last_login_at) : undefined
+      }));
+    } catch (error) {
+      console.error('Error in getUsersByRole:', error);
+      return [];
+    }
+  }
+
+  static async bulkAssignTickets(ticketIds: string[], resolverId: string): Promise<boolean> {
+    try {
+      // Use individual updates instead of bulk upsert
+      const updatePromises = ticketIds.map(ticketId =>
+        supabase
+          .from('tickets')
+          .update({
+            assigned_resolver: resolverId,
+            status: 'in_progress'
+          })
+          .eq('id', ticketId)
+      );
+
+      const results = await Promise.all(updatePromises);
+      
+      // Check if any updates failed
+      const hasError = results.some(result => result.error);
+      if (hasError) {
+        console.error('Some bulk assignments failed');
+        return false;
+      }
+
+      console.log('Bulk assigned tickets successfully');
+      return true;
+    } catch (error) {
+      console.error('Error in bulkAssignTickets:', error);
+      return false;
+    }
+  }
+
+  static async assignTicket(params: { ticketId: string; assignedTo: string; type: string }): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .update({ assigned_resolver: params.assignedTo })
+        .eq('id', params.ticketId);
+
+      if (error) {
+        console.error('Error assigning ticket:', error);
+        return false;
+      }
+
+      console.log('Ticket assigned successfully:', data);
+      return true;
+    } catch (error) {
+      console.error('Error in assignTicket:', error);
+      return false;
+    }
+  }
+
+  static async assignToApprover(ticketId: string, approverId: string): Promise<boolean> {
+    try {
+      // 1. Update the legacy field for compatibility
+      const { data, error } = await supabase
+        .from('tickets')
+        .update({ assigned_approver: approverId })
+        .eq('id', ticketId);
+
+      if (error) {
+        console.error('Error assigning ticket to approver:', error);
+        return false;
+      }
+
+      // 2. Add to ticket_assignees if not already present
+      // Fetch current assignees for this ticket
+      const { data: assigneesData, error: assigneesError } = await supabase
+        .from('ticket_assignees')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .eq('user_id', approverId)
+        .eq('role', 'approver');
+      if (!assigneesError && (!assigneesData || assigneesData.length === 0)) {
+        // Add the approver to ticket_assignees
+        // Use placeholder values for performedBy fields for now
+        await TicketService.addAssignee(ticketId, approverId, 'approver', approverId, 'System', 'approver');
+      }
+
+      console.log('Ticket assigned to approver successfully:', data);
+      return true;
+    } catch (error) {
+      console.error('Error in assignToApprover:', error);
+      return false;
+    }
+  }
+
+  static async updateTicketStatus(ticketId: string, status: string, resolutionNotes?: string): Promise<boolean> {
+    try {
+      const updateData: any = { status };
+      if (resolutionNotes) {
+        updateData.resolution_notes = resolutionNotes;
+      }
+      if (status === 'resolved') {
+        updateData.resolved_at = new Date().toISOString();
+      }
+
+      const { data, error } = await supabase
+        .from('tickets')
+        .update(updateData)
+        .eq('id', ticketId);
+
+      if (error) {
+        console.error('Error updating ticket status:', error);
+        return false;
+      }
+
+      console.log('Ticket status updated successfully:', data);
+      return true;
+    } catch (error) {
+      console.error('Error in updateTicketStatus:', error);
+      return false;
+    }
+  }
+
+  static async getTicketAnalytics(): Promise<TicketAnalytics> {
+    try {
+      const { data: tickets, error } = await supabase
+        .from('tickets')
+        .select('*');
+
+      if (error) {
+        console.error('Error fetching tickets for analytics:', error);
+        throw error;
+      }
+
+      if (!tickets) {
+        return this.getEmptyAnalytics();
+      }
+
+      // Calculate metrics
+      const totalTickets = tickets.length;
+      const openTickets = tickets.filter(t => t.status === 'open').length;
+      const inProgressTickets = tickets.filter(t => t.status === 'in_progress').length;
+      const resolvedTickets = tickets.filter(t => t.status === 'resolved').length;
+      const closedTickets = tickets.filter(t => t.status === 'closed').length;
+      
+      const sev1Tickets = tickets.filter(t => t.severity === 'sev1').length;
+      const sev2Tickets = tickets.filter(t => t.severity === 'sev2').length;
+      const sev3Tickets = tickets.filter(t => t.severity === 'sev3').length;
+      
+      const assignedTickets = tickets.filter(t => t.assigned_resolver).length;
+      const unassignedTickets = totalTickets - assignedTickets;
+      const slaBreachedTickets = tickets.filter(t => t.is_sla_breached).length;
+
+      // Calculate average resolution time
+      const resolvedWithTime = tickets.filter(t => t.resolution_time_hours);
+      const avgResolutionHours = resolvedWithTime.length > 0 
+        ? resolvedWithTime.reduce((sum, t) => sum + (t.resolution_time_hours || 0), 0) / resolvedWithTime.length
+        : 0;
+
+      // Calculate breakdowns
+      const cityMap = new Map<string, number>();
+      const centreMap = new Map<string, number>();
+      const resolverMap = new Map<string, number>();
+
+      tickets.forEach(ticket => {
+        // City breakdown
+        cityMap.set(ticket.city, (cityMap.get(ticket.city) || 0) + 1);
+        
+        // Centre breakdown
+        centreMap.set(ticket.centre_code, (centreMap.get(ticket.centre_code) || 0) + 1);
+        
+        // Resolver breakdown
+        if (ticket.assigned_resolver) {
+          resolverMap.set(ticket.assigned_resolver, (resolverMap.get(ticket.assigned_resolver) || 0) + 1);
+        }
+      });
+
+      const cityBreakdown = Array.from(cityMap.entries()).map(([city, count]) => ({ city, count }));
+      const centreBreakdown = Array.from(centreMap.entries()).map(([centreCode, count]) => ({ centreCode, count }));
+      const resolverBreakdown = Array.from(resolverMap.entries()).map(([resolver, count]) => ({ resolver, count }));
+
+      return {
+        totalTickets,
+        openTickets,
+        inProgressTickets,
+        resolvedTickets,
+        closedTickets,
+        sev1Tickets,
+        sev2Tickets,
+        sev3Tickets,
+        assignedTickets,
+        unassignedTickets,
+        slaBreachedTickets,
+        avgResolutionHours,
+        cityBreakdown,
+        centreBreakdown,
+        resolverBreakdown
+      };
+    } catch (error) {
+      console.error('Error in getTicketAnalytics:', error);
+      return this.getEmptyAnalytics();
+    }
+  }
+
+  private static getEmptyAnalytics(): TicketAnalytics {
+    return {
+      totalTickets: 0,
+      openTickets: 0,
+      inProgressTickets: 0,
+      resolvedTickets: 0,
+      closedTickets: 0,
+      sev1Tickets: 0,
+      sev2Tickets: 0,
+      sev3Tickets: 0,
+      assignedTickets: 0,
+      unassignedTickets: 0,
+      slaBreachedTickets: 0,
+      avgResolutionHours: 0,
+      cityBreakdown: [],
+      centreBreakdown: [],
+      resolverBreakdown: []
+    };
+  }
+
+  private static parseIssueDate(issueDate: any): Issue['issueDate'] {
+    // Handle case where issueDate is already properly structured
+    if (typeof issueDate === 'object' && issueDate !== null && issueDate.type) {
+      return {
+        type: issueDate.type,
+        dates: issueDate.dates ? issueDate.dates.map((d: any) => new Date(d)) : [],
+        startDate: issueDate.startDate ? new Date(issueDate.startDate) : undefined,
+        endDate: issueDate.endDate ? new Date(issueDate.endDate) : undefined
+      };
+    }
+
+    // Handle string or other formats - provide a default structure
+    return {
+      type: 'single',
+      dates: [new Date()],
+      startDate: undefined,
+      endDate: undefined
+    };
+  }
+
+  // Helper method to map database roles to User type roles
+  private static mapDatabaseRoleToUserRole(dbRole: string): User['role'] {
+    switch (dbRole) {
+      case 'supervisor':
+      case 'resolver':
+        return 'resolver';
+      case 'city_owner':
+      case 'approver':
+        return 'approver';
+      case 'operations_head':
+      case 'super_admin':
+        return 'super_admin';
+      case 'invigilator':
+        return 'invigilator';
+      default:
+        return 'invigilator';
+    }
+  }
+
+  // Helper method to map User type roles to database roles
+  private static mapUserRoleToDatabaseRole(userRole: User['role']): string {
+    switch (userRole) {
+      case 'resolver':
+        return 'resolver';
+      case 'approver':
+        return 'approver';
+      case 'super_admin':
+        return 'super_admin';
+      case 'invigilator':
+        return 'invigilator';
+      default:
+        return 'invigilator';
+    }
+  }
+
+  static async getUserById(userId: string): Promise<{ name: string; role: string } | null> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('name, role')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching user:', error);
+        return null;
+      }
+
+      return data ? { name: data.name, role: data.role } : null;
+    } catch (error) {
+      console.error('Error in getUserById:', error);
+      return null;
+    }
+  }
+}
