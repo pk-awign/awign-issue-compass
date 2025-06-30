@@ -25,7 +25,9 @@ import {
   RefreshCw,
   History,
   Download,
-  Eye
+  Eye,
+  Trash2,
+  X
 } from 'lucide-react';
 import { Issue, User as UserType, TimelineEvent, StatusTransition } from '@/types/issue';
 import { AdminService } from '@/services/adminService';
@@ -67,6 +69,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [isTimelineLoading, setIsTimelineLoading] = useState(false);
   const [availableTransitions, setAvailableTransitions] = useState<Issue['status'][]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -323,16 +326,67 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
     setIsCommentLoading(false);
   };
 
+  const handleDeleteTicket = async () => {
+    if (!ticket || !window.confirm(`Are you sure you want to delete ticket ${ticket.ticketNumber}? This action cannot be undone and will delete all related data (comments, attachments, etc.).`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const success = await AdminService.deleteTicket(ticket.id);
+      if (success) {
+        toast.success(`Ticket ${ticket.ticketNumber} deleted successfully`);
+        onClose();
+        if (onTicketUpdate) onTicketUpdate();
+      } else {
+        toast.error('Failed to delete ticket');
+      }
+    } catch (error) {
+      console.error('Error deleting ticket:', error);
+      toast.error('Failed to delete ticket');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (!ticket) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5" />
-            Ticket Details
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <span>Ticket Details - {ticket?.ticketNumber}</span>
+              {ticket && (
+                <Badge variant={getStatusColor(ticket.status)}>
+                  {ticket.status.replace('_', ' ')}
+                </Badge>
+              )}
+            </DialogTitle>
+            <div className="flex items-center gap-2 mr-8">
+              {user?.role === 'super_admin' && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteTicket}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -421,6 +475,31 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         <p className="text-sm">{ticket.awignAppTicketId}</p>
                       </div>
                     )}
+                    {ticket.issueDate && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-600">Issue Date(s)</label>
+                        {ticket.issueDate.type === 'multiple' && Array.isArray(ticket.issueDate.dates) ? (
+                          <ul className="mt-1 space-y-1">
+                            {ticket.issueDate.dates.map((d: any, idx: number) => (
+                              <li key={idx} className="text-sm flex flex-col">
+                                <span className="font-mono">{d.date instanceof Date ? d.date.toLocaleDateString() : new Date(d.date).toLocaleDateString()}</span>
+                                {d.description && <span className="text-xs text-gray-500 ml-2">{d.description}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-sm">{
+                            ticket.issueDate.type === 'single' && ticket.issueDate.dates && ticket.issueDate.dates[0]
+                              ? (ticket.issueDate.dates[0] instanceof Date ? ticket.issueDate.dates[0].toLocaleDateString() : new Date(ticket.issueDate.dates[0]).toLocaleDateString())
+                              : ticket.issueDate.type === 'range' && ticket.issueDate.startDate && ticket.issueDate.endDate
+                                ? `${ticket.issueDate.startDate instanceof Date ? ticket.issueDate.startDate.toLocaleDateString() : new Date(ticket.issueDate.startDate).toLocaleDateString()} - ${ticket.issueDate.endDate instanceof Date ? ticket.issueDate.endDate.toLocaleDateString() : new Date(ticket.issueDate.endDate).toLocaleDateString()}`
+                                : ticket.issueDate.type === 'ongoing'
+                                  ? 'Ongoing Issue'
+                                  : 'N/A'
+                          }</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">Description</label>
@@ -479,7 +558,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Submitted At</label>
-                      <p className="text-sm">{formatDate(ticket.submittedAt)}</p>
+                      <p className="text-sm">{ticket.submittedAt ? format(new Date(ticket.submittedAt), 'MMM dd, yyyy HH:mm:ss') : 'N/A'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Assigned Resolvers</label>
@@ -755,12 +834,6 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               </CardContent>
             </Card>
           )}
-        </div>
-
-        <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

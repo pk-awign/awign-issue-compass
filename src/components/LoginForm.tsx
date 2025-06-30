@@ -85,7 +85,7 @@ export const LoginForm: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-col items-start flex-1 ml-4">
-            <span className="text-base sm:text-xl font-semibold text-gray-900 leading-tight">AWIGN ISSUE MANAGEMENT</span>
+            <span className="text-base sm:text-xl font-semibold text-gray-900 leading-tight">AWIGN ESCALATION MANAGEMENT</span>
             <span className="text-xs sm:text-sm text-gray-600 mt-1 leading-tight">Login Portal</span>
           </div>
           <div className="flex items-center gap-2 ml-4">

@@ -4,11 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download } from 'lucide-react';
-import { Issue } from '@/types/issue';
+import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download, Ticket, Calendar, MapPin, FileText, Send } from 'lucide-react';
+import { Issue, Comment } from '@/types/issue';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIssues } from '@/contexts/IssueContext';
+import { TicketService } from '@/services/ticketService';
+import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 interface TicketTrackerProps {
   initialSearchTerm?: string;
@@ -16,7 +20,7 @@ interface TicketTrackerProps {
 
 export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm = '' }) => {
   const { user } = useAuth();
-  const { getIssuesByUser, getIssueByTicketNumber } = useIssues();
+  const { getIssuesByUser, getIssueByTicketNumber, getIssuesByCity } = useIssues();
   
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
@@ -25,6 +29,8 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
   const [anonymousTicket, setAnonymousTicket] = useState<Issue | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [isAddingComment, setIsAddingComment] = useState(false);
 
   useEffect(() => {
     setSearchTerm(initialSearchTerm);
@@ -42,7 +48,29 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
     
     setLoading(true);
     try {
-      const issues = await getIssuesByUser(user.id);
+      let issues: Issue[];
+      
+      if (user.role === 'invigilator') {
+        // For invigilators, load both their own tickets AND tickets in their city
+        console.log('Loading tickets for invigilator in city:', user.city);
+        const cityTickets = await getIssuesByCity(user.city);
+        const ownTickets = await getIssuesByUser(user.id);
+        
+        // Combine and remove duplicates based on ticket ID
+        const allTickets = [...ownTickets, ...cityTickets];
+        const uniqueTickets = allTickets.filter((ticket, index, self) => 
+          index === self.findIndex(t => t.id === ticket.id)
+        );
+        
+        console.log('Found tickets for invigilator:', uniqueTickets.length);
+        issues = uniqueTickets;
+      } else {
+        // For other users, load their own tickets
+        console.log('Loading tickets for user:', user.id);
+        issues = await getIssuesByUser(user.id);
+        console.log('Found tickets for user:', issues.length);
+      }
+      
       setUserIssues(issues);
     } catch (error) {
       console.error('Error loading user tickets:', error);
@@ -125,6 +153,92 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
     setSelectedTicket(null);
   };
 
+  const handleAddComment = async () => {
+    if (!selectedTicket || !newComment.trim()) return;
+    
+    console.log('Attempting to add comment:', {
+      ticketId: selectedTicket.id,
+      ticketNumber: selectedTicket.ticketNumber,
+      newComment: newComment,
+      user: user ? { id: user.id, name: user.name, role: user.role } : 'No user'
+    });
+    
+    setIsAddingComment(true);
+    try {
+      // For anonymous users, use "Anonymous" as author, but display as "Awign Team"
+      const authorName = user ? user.name : 'Anonymous';
+      const authorRole = user ? user.role : 'anonymous';
+      
+      console.log('Comment data to be sent:', {
+        content: newComment,
+        author: authorName,
+        authorRole: authorRole,
+        isInternal: false
+      });
+      
+      await TicketService.addComment(selectedTicket.id, {
+        content: newComment,
+        author: authorName,
+        authorRole: authorRole,
+        isInternal: false
+      });
+      
+      // Refresh the ticket to get updated comments
+      const updatedTicket = await TicketService.getTicketByNumber(selectedTicket.ticketNumber);
+      setSelectedTicket(updatedTicket);
+      
+      setNewComment('');
+      toast.success('Comment added successfully');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast.error('Failed to add comment');
+    } finally {
+      setIsAddingComment(false);
+    }
+  };
+
+  const getSeverityColor = (severity: Issue['severity']) => {
+    switch (severity) {
+      case 'sev1': return 'bg-red-100 text-red-800';
+      case 'sev2': return 'bg-orange-100 text-orange-800';
+      case 'sev3': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatCategory = (category: string) => {
+    return category.split('_').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  };
+
+  // Function to get display name for comments based on user role
+  const getCommentDisplayName = (comment: Comment) => {
+    // If the comment author is 'Anonymous', show 'Me'
+    if (comment.author === 'Anonymous') {
+      return 'Me';
+    }
+    // If user is logged in and is the comment author (by name and role), show 'Me'
+    if (user && comment.author === user.name && comment.authorRole === user.role) {
+      return 'Me';
+    }
+    // If the comment author is the ticket raiser (by name)
+    if (selectedTicket && comment.author === selectedTicket.submittedBy && (comment.authorRole === 'invigilator' || comment.authorRole === 'anonymous')) {
+      return 'Me';
+    }
+    // If the comment is by staff (resolver, approver, admin, super_admin), show 'Awign Team'
+    if ([
+      'resolver',
+      'approver',
+      'admin',
+      'super_admin'
+    ].includes(comment.authorRole)) {
+      return 'Awign Team';
+    }
+    // Default to 'Awign Team' for privacy
+    return 'Awign Team';
+  };
+
   return (
     <div className="space-y-4">
       {/* Mobile: Show either list or details */}
@@ -134,7 +248,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 {user ? <User className="h-5 w-5" /> : <Search className="h-5 w-5" />}
-                {user ? `Your Issues (${userIssues.length})` : 'Track Any Ticket'}
+                {user ? (user.role === 'invigilator' ? `Your Tickets & City Issues (${userIssues.length})` : `Your Issues (${userIssues.length})`) : 'Track Any Ticket'}
               </CardTitle>
               
               {!user && (
@@ -258,7 +372,31 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                     </div>
                     <div>
                       <span className="font-medium">Submitted:</span>
-                      <p className="text-muted-foreground">{format(selectedTicket.submittedAt, 'PPP p')}</p>
+                      {selectedTicket.issueDate && (
+                        <div>
+                          <span className="font-medium">Issue Date(s):</span>
+                          {selectedTicket.issueDate.type === 'multiple' && Array.isArray(selectedTicket.issueDate.dates) ? (
+                            <ul className="mt-1 space-y-1">
+                              {selectedTicket.issueDate.dates.map((d: any, idx: number) => (
+                                <li key={idx} className="text-sm flex flex-col">
+                                  <span className="font-mono">{d.date instanceof Date ? d.date.toLocaleDateString() : new Date(d.date).toLocaleDateString()}</span>
+                                  {d.description && <span className="text-xs text-gray-500 ml-2">{d.description}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span className="text-sm">{
+                              selectedTicket.issueDate.type === 'single' && selectedTicket.issueDate.dates && selectedTicket.issueDate.dates[0]
+                                ? (selectedTicket.issueDate.dates[0] instanceof Date ? selectedTicket.issueDate.dates[0].toLocaleDateString() : new Date(selectedTicket.issueDate.dates[0]).toLocaleDateString())
+                                : selectedTicket.issueDate.type === 'range' && selectedTicket.issueDate.startDate && selectedTicket.issueDate.endDate
+                                  ? `${selectedTicket.issueDate.startDate instanceof Date ? selectedTicket.issueDate.startDate.toLocaleDateString() : new Date(selectedTicket.issueDate.startDate).toLocaleDateString()} - ${selectedTicket.issueDate.endDate instanceof Date ? selectedTicket.issueDate.endDate.toLocaleDateString() : new Date(selectedTicket.issueDate.endDate).toLocaleDateString()}`
+                                  : selectedTicket.issueDate.type === 'ongoing'
+                                    ? 'Ongoing Issue'
+                                    : 'N/A'
+                            }</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -308,30 +446,25 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                     </>
                   )}
 
-                  {selectedTicket.comments.length > 0 && (
-                    <>
-                      <Separator />
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <MessageSquare className="h-4 w-4" />
-                          <span className="font-medium">Comments ({selectedTicket.comments.length})</span>
+                  {/* Comments Section */}
+                  <Separator />
+                  <div className="mt-6">
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Comments ({selectedTicket.comments.length})
+                    </h4>
+                    <div className="space-y-3">
+                      {selectedTicket.comments.map((comment) => (
+                        <div key={comment.id} className="bg-muted p-3 rounded-lg">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-semibold">{getCommentDisplayName(comment)}</span>
+                            <span className="text-xs text-muted-foreground">{format(comment.timestamp, 'MMM dd, HH:mm')}</span>
+                          </div>
+                          <div className="text-sm">{comment.content}</div>
                         </div>
-                        <div className="space-y-3 max-h-40 overflow-y-auto">
-                          {selectedTicket.comments.map((comment) => (
-                            <div key={comment.id} className="p-3 bg-muted rounded-lg">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm font-medium">{comment.author}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {format(comment.timestamp, 'MMM dd, HH:mm')}
-                                </span>
-                              </div>
-                              <p className="text-sm">{comment.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
+                      ))}
+                    </div>
+                  </div>
 
                   {selectedTicket.resolutionNotes && (
                     <>
@@ -342,6 +475,36 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                       </div>
                     </>
                   )}
+
+                  {/* Add Comment Section - Available to all users */}
+                  <Separator />
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Add Comment</Label>
+                    <Textarea
+                      placeholder="Enter your comment..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      className="min-h-[80px]"
+                    />
+                    <Button 
+                      onClick={handleAddComment}
+                      disabled={!newComment.trim() || isAddingComment}
+                      size="sm"
+                      className="w-full"
+                    >
+                      {isAddingComment ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Adding...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4 mr-2" />
+                          Add Comment
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -356,7 +519,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {user ? <User className="h-5 w-5" /> : <Search className="h-5 w-5" />}
-              {user ? `Your Issues (${userIssues.length})` : 'Track Any Ticket'}
+              {user ? (user.role === 'invigilator' ? `Your Tickets & City Issues (${userIssues.length})` : `Your Issues (${userIssues.length})`) : 'Track Any Ticket'}
             </CardTitle>
             
             {!user && (
@@ -478,7 +641,31 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                   </div>
                   <div>
                     <span className="font-medium">Submitted:</span>
-                    <p className="text-muted-foreground">{format(selectedTicket.submittedAt, 'PPP p')}</p>
+                    {selectedTicket.issueDate && (
+                      <div>
+                        <span className="font-medium">Issue Date(s):</span>
+                        {selectedTicket.issueDate.type === 'multiple' && Array.isArray(selectedTicket.issueDate.dates) ? (
+                          <ul className="mt-1 space-y-1">
+                            {selectedTicket.issueDate.dates.map((d: any, idx: number) => (
+                              <li key={idx} className="text-sm flex flex-col">
+                                <span className="font-mono">{d.date instanceof Date ? d.date.toLocaleDateString() : new Date(d.date).toLocaleDateString()}</span>
+                                {d.description && <span className="text-xs text-gray-500 ml-2">{d.description}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-sm">{
+                            selectedTicket.issueDate.type === 'single' && selectedTicket.issueDate.dates && selectedTicket.issueDate.dates[0]
+                              ? (selectedTicket.issueDate.dates[0] instanceof Date ? selectedTicket.issueDate.dates[0].toLocaleDateString() : new Date(selectedTicket.issueDate.dates[0]).toLocaleDateString())
+                              : selectedTicket.issueDate.type === 'range' && selectedTicket.issueDate.startDate && selectedTicket.issueDate.endDate
+                                ? `${selectedTicket.issueDate.startDate instanceof Date ? selectedTicket.issueDate.startDate.toLocaleDateString() : new Date(selectedTicket.issueDate.startDate).toLocaleDateString()} - ${selectedTicket.issueDate.endDate instanceof Date ? selectedTicket.issueDate.endDate.toLocaleDateString() : new Date(selectedTicket.issueDate.endDate).toLocaleDateString()}`
+                                : selectedTicket.issueDate.type === 'ongoing'
+                                  ? 'Ongoing Issue'
+                                  : 'N/A'
+                          }</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -528,30 +715,25 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                   </>
                 )}
 
-                {selectedTicket.comments.length > 0 && (
-                  <>
-                    <Separator />
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <MessageSquare className="h-4 w-4" />
-                        <span className="font-medium">Comments ({selectedTicket.comments.length})</span>
+                {/* Comments Section */}
+                <Separator />
+                <div className="mt-6">
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Comments ({selectedTicket.comments.length})
+                  </h4>
+                  <div className="space-y-3">
+                    {selectedTicket.comments.map((comment) => (
+                      <div key={comment.id} className="bg-muted p-3 rounded-lg">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold">{getCommentDisplayName(comment)}</span>
+                          <span className="text-xs text-muted-foreground">{format(comment.timestamp, 'MMM dd, HH:mm')}</span>
+                        </div>
+                        <div className="text-sm">{comment.content}</div>
                       </div>
-                      <div className="space-y-3 max-h-60 overflow-y-auto">
-                        {selectedTicket.comments.map((comment) => (
-                          <div key={comment.id} className="p-3 bg-muted rounded-lg">
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-sm font-medium">{comment.author}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {format(comment.timestamp, 'MMM dd, HH:mm')}
-                              </span>
-                            </div>
-                            <p className="text-sm">{comment.content}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+                    ))}
+                  </div>
+                </div>
 
                 {selectedTicket.resolutionNotes && (
                   <>
@@ -562,6 +744,36 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                     </div>
                   </>
                 )}
+
+                {/* Add Comment Section - Available to all users */}
+                <Separator />
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Add Comment</Label>
+                  <Textarea
+                    placeholder="Enter your comment..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    className="min-h-[80px]"
+                  />
+                  <Button 
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim() || isAddingComment}
+                    size="sm"
+                    className="w-full"
+                  >
+                    {isAddingComment ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Add Comment
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-8">

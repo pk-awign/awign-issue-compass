@@ -181,6 +181,31 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                     <p className="text-sm font-medium">Last Updated</p>
                     <p className="text-sm text-muted-foreground">{format(ticket.submittedAt, 'MMM dd, yyyy HH:mm')}</p>
                   </div>
+                  {ticket.issueDate && (
+                    <div>
+                      <p className="text-sm font-medium">Issue Date(s)</p>
+                      {ticket.issueDate.type === 'multiple' && Array.isArray(ticket.issueDate.dates) ? (
+                        <ul className="mt-1 space-y-1">
+                          {ticket.issueDate.dates.map((d: any, idx: number) => (
+                            <li key={idx} className="text-sm flex flex-col">
+                              <span className="font-mono">{d.date instanceof Date ? d.date.toLocaleDateString() : new Date(d.date).toLocaleDateString()}</span>
+                              {d.description && <span className="text-xs text-gray-500 ml-2">{d.description}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-sm">{
+                          ticket.issueDate.type === 'single' && ticket.issueDate.dates && ticket.issueDate.dates[0]
+                            ? (ticket.issueDate.dates[0] instanceof Date ? ticket.issueDate.dates[0].toLocaleDateString() : new Date(ticket.issueDate.dates[0]).toLocaleDateString())
+                            : ticket.issueDate.type === 'range' && ticket.issueDate.startDate && ticket.issueDate.endDate
+                              ? `${ticket.issueDate.startDate instanceof Date ? ticket.issueDate.startDate.toLocaleDateString() : new Date(ticket.issueDate.startDate).toLocaleDateString()} - ${ticket.issueDate.endDate instanceof Date ? ticket.issueDate.endDate.toLocaleDateString() : new Date(ticket.issueDate.endDate).toLocaleDateString()}`
+                              : ticket.issueDate.type === 'ongoing'
+                                ? 'Ongoing Issue'
+                                : 'N/A'
+                        }</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm font-medium mb-2">Issue Description</p>

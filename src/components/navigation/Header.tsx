@@ -46,28 +46,30 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
 
   return (
     <header className="border-b bg-white shadow-sm">
-      <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-4 relative">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+      <div className="container mx-auto px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <div className="bg-gray-800 p-1 rounded">
               <img 
                 src="/awign-logo.svg"
                 alt="Awign Logo" 
-                className="h-6 w-6 md:h-8 md:w-8 object-contain"
+                className={`h-6 w-6 md:h-8 md:w-8 object-contain`}
               />
             </div>
             <div className="hidden sm:block">
-              <h1 className="text-base md:text-2xl font-bold">Awign invIgilation Escalation Portal</h1>
-              <p className="text-xs md:text-sm text-muted-foreground font-semibold">Report Escalations Only</p>
+              <h1 className="text-lg md:text-2xl font-bold">Awign invIgilation Escalation Portal</h1>
+              <p className="text-xs md:text-sm text-muted-foreground">
+                TCS Examination Operations - {getRoleDisplayName()} Panel
+              </p>
             </div>
             <div className="sm:hidden">
-              <h1 className="text-base font-bold">Awign invIgilation Escalation Portal</h1>
-              <p className="text-xs text-muted-foreground font-semibold">Report Escalations Only</p>
+              <h1 className="text-sm font-bold">Awign</h1>
+              <p className="text-xs text-muted-foreground">{getRoleDisplayName()}</p>
             </div>
           </div>
           
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-end">
+          <div className="hidden md:flex items-center gap-4">
             {/* Only show role switcher for Super Admin */}
             {user && showRoleSwitcher && isSuperAdmin && (
               <Select onValueChange={handleRoleSwitch}>
@@ -105,15 +107,62 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
             )}
           </div>
 
-          {/* Mobile: Logout button at top right */}
-          <div className="md:hidden absolute right-2 top-2 z-20">
-            {user && (
-              <Button variant="outline" size="sm" onClick={onLogout}>
-                <LogOut className="h-4 w-4" />
+          {/* Mobile Menu Button */}
+          <div className="md:hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
+        </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden mt-4 border-t pt-4 space-y-4">
+            {/* Only show role switcher for Super Admin on mobile */}
+            {user && showRoleSwitcher && isSuperAdmin && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Switch Role:</label>
+                <Select onValueChange={handleRoleSwitch}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={getRoleDisplayName()} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="invigilator">Invigilator</SelectItem>
+                    <SelectItem value="resolver">Resolver</SelectItem>
+                    <SelectItem value="approver">Approver</SelectItem>
+                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {user ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <RoleIcon className="h-4 w-4" />
+                  <span className="text-sm font-medium">{user.name}</span>
+                  <Badge variant={isSuperAdmin ? "default" : isResolver ? "secondary" : isApprover ? "destructive" : "outline"}>
+                    <Shield className="h-3 w-3 mr-1" />
+                    {getRoleDisplayName()}
+                  </Badge>
+                </div>
+                <Button variant="outline" size="sm" onClick={onLogout} className="w-full">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" onClick={() => window.location.href = '/'} className="w-full">
+                <Home className="h-4 w-4 mr-2" />
+                Home
               </Button>
             )}
           </div>
-        </div>
+        )}
       </div>
     </header>
   );

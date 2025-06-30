@@ -1,5 +1,7 @@
 import jsPDF from 'jspdf';
 import { AttachmentMetadata, processAttachments } from './attachmentProcessor';
+import { generateQRCodeDataURL } from './qrCodeGenerator';
+import QRCode from 'qrcode';
 
 interface TicketInfo {
   ticketNumber: string;
@@ -37,7 +39,11 @@ const formatIssueDate = (issueDate: any): string => {
         return 'N/A';
       case 'multiple':
         if (dates && dates.length > 0) {
-          return dates.map((date: Date) => new Date(date).toLocaleDateString()).join(', ');
+          if (typeof dates[0] === 'object' && dates[0].date) {
+            return dates.map((d: any) => `${new Date(d.date).toLocaleDateString()}${d.description ? ': ' + d.description : ''}`).join('\n');
+          } else {
+            return dates.map((date: Date) => new Date(date).toLocaleDateString()).join(', ');
+          }
         }
         return 'N/A';
       case 'ongoing':
@@ -50,6 +56,8 @@ const formatIssueDate = (issueDate: any): string => {
   return 'N/A';
 };
 
+const logoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAAAfCAYAAABjyArgAAAAAXNSR0IArs4c6QAAB0ZJREFUaEPFWm126ygMFZ6FNV1ZkpXFb2Fjnq+QQAjh2E3nTP60xwYhLtLVB0705pdzfhDRV0rp+93Y/+x9IqI8Sk+UKEcvDhSZiCKavvhsVxA7+ZUV846wDPhOKa2fLUfjRq5ubAq2nsFVgR/vqAmoSzcdDgAmgAvrve+wPP93K5Zt/BZ8cznuzYcLCsCxFLHeZ0rpIf+zFX+45i+azBVRZ7QuYw5Hyssz0qDd1ILVetOOLgb+jIubGjnnm3gDWPOWMq2U6I8c3ouo/F8gS5TzNuX+nLMZ329V3sEoKp2p7vDEiOasbkQEPTHX6bY8bCCwOpj5mIsfG+U7gMG9daCAjGfvudgdLzaYie5ymrrxqowAv9pAKkoDyG498xwqlXeyXjmUdCfKz5QASPnlvL2IEtYbdDc0iJFrszkYRAI13inTmpY+yItH80Go/rKc7ov3E1qwt96q6JYflFpGwfs64SuzQFnWyXcWkqgDWKwYB+qB17jQAK5AsmXf1OsawOX5BOAwiLfDYilFBzizxPyct2wIwBtBWy9iMcu9PkRuOb9S585HPFhdHVbwTItSQJtTQabkAGZaejGdGMtrlgNcEjmrL16HdUxaJ+48AKyGtCP1XCo9ed04yEe66Qqdl4unYy2A/BwsWN15Ee718M2sewZz2Vy+pX3XB2MGS3WKsoUYengS5S/r9jbjaVyuFBFbsALvLd5YvgI1BTiaa/RcOYLZHN64czuZynEcqHAyjcjfUESRl6kCHIyXMWtKy1DMqMXCUo2167jK0ap32XC/iHhdtWB9288pm5rgMQN4eO4MgzOu+jNWgA0UExfX6a2HVsr0WpaU7OFEWFcr2X1wLLrKjLzlTCl3AKssC44Ek8qxJtAgGL16GtKtsfzXzvE3yvSdFlBRodL6nCloWX252FtiHOT6Clf2UzIm4NcAxqutVG2a91Ye4VMpWYABnCOzSa2cBTSrV8I3XNWSyT1WaNA6tIYMcJI7dAWuFELgyjDDOeDgKQWIJU51s54V0OgI8DRzKDknJviUjYXM+MvCPdIOvJgty1JOCLBs1DpKBdGlbEJDY9NiBrDIhuXf9niJQ4IOyvU4sC7lct4exo0pRUSZgw0c3oKrcicyCg+EJPIQwQcX5cFuMxwoJWtotAZXB73YmBBE0hnAhott6leYoqyiVDnl4AWxwawpTNBb8Fi1bdgMTlCDGU619iU8Lx9b8cDxX4306Zn+SStzIQ7KpVc6zlRKPSUVgLniG6o0ExCOLFgjm3hTtViAthRr7lI/cyiwfNY5CIxatf7hc1Ihe84JUlbXiPI7rY64ARSXuY6LBaWrrcUT9Utgq/NHOKS4j2JWcotao0KeHHRMne2OI1JfKlaLrWVmpHIwBwn/NM+NIbeSr8J/CdvDwQp8r01hid7yxyzjjBYAWN0CIF3u9+r847nX7fH6jGC7J4QYEKWvwAQMyhkaN2cA9WM6qzuhz7yVd2byoYYq4DNBfvYgLaYBaKYxx2o50ORVkAvAddE3m2vpa6sZ7JQfYPODKcMeQxk/FBxRxjGoxwuB/ML7rqnQq+MPtOtFudP7aJ3JZO8kb9dQBz8KbyV+cLIwYanT5DXqE0JU84b5yb2ngyb5LQpXvfaXxp/TS4+oWzR2k9p6RM+g1u3HQS5W4pxqRSXpF/x5nyYd4dYO1DZEjtOu3zmHAWBNwbhd2frLZbMl6ZaqxvR6SzXGZWZRi99x3qmHFR2af2fHdO+WhObSx78zDv/xIirAMJ63XuTADJRPvfzNhG1Yp1JNcQM86MpB3k2vcmyXStMh5NFyS6C9X66gpEorFixKy20D1sN1DdbEpSzk39GA6p9xg+hbSm3ogWzBjtGcX3TkCu7xb86o0HQNfoeqjT2qlNJWxouvlNChwzzTvA8tWCs0/7GJVnx8hb+k77xrwYdRFoMS3PwRgLHP+sx4AOp73iQ2srcSuASXebXXbGS5C9F+E8bSu43JxQEqU3gSgwj9zSUudFVj4EOSMfqc/8oz5MQsxwKIHBpjpKXKF6pzgFtdj9jEJz256Ku9YjF9PuVWNufnnqgr0F3HTa/+9VsLe0shANca3lhhB7BYfwVN3c9vTA6ZLU/524Gjnsq3yFpG48A7A6teU5/Xg8RYll28R5tRXRXcWbC4nrn15Sa4vf7mW2XprHHj219fZ8KdXep6ysZqeL7QQv2gxV5U+tZmf0Uvgc+4oYKmgKoVCfDFtZt1VnDsAeA2Wfdp5OmFw8qgNyrqZEA23gmltDjkOXhDM8Txrg9MZnEuI9FtEhevgu0HKt7arAVteXuUJFzCogGBrZc7azZz6ct4AxD6wJzVWGrCMwRaG0vsfrBf1V+skC3af08hncsak6JALDRSvoNwl6dhmnYqjQoGyQZ/+KGgERgq8AsNIXPtXnIdom3Lj+i2u4v8gz6jgp6ibDIxzUxOAW1mR+6sG+myLBY8A/RsMnVVu3ib10vjqZwuyOqov5Kvzwosssy2AAAAAElFTkSuQmCC';
+
 export const generateTicketPDF = async (ticketInfo: TicketInfo, issueData: IssueData) => {
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
@@ -57,19 +65,19 @@ export const generateTicketPDF = async (ticketInfo: TicketInfo, issueData: Issue
   const contentWidth = pageWidth - (2 * margin);
   let yPosition = margin;
 
-  // Header with simple title only
+  // Header with minimized logo
   pdf.setFillColor(31, 41, 55); // gray-800
   pdf.rect(0, 0, pageWidth, 40, 'F');
-  
+  pdf.addImage(logoBase64, 'PNG', margin, 12, 18, 7); // Even smaller logo, slightly lower
+
   pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(18);
+  pdf.setFontSize(15);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('AWIGN', margin, 20);
-  
-  pdf.setFontSize(12);
+  pdf.text('AWIGN INVIGILATION ESCALATION TICKET', margin + 25, 18);
+
+  pdf.setFontSize(11);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('Issue Management System', margin, 30);
-  pdf.text('TCS Examination Operations Portal', margin, 37);
+  pdf.text('TCS Project', margin + 25, 30);
 
   yPosition = 60;
 
@@ -92,6 +100,10 @@ export const generateTicketPDF = async (ticketInfo: TicketInfo, issueData: Issue
   pdf.text('Tracking Link: ' + ticketInfo.trackingLink, margin + 5, yPosition + 18);
   pdf.text('Generated On: ' + new Date().toLocaleString(), margin + 5, yPosition + 26);
   pdf.text('Status: SUBMITTED', margin + 5, yPosition + 34);
+
+  // Real QR code for tracking link (below ticket info box, right-aligned)
+  const qrDataUrl = await QRCode.toDataURL(ticketInfo.trackingLink, { width: 36, margin: 0 });
+  pdf.addImage(qrDataUrl, 'PNG', pageWidth - margin - 36, yPosition + 5, 36, 36);
 
   yPosition += 55;
 
@@ -118,8 +130,8 @@ export const generateTicketPDF = async (ticketInfo: TicketInfo, issueData: Issue
     pdf.setFont('helvetica', 'bold');
     pdf.text(detail.label + ':', margin, yPosition);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(detail.value, margin + 35, yPosition);
-    yPosition += 8;
+    pdf.text(detail.value, margin + 45, yPosition);
+    yPosition += 12; // Increased gap
   });
 
   yPosition += 10;
@@ -194,7 +206,8 @@ export const generateTicketPDF = async (ticketInfo: TicketInfo, issueData: Issue
     '1. Keep this ticket number safe for future reference',
     '2. Use the tracking link to monitor your issue status',
     '3. You will receive updates as your issue progresses',
-    '4. For urgent matters, contact support with your ticket number'
+    '4. For urgent matters, contact support with your ticket number',
+    '5. Save this file for your records.'
   ];
 
   instructions.forEach((instruction) => {
@@ -204,13 +217,6 @@ export const generateTicketPDF = async (ticketInfo: TicketInfo, issueData: Issue
 
   yPosition += 10;
 
-  // Save this file note under instructions
-  pdf.setFontSize(8);
-  pdf.setTextColor(100, 100, 100);
-  pdf.text('Save this file for your records.', margin, yPosition);
-
-  yPosition += 15;
-
   // Footer
   pdf.setFillColor(248, 250, 252);
   pdf.rect(0, yPosition, pageWidth, 20, 'F');
@@ -218,7 +224,7 @@ export const generateTicketPDF = async (ticketInfo: TicketInfo, issueData: Issue
   pdf.setFontSize(8);
   pdf.setTextColor(100, 100, 100);
   // Center align the auto-generation text
-  const autoGenText = 'This ticket was generated automatically by Awign Issue Management System.';
+  const autoGenText = 'This ticket was generated automatically by Awign Escalation Management System.';
   const textWidth = pdf.getTextWidth(autoGenText);
   const centerX = (pageWidth - textWidth) / 2;
   pdf.text(autoGenText, centerX, yPosition + 12);

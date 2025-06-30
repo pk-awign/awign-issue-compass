@@ -1,6 +1,6 @@
 # Email Notification Setup
 
-This document explains how to set up email notifications for the AWIGN Issue Management System.
+This document explains how to set up email notifications for the AWIGN Escalation Management System.
 
 ## Overview
 
@@ -78,7 +78,7 @@ Attachments (2):
 - log.txt (12.1 KB, text/plain)
 
 ---
-This is an automated notification from the AWIGN Issue Management System.
+This is an automated notification from the AWIGN Escalation Management System.
 ```
 
 ### Status Change Notification
@@ -92,7 +92,7 @@ Changed At: 1/1/2024, 11:00:00 AM
 Resolution Notes: Working on the issue...
 
 ---
-This is an automated notification from the AWIGN Issue Management System.
+This is an automated notification from the AWIGN Escalation Management System.
 ```
 
 ## Testing

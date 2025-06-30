@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/navigation/Header';
 import { TicketTracker } from '@/components/TicketTracker';
@@ -60,22 +59,23 @@ export const InvigilatorPage: React.FC = () => {
             )}
           </div>
 
-          {assignedIssues.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg md:text-xl">Your Assigned Issues</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <TicketTracker />
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg md:text-xl">Your Tickets & City Issues</CardTitle>
+              <p className="text-sm text-gray-600">
+                View and comment on your own tickets and all issues in {user?.city}. You can add comments to any ticket in your jurisdiction.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <TicketTracker />
+            </CardContent>
+          </Card>
         </div>
       </main>
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
         <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
-          <p>© 2024 Awign Technologies. Issue Management System for TCS Examination Operations.</p>
+          <p>© 2024 Awign Technologies. Escalation Management System for TCS Examination Operations.</p>
           <p className="mt-1">For technical support, contact: support@awign.com</p>
         </div>
       </footer>

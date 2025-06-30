@@ -17,7 +17,7 @@ const generateTextTicket = (ticketInfo: { ticketNumber: string; trackingLink: st
   const ticketContent = `
 ═══════════════════════════════════════════════
                🏢 AWIGN 🏢
-            ISSUE MANAGEMENT SYSTEM
+            ESCALATION MANAGEMENT SYSTEM
          TCS Examination Operations Portal
 ═══════════════════════════════════════════════
 
@@ -58,7 +58,7 @@ INSTRUCTIONS
 4. For urgent matters, contact support with your ticket number
 
 ═══════════════════════════════════════════════
-This ticket was generated automatically by Awign.
+This ticket was generated automatically by Awign Escalation Management System.
 Save this file for your records.
 ═══════════════════════════════════════════════
   `.trim();
@@ -75,14 +75,8 @@ Save this file for your records.
 };
 
 export const generateWhatsAppMessage = (ticketNumber: string, trackingLink: string) => {
-  const message = `🏢 *Awign Issue Management*
-
-*Ticket Number:* ${ticketNumber}
-*Track your issue:* ${trackingLink}
-
-Your issue has been submitted successfully. Use the ticket number or link above to track progress.
-
-_Powered by Awign Issue Management System_`;
+  // To prevent link preview, wrap the link in < >
+  const message = `🏠 *Awign Escalation Management*\n\n*Ticket Number:* ${ticketNumber}\n*Track your issue:* <${trackingLink}>\n\nYou can send this ticket to yourself for easy tracking. Use the ticket number or link above to track progress.\n\n_Powered by Awign Escalation Management System_`;
   
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 };

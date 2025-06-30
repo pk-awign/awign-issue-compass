@@ -770,7 +770,14 @@ export class AdminService {
     if (typeof issueDate === 'object' && issueDate !== null && issueDate.type) {
       return {
         type: issueDate.type,
-        dates: issueDate.dates ? issueDate.dates.map((d: any) => new Date(d)) : [],
+        dates:
+          issueDate.type === 'multiple'
+            ? issueDate.dates?.map((d: any) =>
+                typeof d === 'object' && d.date
+                  ? { date: new Date(d.date), description: d.description || '' }
+                  : { date: new Date(d), description: '' }
+              ) || []
+            : issueDate.dates ? issueDate.dates.map((d: any) => new Date(d)) : [],
         startDate: issueDate.startDate ? new Date(issueDate.startDate) : undefined,
         endDate: issueDate.endDate ? new Date(issueDate.endDate) : undefined
       };
@@ -837,6 +844,75 @@ export class AdminService {
     } catch (error) {
       console.error('Error in getUserById:', error);
       return null;
+    }
+  }
+
+  // Delete a ticket by ID (Super Admin only)
+  static async deleteTicket(ticketId: string): Promise<boolean> {
+    try {
+      console.log('Deleting ticket:', ticketId);
+      
+      // Delete related data first to avoid foreign key constraint errors
+      await supabase.from('comments').delete().eq('ticket_id', ticketId);
+      await supabase.from('attachments').delete().eq('ticket_id', ticketId);
+      await supabase.from('ticket_assignees').delete().eq('ticket_id', ticketId);
+      await supabase.from('ticket_timeline').delete().eq('ticket_id', ticketId);
+      await supabase.from('ticket_history').delete().eq('ticket_id', ticketId);
+      
+      // Delete the ticket itself
+      const { error } = await supabase.from('tickets').delete().eq('id', ticketId);
+      
+      if (error) {
+        console.error('Error deleting ticket:', error);
+        return false;
+      }
+      
+      console.log('Ticket deleted successfully:', ticketId);
+      return true;
+    } catch (error) {
+      console.error('Error in deleteTicket:', error);
+      return false;
+    }
+  }
+
+  // Delete a user by ID (Super Admin only)
+  static async deleteUser(userId: string): Promise<boolean> {
+    try {
+      console.log('Deleting user data for:', userId);
+      
+      // Check if user has any tickets before deleting
+      const { data: userTickets, error: ticketsError } = await supabase
+        .from('tickets')
+        .select('id')
+        .eq('submitted_by_user_id', userId);
+      
+      if (ticketsError) {
+        console.error('Error checking user tickets:', ticketsError);
+        return false;
+      }
+      
+      // Delete all tickets by this user (but keep the user)
+      if (userTickets && userTickets.length > 0) {
+        console.log(`User has ${userTickets.length} tickets. Deleting tickets but keeping user.`);
+        
+        // Delete all tickets by this user
+        for (const ticket of userTickets) {
+          await this.deleteTicket(ticket.id);
+        }
+      }
+      
+      // Delete user's comments
+      await supabase.from('comments').delete().eq('author', userId);
+      
+      // Delete user's ticket assignments
+      await supabase.from('ticket_assignees').delete().eq('user_id', userId);
+      
+      // Note: We're NOT deleting the user record - just cleaning up their data
+      console.log('User data cleaned successfully. User record preserved:', userId);
+      return true;
+    } catch (error) {
+      console.error('Error in deleteUser:', error);
+      return false;
     }
   }
 }

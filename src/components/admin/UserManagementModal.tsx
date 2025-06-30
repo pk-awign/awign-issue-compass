@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,6 +25,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -219,6 +219,28 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
     }
   };
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to delete all data for user "${userName}"? This will delete all their tickets, comments, and assignments, but keep their user account.`)) {
+      return;
+    }
+
+    setDeletingUserId(userId);
+    try {
+      const success = await AdminService.deleteUser(userId);
+      if (success) {
+        toast.success(`All data for user "${userName}" deleted successfully. User account preserved.`);
+        loadUsers(); // Refresh the user list
+      } else {
+        toast.error('Failed to delete user data');
+      }
+    } catch (error) {
+      console.error('Error deleting user data:', error);
+      toast.error('Failed to delete user data');
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -337,6 +359,24 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
                               onClick={() => startEdit(user)}
                             >
                               <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteUser(user.id, user.name)}
+                              disabled={deletingUserId === user.id}
+                              title="Delete all user data (tickets, comments, assignments) but keep user account"
+                            >
+                              {deletingUserId === user.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  Cleaning...
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="h-4 w-4" />
+                                </>
+                              )}
                             </Button>
                           </div>
                         </TableCell>

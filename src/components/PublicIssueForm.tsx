@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,19 +21,24 @@ import { useAuth } from '@/contexts/AuthContext';
 import { TicketTracker } from './TicketTracker';
 import { generateTicketFile, generateWhatsAppMessage } from '@/utils/ticketDownload';
 import { FaWhatsapp } from 'react-icons/fa';
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '@/components/ui/command';
 
 interface PublicIssueFormProps {
   onSubmit: (issue: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'>) => Promise<string>;
   onAdminLogin: () => void;
   defaultTab?: string;
   searchTerm?: string;
+  defaultAnonymous?: boolean;
+  hideHeader?: boolean;
 }
 
 export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({ 
   onSubmit, 
   onAdminLogin, 
   defaultTab = "report",
-  searchTerm = ""
+  searchTerm = "",
+  defaultAnonymous = false,
+  hideHeader = false
 }) => {
   const { user, logout } = useAuth();
   
@@ -51,15 +56,22 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     singleDate: undefined as Date | undefined,
     startDate: undefined as Date | undefined,
     endDate: undefined as Date | undefined,
-    multipleDates: [] as Date[],
-    isAnonymous: false,
-    submittedBy: ''
+    multipleDates: [] as { date: Date, description: string }[],
+    isAnonymous: defaultAnonymous,
+    submittedBy: '',
+    citySearch: ''
   });
 
   const [files, setFiles] = useState<File[]>([]);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [ticketInfo, setTicketInfo] = useState({ ticketNumber: '', trackingLink: '' });
   const [submittedIssueData, setSubmittedIssueData] = useState<any>(null);
+
+  const [cityInput, setCityInput] = useState('');
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
+  const cityInputRef = useRef<HTMLInputElement>(null);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Pre-fill user data when logged in
   useEffect(() => {
@@ -91,9 +103,9 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     { value: 'other', label: 'Other Issue' }
   ];
 
-  const cities = [
-    'Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad'
-  ];
+  const cities = Array.from(new Set([
+    "Shillong","Balasore","Cuttack","Gorakhpur","Rourkela","Faridabad","Guwahati","Gaya","Mumbai","Mapusa","New Delhi","Imphal","Parbhani","Kolkata","Ajmer","Jammu","Muzaffarpur","Sikar","Kakching","Mohali","Anantapur","Jodhpur","Nashik","Bhubaneswar","Bikaner","Kolhapur","Roorkee","Gurugram","Nagpur","Agartala","Delhi","Sambalpur","Ranchi","KOTA","Chandigarh","Dehradun","Jaipur","Darbhanga","Durgapur","Varanasi","KOTA","IMPHAL","Ludhiana","Udaipur","Kota","PRAYAGRAJ","Ernakulam","Pune","Hyderabad","Patna","Kottayam","Haldwani","Visakhapatnam","Naharlagun","Tirupathi","Kurnool","Bathinda","Patiala","Raipur","Mysuru(Mysore)","Mangaluru(Mangalore)","Shivamogga(Shimoga)","Hamirpur","Amravati","Jamshedpur","Dhanbad","Ahmedabad","Rajkot","Kohima","Aizwal","Panaji","Noida","Samba","vijayawada","Hubballi(Hubli)","SECUNDERABAD","Surat","Nanded","Jhansi","Aligarh","Thrissur","Siliguri","Baruipur","Asansol","Howrah","Bankura","Solan","Jalandhar","Greater Noida","Thane","SIKAR","SOLAPUR","Akola","Chandrapur","Kalyani","Hisar","Siddipet","Bhandara","Hanamkonda","Nizamabad","KOTHAGUDEM","Alappuzha","BARDOLI","Suryapet","Udupi","Nalgonda","Sathupally","Kannur","Adilabad","Karimnagar","Warangal","Khurda","Khammam","Mahabubnagar","Kodad","Narsampet","Bhopal","Indore","Hanumanghar","Jabalpur","Satna","Ujjain","Gwalior"
+  ])).sort();
 
   const generateTicketNumber = () => {
     const prefix = 'AIM';
@@ -119,12 +131,13 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
   const handleMultipleDateSelect = (date: Date | undefined) => {
     if (!date) return;
-    
     setFormData(prev => {
-      const newDates = prev.multipleDates.includes(date)
-        ? prev.multipleDates.filter(d => d.getTime() !== date.getTime())
-        : [...prev.multipleDates, date];
-      return { ...prev, multipleDates: newDates };
+      const exists = prev.multipleDates.find(d => d.date.getTime() === date.getTime());
+      if (exists) {
+        return { ...prev, multipleDates: prev.multipleDates.filter(d => d.date.getTime() !== date.getTime()) };
+      } else {
+        return { ...prev, multipleDates: [...prev.multipleDates, { date, description: '' }] };
+      }
     });
   };
 
@@ -157,53 +170,65 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Updated validation logic
-    if (!formData.centreCode || !formData.city || !formData.resourceId || !formData.issueCategory || !formData.issueDescription) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    // Validate name for non-anonymous reports (only for non-logged-in users)
-    if (!user && !formData.isAnonymous && !formData.submittedBy) {
-      toast.error('Name is required for non-anonymous reports');
-      return;
-    }
-
-    let dates: Date[] = [];
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-
-    if (formData.dateType === 'single' && formData.singleDate) {
-      dates = [formData.singleDate];
-    } else if (formData.dateType === 'range') {
-      startDate = formData.startDate;
-      endDate = formData.endDate;
-    } else if (formData.dateType === 'multiple') {
-      dates = formData.multipleDates;
-    }
-
-    const issueData = {
-      centreCode: formData.centreCode,
-      city: formData.city,
-      resourceId: formData.resourceId,
-      awignAppTicketId: formData.awignAppTicketId || undefined,
-      issueCategory: formData.issueCategory as Issue['issueCategory'],
-      issueDescription: formData.issueDescription,
-      issueEvidence: files.length > 0 ? files : undefined,
-      issueDate: {
-        type: formData.dateType,
-        dates,
-        startDate,
-        endDate
-      },
-      isAnonymous: formData.isAnonymous,
-      submittedBy: formData.isAnonymous ? undefined : formData.submittedBy
-    };
-
+    setIsSubmitting(true);
     try {
+      // Updated validation logic - don't require resourceId for anonymous submissions
+      const requiredFields = [
+        formData.centreCode,
+        formData.city,
+        formData.issueCategory,
+        formData.issueDescription
+      ];
+      
+      // Only require resourceId if not anonymous
+      if (!formData.isAnonymous) {
+        requiredFields.push(formData.resourceId);
+      }
+      
+      if (requiredFields.some(field => !field)) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
+
+      // Validate name for non-anonymous reports (only for non-logged-in users)
+      if (!user && !formData.isAnonymous && !formData.submittedBy) {
+        toast.error('Name is required for non-anonymous reports');
+        return;
+      }
+
+      let dates: any[] = [];
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+
+      if (formData.dateType === 'single' && formData.singleDate) {
+        dates = [formData.singleDate];
+      } else if (formData.dateType === 'range') {
+        startDate = formData.startDate;
+        endDate = formData.endDate;
+      } else if (formData.dateType === 'multiple') {
+        dates = formData.multipleDates;
+      }
+
+      const issueData = {
+        centreCode: formData.centreCode,
+        city: formData.city,
+        resourceId: formData.isAnonymous ? undefined : formData.resourceId,
+        awignAppTicketId: formData.awignAppTicketId || undefined,
+        issueCategory: formData.issueCategory as Issue['issueCategory'],
+        issueDescription: formData.issueDescription,
+        issueEvidence: files.length > 0 ? files : undefined,
+        issueDate: {
+          type: formData.dateType,
+          dates,
+          startDate,
+          endDate
+        },
+        isAnonymous: formData.isAnonymous,
+        submittedBy: formData.isAnonymous ? undefined : formData.submittedBy
+      };
+
       const ticketNumber = await onSubmit(issueData);
-      const trackingLink = `${window.location.origin}/track/${ticketNumber}`;
+      const trackingLink = `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`;
       
       // Store submitted data for download
       setSubmittedIssueData(issueData);
@@ -234,56 +259,56 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
         startDate: undefined,
         endDate: undefined,
         multipleDates: [],
-        isAnonymous: false,
-        submittedBy: user?.name || ''
+        isAnonymous: defaultAnonymous,
+        submittedBy: user?.name || '',
+        citySearch: ''
       });
       setFiles([]);
     } catch (error) {
       toast.error('Failed to submit issue. Please try again.');
       console.error('Issue submission error:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b shadow-sm">
-        <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col items-start">
-              <div className="bg-gray-800 p-1 rounded">
-                <img 
-                  src="/awign-logo.svg" 
-                  alt="Awign Logo" 
-                  className="w-8 h-8 object-contain"
-                />
+      {!hideHeader && (
+        <header className="bg-white border-b shadow-sm">
+          <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex flex-col items-start">
+                <div className="bg-gray-800 p-1 rounded">
+                  <img 
+                    src="/awign-logo.svg" 
+                    alt="Awign Logo" 
+                    className="w-8 h-8 object-contain"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col items-start flex-1 ml-4">
+                <span className="text-base sm:text-xl font-semibold text-gray-900">Awign invIgilation Escalation Portal</span>
+                <span className="text-xs sm:text-sm text-gray-600 mt-1">Report Escalations Only This is a leadership connect portal for escalations of your Issue when other channels like TL, Awign Support have not resolved your issue in time</span>
+              </div>
+              <div className="flex items-center gap-2 ml-4">
+                {user && (
+                  <Button variant="outline" size="sm" onClick={logout}>
+                    <LogOut className="h-5 w-5" />
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="flex flex-col items-start flex-1 ml-4">
-              <span className="text-base sm:text-xl font-semibold text-gray-900">Awign invIgilation Escalation Portal</span>
-              <span className="text-xs sm:text-sm text-gray-600 mt-1">Report Escalations Only This is a leadership connect portal for escalations of your Issue when other channels like TL, Awign Support have not resolved your issue in time</span>
-            </div>
-            <div className="flex items-center gap-2 ml-4">
-              {user ? (
-                <Button variant="outline" size="sm" onClick={logout}>
-                  <LogOut className="h-5 w-5" />
-                </Button>
-              ) : (
-                <Button variant="outline" size="sm" onClick={onAdminLogin} className="flex items-center gap-2">
-                  <Users className="h-5 w-5 mr-1" />
-                  <span className="hidden sm:inline">Login</span>
-                </Button>
-              )}
-            </div>
+            {/* 5. After login, show 'Logged in as ...' below header */}
+            {user && (
+              <div className="text-xs text-gray-700 mt-2 text-right">
+                Logged in as <span className="font-semibold">{user.name}</span>
+              </div>
+            )}
           </div>
-          {/* 5. After login, show 'Logged in as ...' below header */}
-          {user && (
-            <div className="text-xs text-gray-700 mt-2 text-right">
-              Logged in as <span className="font-semibold">{user.name}</span>
-            </div>
-          )}
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Main Content */}
       <main className="container mx-auto px-2 py-4 sm:px-6 sm:py-8">
@@ -385,19 +410,44 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                     </div>
                     <div>
                       <Label className="text-sm font-medium">City *</Label>
-                      <Select 
-                        value={formData.city}
-                        onValueChange={(value) => setFormData(prev => ({ ...prev, city: value }))}
-                      >
-                        <SelectTrigger className="w-full mt-2">
-                          <SelectValue placeholder="Select city" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {cities.map((city) => (
-                            <SelectItem key={city} value={city}>{city}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="w-full mt-2 relative">
+                        <input
+                          ref={cityInputRef}
+                          type="text"
+                          className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Search city..."
+                          value={formData.city || cityInput}
+                          onFocus={() => setCityDropdownOpen(true)}
+                          onChange={e => {
+                            setCityInput(e.target.value);
+                            setFormData(prev => ({ ...prev, city: '', }));
+                            setCityDropdownOpen(true);
+                          }}
+                          onBlur={() => setTimeout(() => setCityDropdownOpen(false), 150)}
+                          autoComplete="off"
+                        />
+                        {cityDropdownOpen && (
+                          <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto mt-1">
+                            {cities.filter(city => (cityInput ? city.toLowerCase().includes(cityInput.toLowerCase()) : true)).length === 0 ? (
+                              <div className="p-2 text-sm text-gray-500">No city found.</div>
+                            ) : (
+                              cities.filter(city => (cityInput ? city.toLowerCase().includes(cityInput.toLowerCase()) : true)).map(city => (
+                                <div
+                                  key={city}
+                                  className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${formData.city === city ? 'bg-blue-100 text-blue-900' : ''}`}
+                                  onMouseDown={() => {
+                                    setFormData(prev => ({ ...prev, city }));
+                                    setCityInput(city);
+                                    setCityDropdownOpen(false);
+                                  }}
+                                >
+                                  {city}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -532,20 +582,30 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                           </PopoverContent>
                         </Popover>
                         {formData.multipleDates.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {formData.multipleDates.map((date, index) => (
-                              <div key={index} className="bg-blue-100 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-                                {format(date, "MMM dd, yyyy")}
+                          <div className="space-y-2">
+                            {formData.multipleDates.map((item, index) => (
+                              <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-blue-50 p-2 rounded-lg">
+                                <div className="font-mono text-sm min-w-[120px]">{format(item.date, "MMM dd, yyyy")}</div>
+                                <Textarea
+                                  className="flex-1 min-w-[180px]"
+                                  placeholder="Description for this date..."
+                                  value={item.description}
+                                  onChange={e => setFormData(prev => {
+                                    const newDates = [...prev.multipleDates];
+                                    newDates[index] = { ...newDates[index], description: e.target.value };
+                                    return { ...prev, multipleDates: newDates };
+                                  })}
+                                  rows={2}
+                                />
                                 <button
                                   type="button"
                                   onClick={() => setFormData(prev => ({
                                     ...prev,
                                     multipleDates: prev.multipleDates.filter((_, i) => i !== index)
                                   }))}
-                                  className="text-blue-600 hover:text-blue-800"
-                                >
-                                  ×
-                                </button>
+                                  className="text-blue-600 hover:text-blue-800 ml-2"
+                                  title="Remove date"
+                                >×</button>
                               </div>
                             ))}
                           </div>
@@ -591,13 +651,13 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                     )}
                     <div className={`mt-2 border-2 border-dashed rounded-lg p-6 text-center transition-colors ${files.length > 0 ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}>
                       <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                      <div className="mt-4">
-                        <label htmlFor="file-upload" className="cursor-pointer">
-                          <span className="mt-2 block text-sm font-medium text-gray-900">
-                            Click to upload evidence files
+                      <div className="mt-4 text-center">
+                        <label htmlFor="file-upload" className="cursor-pointer w-full block">
+                          <span className="block text-xs sm:text-sm font-medium text-gray-900 leading-snug">
+                            Attach any files: Image, PDF, Audio, Video, etc
                           </span>
-                          <span className="mt-1 block text-xs text-gray-500">
-                            PNG, JPG, PDF up to 10MB
+                          <span className="mt-2 block text-xs sm:text-sm text-gray-500 leading-tight">
+                            (upto 10 MB)<br />You can add multiple files
                           </span>
                         </label>
                         <input
@@ -612,8 +672,8 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full bg-gray-800 hover:bg-gray-900 text-white py-3">
-                    Submit Issue Report
+                  <Button type="submit" className="w-full" disabled={isSubmitting}>
+                    {isSubmitting ? 'Submitting...' : 'Submit Issue'}
                   </Button>
                 </form>
               </CardContent>
@@ -681,10 +741,10 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
               <Button
                 onClick={handleWhatsAppShare}
                 className="w-full sm:w-auto bg-green-600 hover:bg-green-700 flex items-center justify-center"
-                title="You can send this message to yourself."
+                title="Send this ticket to yourself on WhatsApp."
               >
                 <FaWhatsapp className="h-4 w-4 mr-1" />
-                Share
+                Send to My WhatsApp
               </Button>
             </div>
             

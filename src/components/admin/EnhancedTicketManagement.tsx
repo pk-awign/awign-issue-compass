@@ -23,6 +23,7 @@ import {
   RefreshCw,
   History
 } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface EnhancedTicketManagementProps {
   ticket: Issue;
@@ -188,7 +189,7 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
             </div>
             <div>
               <h4 className="font-semibold text-sm text-gray-600">Submitted At</h4>
-              <p className="text-sm">{formatDate(ticket.submittedAt)}</p>
+              <p className="text-sm">{ticket.submittedAt ? format(new Date(ticket.submittedAt), 'MMM dd, yyyy HH:mm:ss') : 'N/A'}</p>
             </div>
             <div>
               <h4 className="font-semibold text-sm text-gray-600">Assigned Resolver</h4>

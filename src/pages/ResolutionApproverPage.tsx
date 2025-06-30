@@ -378,7 +378,7 @@ export const ResolutionApproverPage: React.FC = () => {
                 </div>
               </div>
               <div className="flex flex-col items-start flex-1 ml-4">
-                <span className="text-base sm:text-xl font-semibold text-gray-900">AWIGN ISSUE MANAGEMENT</span>
+                <span className="text-base sm:text-xl font-semibold text-gray-900">AWIGN ESCALATION MANAGEMENT</span>
                 <span className="text-xs sm:text-sm text-gray-600 mt-1">Approver Panel</span>
               </div>
               <div className="flex sm:hidden items-center gap-2 ml-auto justify-end">
@@ -418,7 +418,7 @@ export const ResolutionApproverPage: React.FC = () => {
               </div>
             </div>
             <div className="flex flex-col items-start flex-1 ml-4">
-              <span className="text-base sm:text-xl font-semibold text-gray-900">AWIGN ISSUE MANAGEMENT</span>
+              <span className="text-base sm:text-xl font-semibold text-gray-900">AWIGN ESCALATION MANAGEMENT</span>
               <span className="text-xs sm:text-sm text-gray-600 mt-1">Approver Panel</span>
             </div>
             <div className="hidden sm:flex items-center gap-2 ml-4">
@@ -607,7 +607,7 @@ export const ResolutionApproverPage: React.FC = () => {
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
         <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
-          <p>© 2024 Awign Technologies. Issue Management System for TCS Examination Operations.</p>
+          <p>© 2024 Awign Technologies. Escalation Management System for TCS Examination Operations.</p>
           <p className="mt-1">For technical support, contact: support@awign.com</p>
         </div>
       </footer>

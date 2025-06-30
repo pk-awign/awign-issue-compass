@@ -11,7 +11,14 @@ export class TicketService {
       // Serialize issue_date for database storage
       const issueDate = {
         type: issueData.issueDate.type,
-        dates: issueData.issueDate.dates?.map(date => date.toISOString()),
+        dates:
+          issueData.issueDate.type === 'multiple'
+            ? issueData.issueDate.dates?.map((d: any) =>
+                typeof d === 'object' && d.date
+                  ? { date: d.date instanceof Date ? d.date.toISOString() : d.date, description: d.description || '' }
+                  : { date: d instanceof Date ? d.toISOString() : d, description: '' }
+              )
+            : issueData.issueDate.dates?.map((date: any) => date instanceof Date ? date.toISOString() : date),
         startDate: issueData.issueDate.startDate?.toISOString(),
         endDate: issueData.issueDate.endDate?.toISOString()
       };
@@ -22,7 +29,7 @@ export class TicketService {
           ticket_number: ticketNumber,
           centre_code: issueData.centreCode,
           city: issueData.city,
-          resource_id: issueData.resourceId,
+          resource_id: issueData.resourceId || 'NOT_SPECIFIED',
           awign_app_ticket_id: issueData.awignAppTicketId,
           issue_category: issueData.issueCategory,
           issue_description: issueData.issueDescription,
@@ -586,7 +593,15 @@ export class TicketService {
    */
   static async addComment(ticketId: string, commentData: Omit<Comment, 'id' | 'timestamp'>): Promise<void> {
     try {
-      const { error } = await supabase
+      console.log('Adding comment with data:', {
+        ticketId,
+        content: commentData.content,
+        author: commentData.author,
+        authorRole: commentData.authorRole,
+        isInternal: commentData.isInternal
+      });
+
+      const { data, error } = await supabase
         .from('comments')
         .insert({
           ticket_id: ticketId,
@@ -594,9 +609,17 @@ export class TicketService {
           author: commentData.author,
           author_role: commentData.authorRole,
           is_internal: commentData.isInternal,
-        });
-      if (error) throw error;
+        })
+        .select();
+
+      if (error) {
+        console.error('Supabase error details:', error);
+        throw error;
+      }
+
+      console.log('Comment added successfully:', data);
       toast.success('Comment added successfully');
+      
       // Log to ticket_history
       await this.addTicketHistoryEvent({
         ticketId,
@@ -609,32 +632,26 @@ export class TicketService {
       });
     } catch (error) {
       console.error('Error adding comment:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       toast.error('Failed to add comment');
       throw error;
     }
   }
 
   private static async generateTicketNumber(): Promise<string> {
-    const { data, error } = await supabase
-      .from('tickets')
-      .select('ticket_number')
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (error) throw error;
-
+    // Generate a dynamic alphanumeric ticket number: AWG-YYYY-XXXXXX (X = alphanumeric)
     const currentYear = new Date().getFullYear();
-    let nextNumber = 1;
-
-    if (data && data.length > 0) {
-      const lastTicket = data[0].ticket_number;
-      const match = lastTicket.match(/AWG-(\d{4})-(\d{3})/);
-      if (match && parseInt(match[1]) === currentYear) {
-        nextNumber = parseInt(match[2]) + 1;
-      }
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let randomStr = '';
+    for (let i = 0; i < 6; i++) {
+      randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-
-    return `AWG-${currentYear}-${String(nextNumber).padStart(3, '0')}`;
+    return `AWG-${currentYear}-${randomStr}`;
   }
 
   private static async uploadAttachments(ticketId: string, files: File[]): Promise<void> {
@@ -670,7 +687,14 @@ export class TicketService {
     // Deserialize issue_date from database
     const issueDate = {
       type: data.issue_date.type,
-      dates: data.issue_date.dates?.map((dateStr: string) => new Date(dateStr)) || [],
+      dates:
+        data.issue_date.type === 'multiple'
+          ? data.issue_date.dates?.map((d: any) =>
+              typeof d === 'object' && d.date
+                ? { date: new Date(d.date), description: d.description || '' }
+                : { date: new Date(d), description: '' }
+            ) || []
+          : data.issue_date.dates?.map((dateStr: string) => new Date(dateStr)) || [],
       startDate: data.issue_date.startDate ? new Date(data.issue_date.startDate) : undefined,
       endDate: data.issue_date.endDate ? new Date(data.issue_date.endDate) : undefined
     };
@@ -762,5 +786,20 @@ export class TicketService {
       .select('*')
       .eq('ticket_id', ticketId);
     return { data, error };
+  }
+
+  static async getLastTicket(): Promise<Issue | null> {
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error || !data || data.length === 0) return null;
+      return this.mapDatabaseToIssue(data[0]);
+    } catch (error) {
+      console.error('Error fetching last ticket:', error);
+      return null;
+    }
   }
 }

@@ -1,3 +1,5 @@
+export type MultipleDateWithDescription = { date: Date; description: string };
+
 export interface Issue {
   id: string;
   ticketNumber: string;
@@ -10,7 +12,7 @@ export interface Issue {
   issueEvidence?: File[];
   issueDate: {
     type: 'single' | 'multiple' | 'range' | 'ongoing';
-    dates: Date[];
+    dates: Date[] | MultipleDateWithDescription[];
     startDate?: Date;
     endDate?: Date;
   };
@@ -44,7 +46,7 @@ export interface Comment {
   id: string;
   content: string;
   author: string;
-  authorRole: 'invigilator' | 'admin' | 'resolver' | 'approver' | 'super_admin';
+  authorRole: 'invigilator' | 'admin' | 'resolver' | 'approver' | 'super_admin' | 'anonymous';
   timestamp: Date;
   isInternal: boolean;
 }

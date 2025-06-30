@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/navigation/Header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText } from 'lucide-react';
+import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import { UserManagementModal } from '@/components/admin/UserManagementModal';
 import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
 import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
+import { format } from 'date-fns';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -46,6 +47,7 @@ export const AdminPage: React.FC = () => {
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showTicketDetails, setShowTicketDetails] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
+  const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
 
   // Update active tab when URL changes
   useEffect(() => {
@@ -266,6 +268,28 @@ export const AdminPage: React.FC = () => {
   const slaCompliance = calculateSLACompliance();
   const avgResolutionTime = calculateAvgResolutionTime();
   const activeUsers = calculateActiveUsers();
+
+  const handleDeleteTicket = async (ticket: Issue) => {
+    if (!window.confirm(`Are you sure you want to delete ticket ${ticket.ticketNumber}? This action cannot be undone and will delete all related data (comments, attachments, etc.).`)) {
+      return;
+    }
+
+    setDeletingTicketId(ticket.id);
+    try {
+      const success = await AdminService.deleteTicket(ticket.id);
+      if (success) {
+        toast.success(`Ticket ${ticket.ticketNumber} deleted successfully`);
+        loadTickets(); // Refresh the ticket list
+      } else {
+        toast.error('Failed to delete ticket');
+      }
+    } catch (error) {
+      console.error('Error deleting ticket:', error);
+      toast.error('Failed to delete ticket');
+    } finally {
+      setDeletingTicketId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -526,53 +550,55 @@ export const AdminPage: React.FC = () => {
 
                     {/* Mobile Ticket Cards */}
                     {filteredTickets.map((ticket) => (
-                      <Card key={ticket.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start space-x-3 flex-1">
-                              <Checkbox
-                                checked={selectedTickets.includes(ticket.id)}
-                                onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked as boolean)}
-                                className="mt-1"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-2">
-                                  <h3 className="font-semibold text-sm truncate">{ticket.ticketNumber}</h3>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewTicket(ticket);
-                                    }}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge variant="outline" className="text-xs">
-                                    {ticket.issueCategory.replace('_', ' ').toUpperCase()}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                                  {ticket.issueDescription}
-                                </p>
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  <Badge variant={getStatusColor(ticket.status)} className="text-xs">
-                                    {ticket.status.replace('_', ' ').toUpperCase()}
-                                  </Badge>
-                                  <Badge variant={getSeverityColor(ticket.severity)} className="text-xs">
-                                    {ticket.severity.toUpperCase()}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                  <span>{ticket.city}</span>
-                                  <span>{formatDate(ticket.submittedAt)}</span>
-                                </div>
-                              </div>
-                            </div>
+                      <Card key={ticket.id} className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={selectedTickets.includes(ticket.id)}
+                              onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked as boolean)}
+                            />
+                            <span className="font-mono font-semibold">{ticket.ticketNumber}</span>
+                            <Badge variant={getStatusColor(ticket.status)}>
+                              {ticket.status.replace('_', ' ')}
+                            </Badge>
+                            <Badge variant={getSeverityColor(ticket.severity)}>
+                              {ticket.severity.toUpperCase()}
+                            </Badge>
                           </div>
-                        </CardContent>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewTicket(ticket)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteTicket(ticket)}
+                              disabled={deletingTicketId === ticket.id}
+                            >
+                              {deletingTicketId === ticket.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  Deleting...
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="h-4 w-4" />
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <h3 className="font-medium mb-2">{ticket.issueDescription}</h3>
+                        
+                        <div className="flex items-center justify-between text-sm text-gray-500">
+                          <span>{ticket.city}</span>
+                          <span>{ticket.submittedAt ? format(new Date(ticket.submittedAt), 'dd MMM yyyy HH:mm:ss') : 'N/A'}</span>
+                        </div>
                       </Card>
                     ))}
                   </>
@@ -639,15 +665,36 @@ export const AdminPage: React.FC = () => {
                                 </Badge>
                               </TableCell>
                               <TableCell>{ticket.city}</TableCell>
-                              <TableCell>{formatDate(ticket.submittedAt)}</TableCell>
                               <TableCell>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleViewTicket(ticket)}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
+                                {ticket.submittedAt ? format(new Date(ticket.submittedAt), 'dd MMM yyyy HH:mm:ss') : 'N/A'}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleViewTicket(ticket)}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => handleDeleteTicket(ticket)}
+                                    disabled={deletingTicketId === ticket.id}
+                                  >
+                                    {deletingTicketId === ticket.id ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Deleting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Trash2 className="h-4 w-4" />
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -706,7 +753,7 @@ export const AdminPage: React.FC = () => {
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
         <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
-          <p>© 2024 Awign Technologies. Issue Management System for TCS Examination Operations.</p>
+          <p>© 2024 Awign Technologies. Escalation Management System for TCS Examination Operations.</p>
           <p className="mt-1">For technical support, contact: support@awign.com</p>
         </div>
       </footer>

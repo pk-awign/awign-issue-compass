@@ -28,7 +28,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
     issueDescription: '',
     dateType: 'single' as 'single' | 'multiple' | 'ongoing',
     singleDate: undefined as Date | undefined,
-    multipleDates: [] as Date[],
+    multipleDates: [] as { date: Date, description: string }[],
     startDate: undefined as Date | undefined,
     endDate: undefined as Date | undefined,
     isAnonymous: false,
@@ -36,6 +36,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
   });
 
   const [files, setFiles] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const issueCategories = [
     { value: 'payment_delay', label: 'Payment Delay' },
@@ -53,66 +54,95 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.centreCode || !formData.city || !formData.resourceId || !formData.issueCategory || !formData.issueDescription) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    let dates: Date[] = [];
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-
-    if (formData.dateType === 'single' && formData.singleDate) {
-      dates = [formData.singleDate];
-    } else if (formData.dateType === 'multiple') {
-      dates = formData.multipleDates;
-    } else if (formData.dateType === 'ongoing') {
-      startDate = formData.startDate;
-      endDate = formData.endDate;
-    }
-
-    const issueData = {
-      centreCode: formData.centreCode,
-      city: formData.city,
-      resourceId: formData.resourceId,
-      awignAppTicketId: formData.awignAppTicketId || undefined,
-      issueCategory: formData.issueCategory as Issue['issueCategory'],
-      issueDescription: formData.issueDescription,
-      issueEvidence: files.length > 0 ? files : undefined,
-      issueDate: {
-        type: formData.dateType,
-        dates,
-        startDate,
-        endDate
-      },
-      isAnonymous: formData.isAnonymous,
-      submittedBy: formData.isAnonymous ? undefined : formData.submittedBy
-    };
-
-    onSubmit(issueData);
-    
-    // Reset form
-    setFormData({
-      centreCode: '',
-      city: '',
-      resourceId: '',
-      awignAppTicketId: '',
-      issueCategory: '',
-      issueDescription: '',
-      dateType: 'single',
-      singleDate: undefined,
-      multipleDates: [],
-      startDate: undefined,
-      endDate: undefined,
-      isAnonymous: false,
-      submittedBy: ''
+  const handleMultipleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    setFormData(prev => {
+      const exists = prev.multipleDates.find(d => d.date.getTime() === date.getTime());
+      if (exists) {
+        return { ...prev, multipleDates: prev.multipleDates.filter(d => d.date.getTime() !== date.getTime()) };
+      } else {
+        return { ...prev, multipleDates: [...prev.multipleDates, { date, description: '' }] };
+      }
     });
-    setFiles([]);
-    
-    toast.success('Issue submitted successfully! You will receive a tracking number shortly.');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      // Updated validation logic - don't require resourceId for anonymous submissions
+      const requiredFields = [
+        formData.centreCode,
+        formData.city,
+        formData.issueCategory,
+        formData.issueDescription
+      ];
+      
+      // Only require resourceId if not anonymous
+      if (!formData.isAnonymous) {
+        requiredFields.push(formData.resourceId);
+      }
+      
+      if (requiredFields.some(field => !field)) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
+
+      let dates: any[] = [];
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+
+      if (formData.dateType === 'single' && formData.singleDate) {
+        dates = [formData.singleDate];
+      } else if (formData.dateType === 'multiple') {
+        dates = formData.multipleDates;
+      } else if (formData.dateType === 'ongoing') {
+        startDate = formData.startDate;
+        endDate = formData.endDate;
+      }
+
+      const issueData = {
+        centreCode: formData.centreCode,
+        city: formData.city,
+        resourceId: formData.isAnonymous ? undefined : formData.resourceId,
+        awignAppTicketId: formData.awignAppTicketId || undefined,
+        issueCategory: formData.issueCategory as Issue['issueCategory'],
+        issueDescription: formData.issueDescription,
+        issueEvidence: files.length > 0 ? files : undefined,
+        issueDate: {
+          type: formData.dateType,
+          dates,
+          startDate,
+          endDate
+        },
+        isAnonymous: formData.isAnonymous,
+        submittedBy: formData.isAnonymous ? undefined : formData.submittedBy
+      };
+
+      onSubmit(issueData);
+      
+      // Reset form
+      setFormData({
+        centreCode: '',
+        city: '',
+        resourceId: '',
+        awignAppTicketId: '',
+        issueCategory: '',
+        issueDescription: '',
+        dateType: 'single',
+        singleDate: undefined,
+        multipleDates: [],
+        startDate: undefined,
+        endDate: undefined,
+        isAnonymous: false,
+        submittedBy: ''
+      });
+      setFiles([]);
+      
+      toast.success('Issue submitted successfully! You will receive a tracking number shortly.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -245,6 +275,57 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
               </div>
             )}
 
+            {formData.dateType === 'multiple' && (
+              <div className="mt-2 space-y-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      Select multiple dates
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      onSelect={handleMultipleDateSelect}
+                      initialFocus
+                      className="p-3 pointer-events-auto"
+                      disabled={(date) => date > new Date()}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {formData.multipleDates.length > 0 && (
+                  <div className="space-y-2">
+                    {formData.multipleDates.map((item, index) => (
+                      <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-blue-50 p-2 rounded-lg">
+                        <div className="font-mono text-sm min-w-[120px]">{format(item.date, "MMM dd, yyyy")}</div>
+                        <Textarea
+                          className="flex-1 min-w-[180px]"
+                          placeholder="Description for this date..."
+                          value={item.description}
+                          onChange={e => setFormData(prev => {
+                            const newDates = [...prev.multipleDates];
+                            newDates[index] = { ...newDates[index], description: e.target.value };
+                            return { ...prev, multipleDates: newDates };
+                          })}
+                          rows={2}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({
+                            ...prev,
+                            multipleDates: prev.multipleDates.filter((_, i) => i !== index)
+                          }))}
+                          className="text-blue-600 hover:text-blue-800 ml-2"
+                          title="Remove date"
+                        >×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {formData.dateType === 'ongoing' && (
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <Popover>
@@ -316,8 +397,8 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
             <Label htmlFor="anonymous">Submit anonymously</Label>
           </div>
 
-          <Button type="submit" className="w-full">
-            Submit Issue
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Submitting...' : 'Submit Issue'}
           </Button>
         </form>
       </CardContent>
