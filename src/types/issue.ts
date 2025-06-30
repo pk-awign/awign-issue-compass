@@ -3,8 +3,9 @@ export interface Issue {
   ticketNumber: string;
   centreCode: string;
   city: string;
-  resourceId?: string;
-  issueCategory: 'payment_delay' | 'partial_payment' | 'behavioral_complaint' | 'improvement_request' | 'other';
+  resourceId: string;
+  awignAppTicketId?: string;
+  issueCategory: 'payment_delay' | 'partial_payment' | 'behavioral_complaint' | 'improvement_request' | 'facility_issue' | 'penalty_issue' | 'other';
   issueDescription: string;
   issueEvidence?: File[];
   issueDate: {
@@ -96,7 +97,8 @@ export interface TicketDetails {
   ticketNumber: string;
   centreCode: string;
   city: string;
-  resourceId?: string;
+  resourceId: string;
+  awignAppTicketId?: string;
   issueCategory: Issue['issueCategory'];
   issueDescription: string;
   severity: Issue['severity'];

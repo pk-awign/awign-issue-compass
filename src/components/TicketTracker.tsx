@@ -108,6 +108,8 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
       partial_payment: 'Partial Payment',
       behavioral_complaint: 'Behavioral Complaint',
       improvement_request: 'Improvement Request',
+      facility_issue: 'Facility Issue',
+      penalty_issue: 'Penalty Issue',
       other: 'Other'
     };
     return labels[category];

@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { TicketTracker } from './TicketTracker';
 import { generateTicketFile, generateWhatsAppMessage } from '@/utils/ticketDownload';
+import { FaWhatsapp } from 'react-icons/fa';
 
 interface PublicIssueFormProps {
   onSubmit: (issue: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'>) => Promise<string>;
@@ -43,6 +44,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     centreCode: '',
     city: '',
     resourceId: '',
+    awignAppTicketId: '',
     issueCategory: '' as Issue['issueCategory'] | '',
     issueDescription: '',
     dateType: 'single' as 'single' | 'range' | 'multiple' | 'ongoing',
@@ -84,6 +86,8 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     { value: 'partial_payment', label: 'Reduced/Partial Payment' },
     { value: 'behavioral_complaint', label: 'Behavioral Complaint' },
     { value: 'improvement_request', label: 'Improvement Request' },
+    { value: 'facility_issue', label: 'Facility Issue' },
+    { value: 'penalty_issue', label: 'Penalty Issue' },
     { value: 'other', label: 'Other Issue' }
   ];
 
@@ -100,7 +104,16 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+      const newFiles = Array.from(e.target.files);
+      setFiles(prevFiles => {
+        // Avoid duplicates by name and size
+        const allFiles = [...prevFiles, ...newFiles];
+        return allFiles.filter((file, idx, arr) =>
+          arr.findIndex(f => f.name === file.name && f.size === file.size) === idx
+        );
+      });
+      // Reset the input value so the same file can be selected again if needed
+      e.target.value = '';
     }
   };
 
@@ -146,13 +159,13 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     e.preventDefault();
     
     // Updated validation logic
-    if (!formData.centreCode || !formData.city || !formData.issueCategory || !formData.issueDescription) {
+    if (!formData.centreCode || !formData.city || !formData.resourceId || !formData.issueCategory || !formData.issueDescription) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    // Validate name for non-anonymous reports
-    if (!formData.isAnonymous && !formData.submittedBy) {
+    // Validate name for non-anonymous reports (only for non-logged-in users)
+    if (!user && !formData.isAnonymous && !formData.submittedBy) {
       toast.error('Name is required for non-anonymous reports');
       return;
     }
@@ -173,7 +186,8 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     const issueData = {
       centreCode: formData.centreCode,
       city: formData.city,
-      resourceId: formData.resourceId || undefined,
+      resourceId: formData.resourceId,
+      awignAppTicketId: formData.awignAppTicketId || undefined,
       issueCategory: formData.issueCategory as Issue['issueCategory'],
       issueDescription: formData.issueDescription,
       issueEvidence: files.length > 0 ? files : undefined,
@@ -212,6 +226,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
         centreCode: user?.centreCode || '',
         city: user?.city || '',
         resourceId: '',
+        awignAppTicketId: '',
         issueCategory: '',
         issueDescription: '',
         dateType: 'single',
@@ -233,9 +248,9 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b shadow-sm">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex flex-col items-start">
               <div className="bg-gray-800 p-1 rounded">
                 <img 
                   src="/awign-logo.svg" 
@@ -243,40 +258,35 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                   className="w-8 h-8 object-contain"
                 />
               </div>
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900">Awign Issue Management</h1>
-                <p className="text-sm text-gray-600">TCS Examination Operations Portal</p>
-              </div>
             </div>
-            
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col items-start flex-1 ml-4">
+              <span className="text-base sm:text-xl font-semibold text-gray-900">Awign invIgilation Escalation Portal</span>
+              <span className="text-xs sm:text-sm text-gray-600 mt-1">Report Escalations Only This is a leadership connect portal for escalations of your Issue when other channels like TL, Awign Support have not resolved your issue in time</span>
+            </div>
+            <div className="flex items-center gap-2 ml-4">
               {user ? (
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                    <p className="text-xs text-gray-600">{user.city} - {user.centreCode}</p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={logout}>
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Logout
-                  </Button>
-                </div>
+                <Button variant="outline" size="sm" onClick={logout}>
+                  <LogOut className="h-5 w-5" />
+                </Button>
               ) : (
-                <>
-                  <span className="text-sm text-gray-600">Invigilator</span>
-                  <Button variant="outline" size="sm" onClick={onAdminLogin}>
-                    <Users className="h-4 w-4 mr-2" />
-                    Login
-                  </Button>
-                </>
+                <Button variant="outline" size="sm" onClick={onAdminLogin} className="flex items-center gap-2">
+                  <Users className="h-5 w-5 mr-1" />
+                  <span className="hidden sm:inline">Login</span>
+                </Button>
               )}
             </div>
           </div>
+          {/* 5. After login, show 'Logged in as ...' below header */}
+          {user && (
+            <div className="text-xs text-gray-700 mt-2 text-right">
+              Logged in as <span className="font-semibold">{user.name}</span>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-2 py-4 sm:px-6 sm:py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full max-w-4xl mx-auto">
           <TabsList className="grid w-full grid-cols-2 mb-8">
             <TabsTrigger value="report">Report Issue</TabsTrigger>
@@ -286,38 +296,28 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
           <TabsContent value="report">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Report New Issue
+                <CardTitle className="flex flex-col gap-1">
+                  <span className="text-lg font-semibold">Report Escalations Only</span>
+                  <span className="text-sm text-muted-foreground">This is a leadership connect portal for escalations of your Issue when other channels like TL, Awign Support have not resolved your issue in time</span>
                 </CardTitle>
-                <p className="text-sm text-gray-600">
-                  Submit an issue report for examination operations. You'll receive a unique ticket ID to track your issue.
-                </p>
               </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Anonymous Checkbox - hide when logged in */}
-                {!user && (
-                  <div className="flex items-center space-x-2 p-4 bg-blue-50 rounded-lg">
-                    <Checkbox 
-                      id="anonymous" 
-                      checked={formData.isAnonymous}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isAnonymous: checked as boolean }))}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="anonymous" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                        Report this issue anonymously
-                      </Label>
-                      <p className="text-xs text-gray-600">
-                        Anonymous reports get unique tracking links
-                      </p>
+              <CardContent>
+                <form className="space-y-6" onSubmit={handleSubmit}>
+                  {/* Anonymous Checkbox - hide when logged in */}
+                  {!user && (
+                    <div className="flex items-center space-x-2 p-4 bg-blue-50 rounded-lg">
+                      <Checkbox 
+                        id="anonymous" 
+                        checked={formData.isAnonymous}
+                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isAnonymous: checked as boolean }))}
+                      />
+                      <Label htmlFor="anonymous" className="text-sm font-medium">Report this issue anonymously</Label>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Name and Resource ID - side by side, only show if not anonymous */}
+                  {/* Name and Resource ID side by side */}
                   {!formData.isAnonymous && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       <div>
                         <Label htmlFor="submittedBy" className="text-sm font-medium">Your Name *</Label>
                         <Input
@@ -325,43 +325,53 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                           value={formData.submittedBy}
                           onChange={(e) => setFormData(prev => ({ ...prev, submittedBy: e.target.value }))}
                           placeholder="Enter your name"
+                          required
                           className="mt-2"
-                          required={!formData.isAnonymous}
-                          disabled={!!user?.name}
                         />
                       </div>
                       <div>
-                        <Label htmlFor="resourceId" className="text-sm font-medium">Resource ID (Optional)</Label>
+                        <Label htmlFor="resourceId" className="text-sm font-medium">Resource ID *</Label>
                         <Input
                           id="resourceId"
                           value={formData.resourceId}
                           onChange={(e) => setFormData(prev => ({ ...prev, resourceId: e.target.value }))}
-                          placeholder="Enter Resource ID if applicable"
+                          placeholder="Enter Resource ID"
+                          required
                           className="mt-2"
                         />
                       </div>
                     </div>
                   )}
 
-                  {/* Issue Type */}
-                  <div>
-                    <Label className="text-sm font-medium">Issue Type *</Label>
-                    <Select value={formData.issueCategory} onValueChange={(value) => setFormData(prev => ({ ...prev, issueCategory: value as Issue['issueCategory'] }))}>
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="Select issue type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {issueCategories.map(category => (
-                          <SelectItem key={category.value} value={category.value}>
-                            {category.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  {/* Issue Type and Awign App Ticket ID side by side */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div>
+                      <Label className="text-sm font-medium">Issue Type *</Label>
+                      <Select value={formData.issueCategory} onValueChange={(value) => setFormData(prev => ({ ...prev, issueCategory: value as Issue['issueCategory'] }))}>
+                        <SelectTrigger className="w-full mt-2">
+                          <SelectValue placeholder="Select issue type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {issueCategories.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="awignAppTicketId" className="text-sm font-medium">Awign App Ticket ID (Optional)</Label>
+                      <Input
+                        id="awignAppTicketId"
+                        value={formData.awignAppTicketId}
+                        onChange={(e) => setFormData(prev => ({ ...prev, awignAppTicketId: e.target.value }))}
+                        placeholder="Enter Awign App Ticket ID if applicable"
+                        className="mt-2"
+                      />
+                    </div>
                   </div>
 
                   {/* Centre Code and City */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     <div>
                       <Label htmlFor="centreCode" className="text-sm font-medium">Centre Code *</Label>
                       <Input
@@ -369,26 +379,22 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                         value={formData.centreCode}
                         onChange={(e) => setFormData(prev => ({ ...prev, centreCode: e.target.value }))}
                         placeholder="e.g., TCS-MUM-001"
-                        className="mt-2"
                         required
-                        disabled={!!user?.centreCode}
+                        className="mt-2"
                       />
                     </div>
                     <div>
                       <Label className="text-sm font-medium">City *</Label>
                       <Select 
-                        value={formData.city} 
+                        value={formData.city}
                         onValueChange={(value) => setFormData(prev => ({ ...prev, city: value }))}
-                        disabled={!!user?.city}
                       >
-                        <SelectTrigger className="mt-2">
+                        <SelectTrigger className="w-full mt-2">
                           <SelectValue placeholder="Select city" />
                         </SelectTrigger>
                         <SelectContent>
-                          {cities.map(city => (
-                            <SelectItem key={city} value={city}>
-                              {city}
-                            </SelectItem>
+                          {cities.map((city) => (
+                            <SelectItem key={city} value={city}>{city}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -565,7 +571,25 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                   {/* File Upload */}
                   <div>
                     <Label className="text-sm font-medium">Issue Evidence (Optional)</Label>
-                    <div className="mt-2 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                    {/* Show attached files list */}
+                    {files.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {files.map((file, idx) => (
+                          <div key={idx} className="flex items-center bg-green-50 border border-green-300 rounded px-2 py-1 text-xs">
+                            <span className="truncate max-w-[120px]">{file.name}</span>
+                            <button
+                              type="button"
+                              className="ml-2 text-red-500 hover:text-red-700"
+                              onClick={() => setFiles(files => files.filter((_, i) => i !== idx))}
+                              aria-label={`Remove ${file.name}`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className={`mt-2 border-2 border-dashed rounded-lg p-6 text-center transition-colors ${files.length > 0 ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}>
                       <Upload className="mx-auto h-12 w-12 text-gray-400" />
                       <div className="mt-4">
                         <label htmlFor="file-upload" className="cursor-pointer">
@@ -585,11 +609,6 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                           onChange={handleFileChange}
                         />
                       </div>
-                      {files.length > 0 && (
-                        <div className="mt-4 text-sm text-gray-600">
-                          {files.length} file(s) selected
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -609,7 +628,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-xs sm:max-w-md w-full overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-600">
               <CheckCircle className="h-6 w-6 text-green-600" />
@@ -651,25 +670,20 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
               </div>
             </div>
             
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowSuccessDialog(false)}
-              >
-                Close
-              </Button>
+            <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4 mt-2">
               <Button
                 onClick={handleTrackIssues}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
               >
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Track
               </Button>
               <Button
                 onClick={handleWhatsAppShare}
-                className="bg-green-600 hover:bg-green-700"
+                className="w-full sm:w-auto bg-green-600 hover:bg-green-700 flex items-center justify-center"
+                title="You can send this message to yourself."
               >
-                <MessageCircle className="h-4 w-4 mr-1" />
+                <FaWhatsapp className="h-4 w-4 mr-1" />
                 Share
               </Button>
             </div>

@@ -66,6 +66,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const [isCommentLoading, setIsCommentLoading] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [isTimelineLoading, setIsTimelineLoading] = useState(false);
+  const [availableTransitions, setAvailableTransitions] = useState<Issue['status'][]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -89,6 +90,12 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         .finally(() => setIsTimelineLoading(false));
     }
   }, [activeTab, ticket]);
+
+  useEffect(() => {
+    if (ticket && user?.role) {
+      TicketService.getStatusTransitions(user.role, ticket.status as Issue['status']).then((arr) => setAvailableTransitions(arr));
+    }
+  }, [ticket, user?.role]);
 
   const loadUsers = async () => {
     try {
@@ -281,8 +288,6 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
     window.open(attachment.downloadUrl, '_blank');
   };
 
-  const availableTransitions = ticket ? getAvailableTransitions(ticket.status, user?.role || '') : [];
-
   const handleAddAssignee = async () => {
     if (!ticket?.id || !newAssignee || !user) return;
     setIsAssigneeLoading(true);
@@ -307,9 +312,14 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const handleAddComment = async () => {
     if (!ticket?.id || !user || !commentText.trim()) return;
     setIsCommentLoading(true);
-    await TicketService.addTimelineComment(ticket.id, commentText, user.id, user.name, user.role);
+    await TicketService.addComment(ticket.id, {
+      content: commentText,
+      author: user.name,
+      authorRole: user.role,
+      isInternal: false
+    });
     setCommentText('');
-    await loadTimeline();
+    onTicketUpdate();
     setIsCommentLoading(false);
   };
 
@@ -321,18 +331,18 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5" />
-            Ticket Details - {ticket.ticketNumber}
+            Ticket Details
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Header with badges */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold">{ticket.ticketNumber}</h2>
-              <p className="text-gray-600">{ticket.issueDescription.substring(0, 100)}...</p>
+              <p className="text-gray-600">{ticket.issueCategory.replace('_', ' ').toUpperCase()}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {ticket.reopenCount > 0 && (
                 <Badge variant="destructive" className="flex items-center gap-1">
                   <RefreshCw className="w-3 h-3" />
@@ -349,11 +359,12 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex space-x-1 border-b">
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-1 border-b">
             <Button
               variant={activeTab === 'details' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveTab('details')}
+              className="justify-start sm:justify-center"
             >
               Details
             </Button>
@@ -361,6 +372,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               variant={activeTab === 'management' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveTab('management')}
+              className="justify-start sm:justify-center"
             >
               Management
             </Button>
@@ -368,6 +380,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               variant={activeTab === 'timeline' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveTab('timeline')}
+              className="justify-start sm:justify-center"
             >
               Timeline
             </Button>
@@ -402,20 +415,55 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       <label className="text-sm font-medium text-gray-600">Issue Category</label>
                       <p className="text-sm">{ticket.issueCategory.replace('_', ' ').toUpperCase()}</p>
                     </div>
+                    {ticket.awignAppTicketId && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-600">Awign App Ticket ID</label>
+                        <p className="text-sm">{ticket.awignAppTicketId}</p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">Description</label>
                     <p className="text-sm mt-1">{ticket.issueDescription}</p>
                   </div>
+                  
+                  {/* Attachments in Basic Information */}
+                  {ticket.attachments && ticket.attachments.length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Attachments ({ticket.attachments.length})</label>
+                      <div className="mt-2 space-y-2">
+                        {ticket.attachments.map((attachment, index) => (
+                          <div key={attachment.id || index} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+                            <div className="flex items-center space-x-3">
+                              <Paperclip className="h-4 w-4 text-gray-500" />
+                              <div>
+                                <p className="text-sm font-medium">{attachment.fileName || attachment.name || `Attachment ${index + 1}`}</p>
+                                <p className="text-xs text-gray-500">
+                                  {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : attachment.size || 'Unknown size'}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDownloadAttachment(attachment)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Assignment Information */}
+              {/* Additional Information */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <User className="w-5 h-5" />
-                    Assignment Information
+                    Additional Information
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -454,129 +502,110 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                               const u = allUsers.find(u => u.id === a.user_id);
                               return u ? `${u.name} (${u.role})` : a.user_id;
                             }).join(', ')
-                      }
-                    </p>
+                        }
+                      </p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Attachments */}
-              {ticket.attachments && ticket.attachments.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Paperclip className="w-5 h-5" />
-                      Attachments ({ticket.attachments.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {ticket.attachments.map((attachment) => (
-                        <div key={attachment.id} className="flex items-center justify-between p-2 border rounded">
-                          <div className="flex items-center gap-2">
-                            <Paperclip className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm">{attachment.fileName}</span>
-                            <span className="text-xs text-gray-500">
-                              ({(attachment.fileSize / 1024).toFixed(1)} KB)
-                            </span>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDownloadAttachment(attachment)}
-                          >
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Comments */}
-              {ticket.comments && ticket.comments.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5" />
-                      Comments ({ticket.comments.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {ticket.comments.map((comment) => (
+                  {/* Comments Section (latest on top) */}
+                  <div className="mt-6">
+                    <label className="text-sm font-medium text-gray-600 mb-2 block">Comments</label>
+                    <div className="space-y-4 max-h-60 overflow-y-auto">
+                      {[...(ticket.comments || [])].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(comment => (
                         <div key={comment.id} className="border-l-2 border-blue-500 pl-4">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-medium text-sm">{comment.author}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {comment.authorRole}
-                            </Badge>
+                            <Badge variant="outline" className="text-xs">{comment.authorRole}</Badge>
                             {comment.isInternal && (
                               <Badge variant="secondary" className="text-xs">Internal</Badge>
                             )}
-                            <span className="text-xs text-gray-500">
-                              {formatDate(comment.timestamp)}
-                            </span>
+                            <span className="text-xs text-gray-500">{formatDate(comment.timestamp)}</span>
                           </div>
                           <p className="text-sm">{comment.content}</p>
                         </div>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
-              )}
+                    {/* Add Comment Box */}
+                    <div className="mt-4">
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">Add Comment</label>
+                      <Textarea
+                        placeholder="Enter your comment..."
+                        value={commentText}
+                        onChange={e => setCommentText(e.target.value)}
+                        className="min-h-[60px]"
+                      />
+                      <Button
+                        className="mt-2"
+                        size="sm"
+                        onClick={handleAddComment}
+                        disabled={isCommentLoading || !commentText.trim()}
+                      >
+                        Add Comment
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
 
           {/* Management Tab */}
           {activeTab === 'management' && user?.role === 'super_admin' && (
             <div className="space-y-6">
-              {/* Assignee Management */}
+              {/* Assignment Management - Only for Super Admin */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Assignee Management</CardTitle>
+                  <CardTitle>Assignment Management</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium">Current Assignees</label>
-                    <div className="space-y-2 mt-2">
-                      {assignees.length === 0 && <p className="text-gray-500">No assignees yet.</p>}
-                      {assignees.map(a => {
-                        const u = allUsers.find(u => u.id === a.user_id);
-                        return (
-                          <div key={a.user_id + a.role} className="flex items-center gap-2">
-                            <span className="text-sm">{u ? u.name : a.user_id} ({a.role})</span>
-                            <Button size="sm" variant="destructive" onClick={() => handleRemoveAssignee(a.user_id, a.role)} disabled={isAssigneeLoading}>Remove</Button>
-                          </div>
-                        );
-                      })}
+                    <label className="text-sm font-medium text-gray-600 mb-2 block">Current Assignees</label>
+                    <div className="space-y-2">
+                      {assignees.length === 0 ? (
+                        <p className="text-sm text-gray-500">No assignees</p>
+                      ) : (
+                        assignees.map(a => {
+                          const u = allUsers.find(u => u.id === a.user_id);
+                          return (
+                            <div key={a.user_id + a.role} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg">
+                              <span className="text-sm flex-1">{u ? u.name : a.user_id} ({a.role})</span>
+                              <Button size="sm" variant="destructive" onClick={() => handleRemoveAssignee(a.user_id, a.role)} disabled={isAssigneeLoading}>
+                                Remove
+                              </Button>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Select value={assigneeRole} onValueChange={setAssigneeRole}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue placeholder="Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="resolver">Resolver</SelectItem>
-                        <SelectItem value="approver">Approver</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={newAssignee} onValueChange={setNewAssignee}>
-                      <SelectTrigger className="w-64">
-                        <SelectValue placeholder="Select user to assign" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(assigneeRole === 'resolver' ? resolvers : approvers)
-                          .filter(u => !assignees.some(a => a.user_id === u.id && a.role === assigneeRole))
-                          .map(u => (
-                            <SelectItem key={u.id} value={u.id}>{u.name} ({u.role})</SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <Button size="sm" onClick={handleAddAssignee} disabled={!newAssignee || isAssigneeLoading}>Add</Button>
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Select value={assigneeRole} onValueChange={setAssigneeRole}>
+                        <SelectTrigger className="w-full sm:w-32">
+                          <SelectValue placeholder="Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="resolver">Resolver</SelectItem>
+                          {user?.role === 'super_admin' && (
+                            <SelectItem value="approver">Approver</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Select value={newAssignee} onValueChange={setNewAssignee}>
+                        <SelectTrigger className="w-full sm:w-64">
+                          <SelectValue placeholder="Select user to assign" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(assigneeRole === 'resolver' ? resolvers : approvers)
+                            .filter(u => !assignees.some(a => a.user_id === u.id && a.role === assigneeRole))
+                            .map(u => (
+                              <SelectItem key={u.id} value={u.id}>{u.name} ({u.role})</SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button size="sm" onClick={handleAddAssignee} disabled={!newAssignee || isAssigneeLoading} className="w-full sm:w-auto">
+                      Add Assignee
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -587,7 +616,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                   <CardTitle>Status Management</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <div>
                       <label className="text-sm font-medium">Current Status</label>
                       <div className="mt-1">
@@ -613,7 +642,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                     </div>
                   </div>
                   
-                  {selectedStatus === 'resolved' && (
+                  {selectedStatus === 'resolved' && user?.role !== 'super_admin' && (
                     <div>
                       <label className="text-sm font-medium">Resolution Notes</label>
                       <Textarea
@@ -623,7 +652,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         className="mt-1"
                         rows={3}
                       />
-                      <Button className="mt-2" onClick={() => handleStatusChange('resolved')} disabled={isUpdating || !resolutionNotes.trim()}>
+                      <Button className="mt-2 w-full sm:w-auto" onClick={() => handleStatusChange('resolved')} disabled={isUpdating || !resolutionNotes.trim()}>
                         Submit Resolution
                       </Button>
                     </div>
@@ -637,7 +666,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                   <CardTitle>Severity Management</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center gap-4">
+                  <div className="space-y-4">
                     <div>
                       <label className="text-sm font-medium">Current Severity</label>
                       <div className="mt-1">
@@ -686,12 +715,18 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       if (isTimelineEvent) {
                         return (
                           <div key={event.id} className="border-l-2 border-blue-500 pl-4">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
                               <span className="font-medium text-sm">{event.performedByName || 'System'}</span>
-                              <span className="text-xs text-gray-500">{event.eventType.replace('_', ' ')}</span>
-                              <span className="text-xs text-gray-400 ml-auto">{formatDate(new Date(event.createdAt))}</span>
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                {event.eventType.replace('_', ' ')}
+                              </span>
+                              <span className="text-xs text-gray-400 sm:ml-auto">{formatDate(new Date(event.createdAt))}</span>
                             </div>
-                            {event.details && <div className="text-sm text-gray-700">{JSON.stringify(event.details)}</div>}
+                            {event.details && (
+                              <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded text-wrap break-words">
+                                {typeof event.details === 'string' ? event.details : JSON.stringify(event.details, null, 2)}
+                              </div>
+                            )}
                           </div>
                         );
                       } else {
@@ -699,12 +734,18 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         const raw = event as any;
                         return (
                           <div key={raw.id} className="border-l-2 border-blue-500 pl-4">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
                               <span className="font-medium text-sm">{raw.performed_by || 'System'}</span>
-                              <span className="text-xs text-gray-500">{(raw.action_type || '').replace('_', ' ')}</span>
-                              <span className="text-xs text-gray-400 ml-auto">{formatDate(new Date(raw.performed_at))}</span>
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                {(raw.action_type || '').replace('_', ' ')}
+                              </span>
+                              <span className="text-xs text-gray-400 sm:ml-auto">{formatDate(new Date(raw.performed_at))}</span>
                             </div>
-                            {raw.details && <div className="text-sm text-gray-700">{JSON.stringify(raw.details)}</div>}
+                            {raw.details && (
+                              <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded text-wrap break-words">
+                                {typeof raw.details === 'string' ? raw.details : JSON.stringify(raw.details, null, 2)}
+                              </div>
+                            )}
                           </div>
                         );
                       }

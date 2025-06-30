@@ -1,17 +1,17 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { createRandomTickets, clearAllTickets } from '@/utils/sampleTickets';
+import { createRandomTickets, clearAllTickets, createSampleAttachments } from '@/utils/sampleTickets';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, Paperclip } from 'lucide-react';
 
 export const RandomTicketGenerator: React.FC = () => {
   const [count, setCount] = useState(10);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isCreatingAttachments, setIsCreatingAttachments] = useState(false);
 
   const handleGenerateTickets = async () => {
     setIsGenerating(true);
@@ -36,6 +36,19 @@ export const RandomTicketGenerator: React.FC = () => {
       console.error('Error clearing tickets:', error);
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  const handleCreateAttachments = async () => {
+    setIsCreatingAttachments(true);
+    try {
+      await createSampleAttachments();
+      toast.success('Sample attachments created successfully!');
+    } catch (error) {
+      toast.error('Failed to create sample attachments');
+      console.error('Error creating attachments:', error);
+    } finally {
+      setIsCreatingAttachments(false);
     }
   };
 
@@ -76,6 +89,25 @@ export const RandomTicketGenerator: React.FC = () => {
               <>
                 <Plus className="h-4 w-4 mr-2" />
                 Generate Random Tickets
+              </>
+            )}
+          </Button>
+          
+          <Button 
+            variant="outline"
+            onClick={handleCreateAttachments} 
+            disabled={isCreatingAttachments}
+            className="w-full"
+          >
+            {isCreatingAttachments ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Paperclip className="h-4 w-4 mr-2" />
+                Create Sample Attachments
               </>
             )}
           </Button>

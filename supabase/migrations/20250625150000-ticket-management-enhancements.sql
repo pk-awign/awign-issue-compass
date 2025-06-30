@@ -54,16 +54,15 @@ CREATE TABLE IF NOT EXISTS public.status_transitions (
 
 -- 8. Insert status transition rules
 INSERT INTO public.status_transitions (from_status, to_status, allowed_roles, requires_comment) VALUES
--- Resolver transitions
+-- Resolver transitions (forward only)
 ('open', 'in_progress', ARRAY['resolver', 'super_admin'], false),
 ('in_progress', 'send_for_approval', ARRAY['resolver', 'super_admin'], true),
 
--- Approver transitions  
+-- Approver transitions (forward only)
 ('send_for_approval', 'approved', ARRAY['approver', 'super_admin'], false),
-('send_for_approval', 'in_progress', ARRAY['approver', 'super_admin'], true), -- Reject back to in_progress
 ('approved', 'resolved', ARRAY['approver', 'super_admin'], false),
 
--- Super Admin can transition to any status
+-- Super Admin can transition to any status (including backward for management)
 ('open', 'send_for_approval', ARRAY['super_admin'], false),
 ('open', 'approved', ARRAY['super_admin'], false),
 ('open', 'resolved', ARRAY['super_admin'], false),
@@ -76,7 +75,7 @@ INSERT INTO public.status_transitions (from_status, to_status, allowed_roles, re
 ('approved', 'in_progress', ARRAY['super_admin'], false),
 ('approved', 'send_for_approval', ARRAY['super_admin'], false),
 
--- Re-open transitions (only for resolved tickets)
+-- Re-open transitions (only for resolved tickets, super admin only)
 ('resolved', 'open', ARRAY['super_admin'], true);
 
 -- 9. Create ticket timeline table for detailed history

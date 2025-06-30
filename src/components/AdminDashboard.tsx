@@ -353,81 +353,81 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Enhanced Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="rounded-xl">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Tickets</p>
                 <p className="text-2xl font-bold">{stats.totalTickets}</p>
               </div>
-              <Ticket className="h-8 w-8 text-blue-600" />
+              <Ticket className="h-7 w-7 text-blue-600" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-xl">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Open</p>
                 <p className="text-2xl font-bold text-red-600">{stats.openTickets}</p>
               </div>
-              <AlertCircle className="h-8 w-8 text-red-600" />
+              <AlertCircle className="h-7 w-7 text-red-600" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-xl">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">In Progress</p>
                 <p className="text-2xl font-bold text-yellow-600">{stats.inProgressTickets}</p>
               </div>
-              <Clock className="h-8 w-8 text-yellow-600" />
+              <Clock className="h-7 w-7 text-yellow-600" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-xl">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Resolved</p>
                 <p className="text-2xl font-bold text-green-600">{stats.resolvedTickets}</p>
               </div>
-              <CheckCircle className="h-8 w-8 text-green-600" />
+              <CheckCircle className="h-7 w-7 text-green-600" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-xl">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Users</p>
                 <p className="text-2xl font-bold">{stats.totalUsers}</p>
               </div>
-              <Users className="h-8 w-8 text-purple-600" />
+              <Users className="h-7 w-7 text-purple-600" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-xl">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Resolvers</p>
                 <p className="text-2xl font-bold">{stats.activeResolvers}</p>
               </div>
-              <Shield className="h-8 w-8 text-blue-600" />
+              <Shield className="h-7 w-7 text-blue-600" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-xl">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Approvers</p>
                 <p className="text-2xl font-bold">{stats.activeApprovers}</p>
               </div>
-              <Shield className="h-8 w-8 text-green-600" />
+              <Shield className="h-7 w-7 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -441,17 +441,23 @@ const AdminDashboard: React.FC = () => {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="tickets" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="tickets">Tickets</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsList className="flex flex-col items-center gap-2 bg-muted p-4 rounded-xl border shadow-md my-4 md:flex-row md:items-stretch md:justify-start">
+          <TabsTrigger value="tickets" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">
+            Tickets
+          </TabsTrigger>
+          <TabsTrigger value="users" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">
+            Users
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">
+            Analytics
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="tickets" className="space-y-4">
           {/* Filters */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex flex-col gap-2">
                 <div className="flex-1 min-w-[200px]">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -496,92 +502,94 @@ const AdminDashboard: React.FC = () => {
               <CardTitle>All Tickets ({filteredIssues.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ticket #</TableHead>
-                    <TableHead>Issue</TableHead>
-                    <TableHead>City</TableHead>
-                    <TableHead>Severity</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Assigned To</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredIssues.map((issue) => (
-                    <TableRow key={issue.id}>
-                      <TableCell className="font-mono text-sm">{issue.ticketNumber}</TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{issue.issueCategory.replace('_', ' ')}</p>
-                          <p className="text-sm text-gray-600 truncate max-w-[200px]">
-                            {issue.issueDescription}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>{issue.city}</TableCell>
-                      <TableCell>{getSeverityBadge(issue.severity)}</TableCell>
-                      <TableCell>{getStatusBadge(issue.status)}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {/* Resolvers */}
-                          {issue.assignees && issue.assignees.filter(a => a.role === 'resolver').length > 0 ? (
-                            <div>
-                              {issue.assignees.filter(a => a.role === 'resolver').map(a => {
-                                const u = users.find(u => u.id === a.user_id);
-                                return (
-                                  <span key={a.user_id + a.role} className="font-medium mr-1">{u ? u.name : a.user_id} <Badge variant="outline">resolver</Badge></span>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="text-muted-foreground">Unassigned</div>
-                          )}
-                          {/* Approvers */}
-                          {issue.assignees && issue.assignees.filter(a => a.role === 'approver').length > 0 ? (
-                            <div className="mt-1">
-                              {issue.assignees.filter(a => a.role === 'approver').map(a => {
-                                const u = users.find(u => u.id === a.user_id);
-                                return (
-                                  <span key={a.user_id + a.role} className="font-medium mr-1">{u ? u.name : a.user_id} <Badge variant="outline">approver</Badge></span>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="text-muted-foreground text-xs mt-1">No approver</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{format(issue.submittedAt, 'MMM dd, yyyy')}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openTicketDetails(issue)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {user?.role === 'super_admin' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedTicket(issue);
-                                setShowUserManagementModal(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
+              <div className="overflow-x-auto min-w-[600px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ticket #</TableHead>
+                      <TableHead>Issue</TableHead>
+                      <TableHead>City</TableHead>
+                      <TableHead>Severity</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Assigned To</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredIssues.map((issue) => (
+                      <TableRow key={issue.id}>
+                        <TableCell className="font-mono text-sm">{issue.ticketNumber}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{issue.issueCategory.replace('_', ' ')}</p>
+                            <p className="text-sm text-gray-600 truncate max-w-[200px]">
+                              {issue.issueDescription}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{issue.city}</TableCell>
+                        <TableCell>{getSeverityBadge(issue.severity)}</TableCell>
+                        <TableCell>{getStatusBadge(issue.status)}</TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {/* Resolvers */}
+                            {issue.assignees && issue.assignees.filter(a => a.role === 'resolver').length > 0 ? (
+                              <div>
+                                {issue.assignees.filter(a => a.role === 'resolver').map(a => {
+                                  const u = users.find(u => u.id === a.user_id);
+                                  return (
+                                    <span key={a.user_id + a.role} className="font-medium mr-1">{u ? u.name : a.user_id} <Badge variant="outline">resolver</Badge></span>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-muted-foreground">Unassigned</div>
+                            )}
+                            {/* Approvers */}
+                            {issue.assignees && issue.assignees.filter(a => a.role === 'approver').length > 0 ? (
+                              <div className="mt-1">
+                                {issue.assignees.filter(a => a.role === 'approver').map(a => {
+                                  const u = users.find(u => u.id === a.user_id);
+                                  return (
+                                    <span key={a.user_id + a.role} className="font-medium mr-1">{u ? u.name : a.user_id} <Badge variant="outline">approver</Badge></span>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-muted-foreground text-xs mt-1">No approver</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{format(issue.submittedAt, 'MMM dd, yyyy')}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openTicketDetails(issue)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedTicket(issue);
+                                  setShowUserManagementModal(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

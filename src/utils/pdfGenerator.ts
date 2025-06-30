@@ -1,4 +1,3 @@
-
 import jsPDF from 'jspdf';
 import { AttachmentMetadata, processAttachments } from './attachmentProcessor';
 
@@ -12,6 +11,7 @@ interface IssueData {
   centreCode?: string;
   city?: string;
   resourceId?: string;
+  awignAppTicketId?: string;
   submittedBy?: string;
   isAnonymous?: boolean;
   issueDescription?: string;
@@ -109,6 +109,7 @@ export const generateTicketPDF = async (ticketInfo: TicketInfo, issueData: Issue
     { label: 'Centre Code', value: issueData.centreCode || 'N/A' },
     { label: 'City', value: issueData.city || 'N/A' },
     { label: 'Resource ID', value: issueData.resourceId || 'N/A' },
+    { label: 'Awign App Ticket ID', value: issueData.awignAppTicketId || 'N/A' },
     { label: 'Submitted By', value: issueData.isAnonymous ? 'Anonymous' : (issueData.submittedBy || 'N/A') },
     { label: 'Issue Date', value: formatIssueDate(issueData.issueDate) }
   ];

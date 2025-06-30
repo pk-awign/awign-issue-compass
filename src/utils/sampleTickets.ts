@@ -1,9 +1,8 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Issue } from '@/types/issue';
 
 const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad'];
-const issueCategories: Issue['issueCategory'][] = ['payment_delay', 'partial_payment', 'behavioral_complaint', 'improvement_request', 'other'];
+const issueCategories: Issue['issueCategory'][] = ['payment_delay', 'partial_payment', 'behavioral_complaint', 'improvement_request', 'facility_issue', 'penalty_issue', 'other'];
 const severities: Issue['severity'][] = ['sev1', 'sev2', 'sev3'];
 const statuses: Issue['status'][] = ['open', 'in_progress', 'resolved', 'closed'];
 
@@ -187,5 +186,64 @@ export async function clearAllTickets() {
   } catch (error) {
     console.error('❌ Error clearing tickets:', error);
     throw error;
+  }
+}
+
+export async function createSampleAttachments() {
+  console.log('📎 Creating sample attachments...');
+  
+  try {
+    // Get a few existing tickets
+    const { data: tickets, error: ticketsError } = await supabase
+      .from('tickets')
+      .select('id')
+      .limit(3);
+
+    if (ticketsError) throw ticketsError;
+
+    const sampleAttachments = [
+      {
+        file_name: 'screenshot_evidence.png',
+        file_size: 245760, // 240 KB
+        file_type: 'image/png',
+        storage_path: 'sample/screenshot_evidence.png'
+      },
+      {
+        file_name: 'payment_receipt.pdf',
+        file_size: 512000, // 500 KB
+        file_type: 'application/pdf',
+        storage_path: 'sample/payment_receipt.pdf'
+      },
+      {
+        file_name: 'incident_report.docx',
+        file_size: 153600, // 150 KB
+        file_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        storage_path: 'sample/incident_report.docx'
+      }
+    ];
+
+    for (const ticket of tickets) {
+      // Add 1-2 attachments per ticket
+      const numAttachments = Math.floor(Math.random() * 2) + 1;
+      const selectedAttachments = sampleAttachments.slice(0, numAttachments);
+      
+      for (const attachment of selectedAttachments) {
+        const { error } = await supabase
+          .from('attachments')
+          .insert({
+            ticket_id: ticket.id,
+            ...attachment,
+            uploaded_at: new Date().toISOString()
+          });
+
+        if (error) {
+          console.error('Error creating sample attachment:', error);
+        }
+      }
+    }
+
+    console.log('✅ Sample attachments created successfully');
+  } catch (error) {
+    console.error('❌ Failed to create sample attachments:', error);
   }
 }

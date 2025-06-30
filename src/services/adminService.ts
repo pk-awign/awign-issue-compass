@@ -19,6 +19,7 @@ export interface TicketAnalytics {
   cityBreakdown: Array<{ city: string; count: number }>;
   centreBreakdown: Array<{ centreCode: string; count: number }>;
   resolverBreakdown: Array<{ resolver: string; count: number }>;
+  approverBreakdown: Array<{ approver: string; count: number }>;
 }
 
 export class AdminService {
@@ -319,7 +320,25 @@ export class AdminService {
     try {
       const { data, error } = await supabase
         .from('tickets')
-        .select('*')
+        .select(`
+          *,
+          comments (
+            id,
+            content,
+            author,
+            author_role,
+            is_internal,
+            created_at
+          ),
+          attachments (
+            id,
+            file_name,
+            file_size,
+            file_type,
+            storage_path,
+            uploaded_at
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -336,6 +355,15 @@ export class AdminService {
         console.error('Error fetching users:', usersError);
       }
 
+      // Get all ticket assignments from the new ticket_assignees table
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('ticket_assignees')
+        .select('*');
+
+      if (assignmentsError) {
+        console.error('Error fetching assignments:', assignmentsError);
+      }
+
       const userMap = new Map();
       if (users) {
         users.forEach(user => {
@@ -343,31 +371,69 @@ export class AdminService {
         });
       }
 
-      // Map database tickets to Issue type
-      return (data || []).map(ticket => ({
-        id: ticket.id,
-        ticketNumber: ticket.ticket_number,
-        centreCode: ticket.centre_code,
-        city: ticket.city,
-        resourceId: ticket.resource_id,
-        issueCategory: ticket.issue_category as any,
-        issueDescription: ticket.issue_description,
-        issueDate: this.parseIssueDate(ticket.issue_date),
-        severity: ticket.severity as any,
-        status: ticket.status as any,
-        isAnonymous: ticket.is_anonymous,
-        submittedBy: ticket.submitted_by,
-        submittedByUserId: ticket.submitted_by_user_id,
-        submittedAt: new Date(ticket.submitted_at),
-        assignedResolver: ticket.assigned_resolver,
-        assignedApprover: ticket.assigned_approver,
-        comments: [],
-        resolutionNotes: ticket.resolution_notes,
-        resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
-        // Add user details for assigned users
-        assignedResolverDetails: userMap.get(ticket.assigned_resolver),
-        assignedApproverDetails: userMap.get(ticket.assigned_approver),
-      }));
+      // Create assignment maps
+      const ticketAssignments = new Map<string, { user_id: string; role: string }[]>();
+      if (assignments) {
+        assignments.forEach(assignment => {
+          if (!ticketAssignments.has(assignment.ticket_id)) {
+            ticketAssignments.set(assignment.ticket_id, []);
+          }
+          ticketAssignments.get(assignment.ticket_id)!.push({
+            user_id: assignment.user_id,
+            role: assignment.role
+          });
+        });
+      }
+
+      // Map database tickets to Issue type, including comments and attachments
+      return (data || []).map(ticket => {
+        // Get assignments for this ticket
+        const ticketAssigns = ticketAssignments.get(ticket.id) || [];
+        const resolverAssignment = ticketAssigns.find(a => a.role === 'resolver');
+        const approverAssignment = ticketAssigns.find(a => a.role === 'approver');
+
+        return {
+          id: ticket.id,
+          ticketNumber: ticket.ticket_number,
+          centreCode: ticket.centre_code,
+          city: ticket.city,
+          resourceId: ticket.resource_id,
+          awignAppTicketId: ticket.awign_app_ticket_id,
+          issueCategory: ticket.issue_category as any,
+          issueDescription: ticket.issue_description,
+          issueDate: this.parseIssueDate(ticket.issue_date),
+          severity: ticket.severity as any,
+          status: ticket.status as any,
+          isAnonymous: ticket.is_anonymous,
+          submittedBy: ticket.submitted_by,
+          submittedByUserId: ticket.submitted_by_user_id,
+          submittedAt: new Date(ticket.submitted_at),
+          // Use new assignment data if available, fallback to legacy fields
+          assignedResolver: resolverAssignment?.user_id || ticket.assigned_resolver,
+          assignedApprover: approverAssignment?.user_id || ticket.assigned_approver,
+          comments: (ticket.comments || []).map((comment: any) => ({
+            id: comment.id,
+            content: comment.content,
+            author: comment.author,
+            authorRole: comment.author_role,
+            timestamp: new Date(comment.created_at),
+            isInternal: comment.is_internal,
+          })),
+          attachments: (ticket.attachments || []).map((attachment: any) => ({
+            id: attachment.id,
+            fileName: attachment.file_name,
+            fileSize: attachment.file_size,
+            fileType: attachment.file_type,
+            uploadedAt: attachment.uploaded_at ? new Date(attachment.uploaded_at) : undefined,
+            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${attachment.storage_path}`
+          })),
+          resolutionNotes: ticket.resolution_notes,
+          resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
+          // Add user details for assigned users
+          assignedResolverDetails: userMap.get(resolverAssignment?.user_id || ticket.assigned_resolver),
+          assignedApproverDetails: userMap.get(approverAssignment?.user_id || ticket.assigned_approver),
+        };
+      });
     } catch (error) {
       console.error('Error in getAllTickets:', error);
       return [];
@@ -412,18 +478,22 @@ export class AdminService {
   static async bulkAssignTickets(ticketIds: string[], resolverId: string): Promise<boolean> {
     try {
       // Use individual updates instead of bulk upsert
-      const updatePromises = ticketIds.map(ticketId =>
-        supabase
+      const updatePromises = ticketIds.map(async ticketId => {
+        // 1. Update legacy field
+        const { error } = await supabase
           .from('tickets')
           .update({
             assigned_resolver: resolverId,
             status: 'in_progress'
           })
-          .eq('id', ticketId)
-      );
+          .eq('id', ticketId);
+        if (error) return { error };
+        // 2. Add to ticket_assignees (new flow)
+        await TicketService.addAssignee(ticketId, resolverId, 'resolver', resolverId, 'System', 'resolver');
+        return { error: null };
+      });
 
       const results = await Promise.all(updatePromises);
-      
       // Check if any updates failed
       const hasError = results.some(result => result.error);
       if (hasError) {
@@ -537,6 +607,45 @@ export class AdminService {
         return this.getEmptyAnalytics();
       }
 
+      // Get all users to map IDs to names
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, role');
+
+      if (usersError) {
+        console.error('Error fetching users for analytics:', usersError);
+      }
+
+      // Get all ticket assignments from the new ticket_assignees table
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('ticket_assignees')
+        .select('*');
+
+      if (assignmentsError) {
+        console.error('Error fetching assignments for analytics:', assignmentsError);
+      }
+
+      const userMap = new Map();
+      if (users) {
+        users.forEach(user => {
+          userMap.set(user.id, { name: user.name, role: user.role });
+        });
+      }
+
+      // Create assignment maps
+      const ticketAssignments = new Map<string, { user_id: string; role: string }[]>();
+      if (assignments) {
+        assignments.forEach(assignment => {
+          if (!ticketAssignments.has(assignment.ticket_id)) {
+            ticketAssignments.set(assignment.ticket_id, []);
+          }
+          ticketAssignments.get(assignment.ticket_id)!.push({
+            user_id: assignment.user_id,
+            role: assignment.role
+          });
+        });
+      }
+
       // Calculate metrics
       const totalTickets = tickets.length;
       const openTickets = tickets.filter(t => t.status === 'open').length;
@@ -548,7 +657,11 @@ export class AdminService {
       const sev2Tickets = tickets.filter(t => t.severity === 'sev2').length;
       const sev3Tickets = tickets.filter(t => t.severity === 'sev3').length;
       
-      const assignedTickets = tickets.filter(t => t.assigned_resolver).length;
+      // Calculate assignments using new ticket_assignees table
+      const assignedTickets = tickets.filter(t => {
+        const ticketAssigns = ticketAssignments.get(t.id);
+        return ticketAssigns && ticketAssigns.some(a => a.role === 'resolver');
+      }).length;
       const unassignedTickets = totalTickets - assignedTickets;
       const slaBreachedTickets = tickets.filter(t => t.is_sla_breached).length;
 
@@ -562,6 +675,7 @@ export class AdminService {
       const cityMap = new Map<string, number>();
       const centreMap = new Map<string, number>();
       const resolverMap = new Map<string, number>();
+      const approverMap = new Map<string, number>();
 
       tickets.forEach(ticket => {
         // City breakdown
@@ -570,15 +684,41 @@ export class AdminService {
         // Centre breakdown
         centreMap.set(ticket.centre_code, (centreMap.get(ticket.centre_code) || 0) + 1);
         
-        // Resolver breakdown
-        if (ticket.assigned_resolver) {
-          resolverMap.set(ticket.assigned_resolver, (resolverMap.get(ticket.assigned_resolver) || 0) + 1);
+        // Resolver breakdown - use new ticket_assignees data
+        const ticketAssigns = ticketAssignments.get(ticket.id);
+        if (ticketAssigns) {
+          const resolverAssignment = ticketAssigns.find(a => a.role === 'resolver');
+          if (resolverAssignment) {
+            const userDetails = userMap.get(resolverAssignment.user_id);
+            const resolverName = userDetails ? userDetails.name : resolverAssignment.user_id;
+            resolverMap.set(resolverName, (resolverMap.get(resolverName) || 0) + 1);
+          }
+          
+          // Approver breakdown - use new ticket_assignees data
+          const approverAssignment = ticketAssigns.find(a => a.role === 'approver');
+          if (approverAssignment) {
+            const userDetails = userMap.get(approverAssignment.user_id);
+            const approverName = userDetails ? userDetails.name : approverAssignment.user_id;
+            approverMap.set(approverName, (approverMap.get(approverName) || 0) + 1);
+          }
         }
       });
 
-      const cityBreakdown = Array.from(cityMap.entries()).map(([city, count]) => ({ city, count }));
-      const centreBreakdown = Array.from(centreMap.entries()).map(([centreCode, count]) => ({ centreCode, count }));
-      const resolverBreakdown = Array.from(resolverMap.entries()).map(([resolver, count]) => ({ resolver, count }));
+      const cityBreakdown = Array.from(cityMap.entries())
+        .map(([city, count]) => ({ city, count }))
+        .sort((a, b) => b.count - a.count); // Sort by count descending
+
+      const centreBreakdown = Array.from(centreMap.entries())
+        .map(([centreCode, count]) => ({ centreCode, count }))
+        .sort((a, b) => b.count - a.count); // Sort by count descending
+
+      const resolverBreakdown = Array.from(resolverMap.entries())
+        .map(([resolver, count]) => ({ resolver, count }))
+        .sort((a, b) => b.count - a.count); // Sort by count descending
+
+      const approverBreakdown = Array.from(approverMap.entries())
+        .map(([approver, count]) => ({ approver, count }))
+        .sort((a, b) => b.count - a.count); // Sort by count descending
 
       return {
         totalTickets,
@@ -595,7 +735,8 @@ export class AdminService {
         avgResolutionHours,
         cityBreakdown,
         centreBreakdown,
-        resolverBreakdown
+        resolverBreakdown,
+        approverBreakdown
       };
     } catch (error) {
       console.error('Error in getTicketAnalytics:', error);
@@ -619,7 +760,8 @@ export class AdminService {
       avgResolutionHours: 0,
       cityBreakdown: [],
       centreBreakdown: [],
-      resolverBreakdown: []
+      resolverBreakdown: [],
+      approverBreakdown: []
     };
   }
 

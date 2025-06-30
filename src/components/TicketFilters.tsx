@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -120,6 +119,8 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
                 <SelectItem value="partial_payment">Partial Payment</SelectItem>
                 <SelectItem value="behavioral_complaint">Behavioral Complaint</SelectItem>
                 <SelectItem value="improvement_request">Improvement Request</SelectItem>
+                <SelectItem value="facility_issue">Facility Issue</SelectItem>
+                <SelectItem value="penalty_issue">Penalty Issue</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>

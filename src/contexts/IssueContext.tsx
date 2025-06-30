@@ -73,9 +73,48 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // Convert Issue updates to database format
       const dbUpdates: any = {};
       if (updates.status) dbUpdates.status = updates.status;
-      if (updates.assignedResolver) dbUpdates.assigned_resolver = updates.assignedResolver;
-      if (updates.assignedApprover) dbUpdates.assigned_approver = updates.assignedApprover;
       if (updates.resolutionNotes) dbUpdates.resolution_notes = updates.resolutionNotes;
+      
+      // Handle assignment updates using the new ticket_assignees table
+      if (updates.assignedResolver) {
+        // Remove existing resolver assignment
+        await supabase
+          .from('ticket_assignees')
+          .delete()
+          .eq('ticket_id', issueId)
+          .eq('role', 'resolver');
+        
+        // Add new resolver assignment
+        if (updates.assignedResolver) {
+          await supabase
+            .from('ticket_assignees')
+            .insert([{
+              ticket_id: issueId,
+              user_id: updates.assignedResolver,
+              role: 'resolver'
+            }]);
+        }
+      }
+      
+      if (updates.assignedApprover) {
+        // Remove existing approver assignment
+        await supabase
+          .from('ticket_assignees')
+          .delete()
+          .eq('ticket_id', issueId)
+          .eq('role', 'approver');
+        
+        // Add new approver assignment
+        if (updates.assignedApprover) {
+          await supabase
+            .from('ticket_assignees')
+            .insert([{
+              ticket_id: issueId,
+              user_id: updates.assignedApprover,
+              role: 'approver'
+            }]);
+        }
+      }
       
       const { error } = await supabase
         .from('tickets')
@@ -137,6 +176,14 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             author_role,
             is_internal,
             created_at
+          ),
+          attachments (
+            id,
+            file_name,
+            file_size,
+            file_type,
+            storage_path,
+            uploaded_at
           )
         `)
         .order('created_at', { ascending: false });
@@ -155,36 +202,56 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         assigneesByTicket[a.ticket_id].push(a);
       });
 
-      const mappedIssues = data.map((ticket: any) => ({
-        id: ticket.id,
-        ticketNumber: ticket.ticket_number,
-        centreCode: ticket.centre_code,
-        city: ticket.city,
-        resourceId: ticket.resource_id,
-        issueCategory: ticket.issue_category,
-        issueDescription: ticket.issue_description,
-        issueDate: ticket.issue_date,
-        severity: ticket.severity,
-        status: ticket.status,
-        isAnonymous: ticket.is_anonymous,
-        submittedBy: ticket.submitted_by,
-        submittedByUserId: ticket.submitted_by_user_id,
-        submittedAt: new Date(ticket.submitted_at),
-        assignedResolver: ticket.assigned_resolver,
-        assignedApprover: ticket.assigned_approver,
-        resolutionNotes: ticket.resolution_notes,
-        resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
-        comments: ticket.comments?.map((comment: any) => ({
-          id: comment.id,
-          content: comment.content,
-          author: comment.author,
-          authorRole: comment.author_role,
-          timestamp: new Date(comment.created_at),
-          isInternal: comment.is_internal,
-        })) || [],
-        issueEvidence: [],
-        assignees: assigneesByTicket[ticket.id] || [],
-      }));
+      const mappedIssues = data.map((ticket: any) => {
+        // Get assignments for this ticket
+        const ticketAssigns = assigneesByTicket[ticket.id] || [];
+        const resolverAssignment = ticketAssigns.find((a: any) => a.role === 'resolver');
+        const approverAssignment = ticketAssigns.find((a: any) => a.role === 'approver');
+
+        // Map attachments with download URLs
+        const attachments = Array.isArray(ticket.attachments) ? ticket.attachments.map((att: any) => ({
+          id: att.id,
+          fileName: att.file_name,
+          fileSize: att.file_size,
+          fileType: att.file_type,
+          uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+          downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${att.storage_path}`
+        })) : [];
+
+        return {
+          id: ticket.id,
+          ticketNumber: ticket.ticket_number,
+          centreCode: ticket.centre_code,
+          city: ticket.city,
+          resourceId: ticket.resource_id,
+          awignAppTicketId: ticket.awign_app_ticket_id,
+          issueCategory: ticket.issue_category,
+          issueDescription: ticket.issue_description,
+          issueDate: ticket.issue_date,
+          severity: ticket.severity,
+          status: ticket.status,
+          isAnonymous: ticket.is_anonymous,
+          submittedBy: ticket.submitted_by,
+          submittedByUserId: ticket.submitted_by_user_id,
+          submittedAt: new Date(ticket.submitted_at),
+          // Use new assignment data if available, fallback to legacy fields
+          assignedResolver: resolverAssignment?.user_id || ticket.assigned_resolver,
+          assignedApprover: approverAssignment?.user_id || ticket.assigned_approver,
+          resolutionNotes: ticket.resolution_notes,
+          resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
+          comments: ticket.comments?.map((comment: any) => ({
+            id: comment.id,
+            content: comment.content,
+            author: comment.author,
+            authorRole: comment.author_role,
+            timestamp: new Date(comment.created_at),
+            isInternal: comment.is_internal,
+          })) || [],
+          attachments,
+          issueEvidence: [],
+          assignees: assigneesByTicket[ticket.id] || [],
+        };
+      });
 
       setIssues(mappedIssues);
     } catch (error) {

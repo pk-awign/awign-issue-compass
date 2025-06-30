@@ -23,6 +23,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
     centreCode: '',
     city: '',
     resourceId: '',
+    awignAppTicketId: '',
     issueCategory: '' as Issue['issueCategory'] | '',
     issueDescription: '',
     dateType: 'single' as 'single' | 'multiple' | 'ongoing',
@@ -41,6 +42,8 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
     { value: 'partial_payment', label: 'Reduced/Partial Payment' },
     { value: 'behavioral_complaint', label: 'Behavioral Complaint' },
     { value: 'improvement_request', label: 'Improvement Request' },
+    { value: 'facility_issue', label: 'Facility Issue' },
+    { value: 'penalty_issue', label: 'Penalty Issue' },
     { value: 'other', label: 'Other Issue' }
   ];
 
@@ -53,7 +56,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.centreCode || !formData.city || !formData.issueCategory || !formData.issueDescription) {
+    if (!formData.centreCode || !formData.city || !formData.resourceId || !formData.issueCategory || !formData.issueDescription) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -74,7 +77,8 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
     const issueData = {
       centreCode: formData.centreCode,
       city: formData.city,
-      resourceId: formData.resourceId || undefined,
+      resourceId: formData.resourceId,
+      awignAppTicketId: formData.awignAppTicketId || undefined,
       issueCategory: formData.issueCategory as Issue['issueCategory'],
       issueDescription: formData.issueDescription,
       issueEvidence: files.length > 0 ? files : undefined,
@@ -95,6 +99,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
       centreCode: '',
       city: '',
       resourceId: '',
+      awignAppTicketId: '',
       issueCategory: '',
       issueDescription: '',
       dateType: 'single',
@@ -144,14 +149,27 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="resourceId">Resource ID (Optional)</Label>
-            <Input
-              id="resourceId"
-              value={formData.resourceId}
-              onChange={(e) => setFormData(prev => ({ ...prev, resourceId: e.target.value }))}
-              placeholder="Enter resource ID if applicable"
-            />
+          {/* Resource ID and Awign App Ticket ID */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="resourceId">Resource ID *</Label>
+              <Input
+                id="resourceId"
+                value={formData.resourceId}
+                onChange={(e) => setFormData(prev => ({ ...prev, resourceId: e.target.value }))}
+                placeholder="Enter resource ID"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="awignAppTicketId">Awign App Ticket ID (Optional)</Label>
+              <Input
+                id="awignAppTicketId"
+                value={formData.awignAppTicketId}
+                onChange={(e) => setFormData(prev => ({ ...prev, awignAppTicketId: e.target.value }))}
+                placeholder="Enter Awign App Ticket ID if applicable"
+              />
+            </div>
           </div>
 
           {/* Issue Category */}
@@ -297,18 +315,6 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
             />
             <Label htmlFor="anonymous">Submit anonymously</Label>
           </div>
-
-          {!formData.isAnonymous && (
-            <div>
-              <Label htmlFor="submittedBy">Your Name</Label>
-              <Input
-                id="submittedBy"
-                value={formData.submittedBy}
-                onChange={(e) => setFormData(prev => ({ ...prev, submittedBy: e.target.value }))}
-                placeholder="Enter your name"
-              />
-            </div>
-          )}
 
           <Button type="submit" className="w-full">
             Submit Issue

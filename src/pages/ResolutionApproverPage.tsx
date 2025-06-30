@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Header } from '@/components/navigation/Header';
+import { LogOut, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ export const ResolutionApproverPage: React.FC = () => {
   
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('pending_approval');
+  const [activeTab, setActiveTab] = useState('all');
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -120,7 +120,7 @@ export const ResolutionApproverPage: React.FC = () => {
   // Categorize tickets by approval status
   const ticketsByStatus = useMemo(() => {
     return {
-      pending_approval: filteredTickets.filter(t => t.status === 'resolved'),
+      pending_approval: filteredTickets.filter(t => t.status === 'send_for_approval'),
       all_tickets: filteredTickets,
       open: filteredTickets.filter(t => t.status === 'open'),
       in_progress: filteredTickets.filter(t => t.status === 'in_progress'),
@@ -168,6 +168,17 @@ export const ResolutionApproverPage: React.FC = () => {
     return hours;
   };
 
+  const getRoleDisplayName = () => {
+    if (!user) return '';
+    switch (user.role) {
+      case 'super_admin': return 'Super Admin';
+      case 'resolver': return 'Resolver';
+      case 'approver': return 'Approver';
+      case 'invigilator': return 'Invigilator';
+      default: return user.role;
+    }
+  };
+
   const renderApprovalCard = (ticket: Issue) => {
     const resolutionTime = getResolutionTime(ticket);
     
@@ -179,12 +190,14 @@ export const ResolutionApproverPage: React.FC = () => {
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <span className="font-mono font-semibold text-sm">{ticket.ticketNumber}</span>
-                <Badge className={getSeverityColor(ticket.severity)}>
-                  {ticket.severity.toUpperCase()}
-                </Badge>
-                <Badge className="bg-orange-100 text-orange-800">
-                  PENDING APPROVAL
-                </Badge>
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                  <Badge className={getSeverityColor(ticket.severity)}>
+                    {ticket.severity.toUpperCase()}
+                  </Badge>
+                  <Badge className={getStatusColor(ticket.status)}>
+                    {ticket.status.replace('_', ' ').toUpperCase()}
+                  </Badge>
+                </div>
               </div>
               <Button
                 variant="outline"
@@ -215,29 +228,31 @@ export const ResolutionApproverPage: React.FC = () => {
             )}
 
             {/* Assignment & Timeline Info */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <UserCheck className="h-3 w-3" />
-                  <span>Resolved by:</span>
+            {user?.role !== 'approver' && (
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <UserCheck className="h-3 w-3" />
+                    <span>Resolved by:</span>
+                  </div>
+                  <div>Assigned Resolvers: {(ticket as IssueWithAssignees).assignees?.filter(a => a.role === 'resolver').map(a => a.user_id).join(', ') || 'Unassigned'}</div>
                 </div>
-                <div>Assigned Resolvers: {(ticket as IssueWithAssignees).assignees?.filter(a => a.role === 'resolver').map(a => a.user_id).join(', ') || 'Unassigned'}</div>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  <span>Resolution Time:</span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    <span>Resolution Time:</span>
+                  </div>
+                  <p className="font-medium">
+                    {resolutionTime ? `${resolutionTime}h` : 'N/A'}
+                    {resolutionTime && resolutionTime > 24 && (
+                      <Badge variant="destructive" className="ml-1 text-xs">
+                        SLA Breach
+                      </Badge>
+                    )}
+                  </p>
                 </div>
-                <p className="font-medium">
-                  {resolutionTime ? `${resolutionTime}h` : 'N/A'}
-                  {resolutionTime && resolutionTime > 24 && (
-                    <Badge variant="destructive" className="ml-1 text-xs">
-                      SLA Breach
-                    </Badge>
-                  )}
-                </p>
               </div>
-            </div>
+            )}
 
             {/* Meta Info */}
             <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
@@ -275,13 +290,17 @@ export const ResolutionApproverPage: React.FC = () => {
           {/* Header */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2">
-              <span className="font-mono font-semibold text-sm">{ticket.ticketNumber}</span>
-              <Badge className={getSeverityColor(ticket.severity)}>
-                {ticket.severity.toUpperCase()}
-              </Badge>
-              <Badge className={getStatusColor(ticket.status)}>
-                {ticket.status.replace('_', ' ').toUpperCase()}
-              </Badge>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="font-mono font-semibold text-sm">{ticket.ticketNumber}</span>
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                  <Badge className={getSeverityColor(ticket.severity)}>
+                    {ticket.severity.toUpperCase()}
+                  </Badge>
+                  <Badge className={getStatusColor(ticket.status)}>
+                    {ticket.status.replace('_', ' ').toUpperCase()}
+                  </Badge>
+                </div>
+              </div>
             </div>
             <Button
               variant="outline"
@@ -301,17 +320,19 @@ export const ResolutionApproverPage: React.FC = () => {
           </div>
 
           {/* Assignment Info */}
-          <div className="bg-gray-50 p-2 rounded text-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <User className="h-3 w-3" />
-                <span>Assigned to: {(ticket as IssueWithAssignees).assignees?.filter(a => a.role === 'resolver').map(a => a.user_id).join(', ') || 'Unassigned'}</span>
+          {user?.role !== 'approver' && (
+            <div className="bg-gray-50 p-2 rounded text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  <span>Assigned to: {(ticket as IssueWithAssignees).assignees?.filter(a => a.role === 'resolver').map(a => a.user_id).join(', ') || 'Unassigned'}</span>
+                </div>
+                {ticket.status === 'resolved' && (
+                  <ArrowRight className="h-3 w-3 text-orange-500" />
+                )}
               </div>
-              {ticket.status === 'resolved' && (
-                <ArrowRight className="h-3 w-3 text-orange-500" />
-              )}
             </div>
-          </div>
+          )}
 
           {/* Meta Info */}
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -344,7 +365,32 @@ export const ResolutionApproverPage: React.FC = () => {
   if (!user) {
     return (
       <div className="min-h-screen bg-background">
-        <Header onLogout={handleLogout} />
+        <header className="bg-white border-b shadow-sm">
+          <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex flex-col items-start">
+                <div className="bg-gray-800 p-1 rounded">
+                  <img 
+                    src="/awign-logo.svg" 
+                    alt="Awign Logo" 
+                    className="w-8 h-8 object-contain"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col items-start flex-1 ml-4">
+                <span className="text-base sm:text-xl font-semibold text-gray-900">AWIGN ISSUE MANAGEMENT</span>
+                <span className="text-xs sm:text-sm text-gray-600 mt-1">Approver Panel</span>
+              </div>
+              <div className="flex sm:hidden items-center gap-2 ml-auto justify-end">
+                {user && (
+                  <button onClick={handleLogout} className="ml-2">
+                    <LogOut className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </header>
         <main className="container mx-auto px-4 py-8">
           <Card>
             <CardContent className="py-8 text-center">
@@ -359,22 +405,59 @@ export const ResolutionApproverPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onLogout={handleLogout} />
+      <header className="bg-white border-b shadow-sm">
+        <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex flex-col items-start">
+              <div className="bg-gray-800 p-1 rounded">
+                <img 
+                  src="/awign-logo.svg" 
+                  alt="Awign Logo" 
+                  className="w-8 h-8 object-contain"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col items-start flex-1 ml-4">
+              <span className="text-base sm:text-xl font-semibold text-gray-900">AWIGN ISSUE MANAGEMENT</span>
+              <span className="text-xs sm:text-sm text-gray-600 mt-1">Approver Panel</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-2 ml-4">
+              {user && (
+                <>
+                  <Users className="h-5 w-5" />
+                  <span className="text-sm font-medium">{user.name}</span>
+                  <span className="px-2 py-0.5 rounded bg-gray-100 text-xs font-semibold text-gray-700 ml-1">{getRoleDisplayName()}</span>
+                  <button onClick={handleLogout} className="ml-2">
+                    <LogOut className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="flex sm:hidden items-center gap-2 ml-auto justify-end">
+              {user && (
+                <button onClick={handleLogout} className="ml-2">
+                  <LogOut className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-6">
           {/* Page Header */}
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl md:text-3xl font-bold">Resolution Approver Dashboard</h2>
-            <p className="text-sm md:text-base text-gray-600">Review and approve issue resolutions</p>
+          <div className="text-center space-y-2 px-2 sm:px-0">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">Resolution Approver Dashboard</h2>
+            <p className="text-xs sm:text-sm md:text-base text-gray-600">Review and approve issue resolutions</p>
             {user && (
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <p className="text-purple-800 text-sm">
-                  Approver: {user.name} | City: {user.city} | Role: {user.role}
+              <div className="bg-purple-50 p-3 sm:p-4 rounded-lg flex flex-col items-center justify-center gap-2 text-center">
+                <p className="text-purple-800 text-xs sm:text-sm">
+                  Approver: {user.name} | City: {user.city}
                 </p>
-                <div className="flex justify-center mt-2">
+                <div className="flex flex-col items-center justify-center mt-2 sm:mt-0">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">
+                    <div className="text-xl sm:text-2xl font-bold text-purple-600">
                       {ticketsByStatus.pending_approval.length}
                     </div>
                     <div className="text-xs text-purple-600">Pending Approvals</div>
@@ -384,7 +467,7 @@ export const ResolutionApproverPage: React.FC = () => {
             )}
           </div>
 
-          {/* Stats Cards */}
+          {/* Stats Cards (remove Closed card) */}
           <TicketStatsCards tickets={approverTickets} userRole="approver" />
 
           {/* Filters */}
@@ -405,83 +488,110 @@ export const ResolutionApproverPage: React.FC = () => {
 
           {/* Tickets Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="pending_approval" className="relative">
-                <div className="flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  Approvals
-                </div>
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.pending_approval.length}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="all_tickets">
+            <TabsList className="grid grid-cols-2 sm:flex sm:flex-row w-full gap-3 sm:gap-0 bg-white p-2 rounded-xl border shadow-md my-4 z-10">
+              <TabsTrigger value="all" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 All
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.all_tickets.length}
-                </Badge>
+                <Badge variant="secondary" className="ml-2">{approverTickets.length}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="open">
-                Open
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.open.length}
-                </Badge>
+              <TabsTrigger value="approval_pending" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                Approval Pending
+                <Badge variant="secondary" className="ml-2">{approverTickets.filter(t => t.status === 'send_for_approval').length}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="in_progress">
-                In Progress
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.in_progress.length}
-                </Badge>
+              <TabsTrigger value="approved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                Approved
+                <Badge variant="secondary" className="ml-2">{approverTickets.filter(t => t.status === 'approved').length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="resolved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                Resolved
+                <Badge variant="secondary" className="ml-2">{approverTickets.filter(t => t.status === 'resolved').length}</Badge>
               </TabsTrigger>
             </TabsList>
 
-            {/* Pending Approval Tab */}
-            <TabsContent value="pending_approval" className="mt-6">
+            <TabsContent value="all" className="mt-6">
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading approvals...</p>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : ticketsByStatus.pending_approval.length === 0 ? (
+              ) : approverTickets.length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No pending approvals</p>
-                    <p className="text-sm text-muted-foreground">All resolutions have been reviewed!</p>
+                    <Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-lg font-medium">No tickets found</p>
+                    <p className="text-sm text-muted-foreground">
+                      {activeFiltersCount > 0 ? 'Try adjusting your filters' : 'No tickets assigned to you'}
+                    </p>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-4">
-                  {ticketsByStatus.pending_approval.map(renderApprovalCard)}
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {approverTickets.map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>
 
-            {/* Other Tabs */}
-            {Object.entries(ticketsByStatus).filter(([key]) => key !== 'pending_approval').map(([status, tickets]) => (
-              <TabsContent key={status} value={status} className="mt-6">
-                {loading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Loading tickets...</p>
-                  </div>
-                ) : tickets.length === 0 ? (
-                  <Card>
-                    <CardContent className="text-center py-8">
-                      <Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                      <p className="text-lg font-medium">No tickets found</p>
-                      <p className="text-sm text-muted-foreground">
-                        {activeFiltersCount > 0 ? 'Try adjusting your filters' : `No ${status.replace('_', ' ')} tickets in your region`}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {tickets.map(renderTicketCard)}
-                  </div>
-                )}
-              </TabsContent>
-            ))}
+            <TabsContent value="approval_pending" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : approverTickets.filter(t => t.status === 'send_for_approval').length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No approval pending tickets</p>
+                    <p className="text-sm text-muted-foreground">All tickets have been reviewed!</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {approverTickets.filter(t => t.status === 'send_for_approval').map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="approved" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : approverTickets.filter(t => t.status === 'approved').length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No approved tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in approved status</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {approverTickets.filter(t => t.status === 'approved').map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="resolved" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : approverTickets.filter(t => t.status === 'resolved').length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No resolved tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in resolved status</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {approverTickets.filter(t => t.status === 'resolved').map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
           </Tabs>
         </div>
       </main>

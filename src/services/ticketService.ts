@@ -1,6 +1,7 @@
 import { supabase } from '../integrations/supabase/client';
 import { Issue, Comment, Attachment, TimelineEvent, StatusTransition, TicketDetails } from '../types/issue';
 import { toast } from 'sonner';
+import { EmailService } from './emailService';
 
 export class TicketService {
   static async createTicket(issueData: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'> & { issueEvidence?: File[] }, userId?: string): Promise<string> {
@@ -22,6 +23,7 @@ export class TicketService {
           centre_code: issueData.centreCode,
           city: issueData.city,
           resource_id: issueData.resourceId,
+          awign_app_ticket_id: issueData.awignAppTicketId,
           issue_category: issueData.issueCategory,
           issue_description: issueData.issueDescription,
           issue_date: issueDate,
@@ -41,8 +43,14 @@ export class TicketService {
       const ticketId = data.id;
 
       // Upload attachments if any
+      let uploadedAttachments: Array<{ fileName: string; fileSize: number; fileType: string }> = [];
       if (issueData.issueEvidence && issueData.issueEvidence.length > 0) {
         await this.uploadAttachments(ticketId, issueData.issueEvidence);
+        uploadedAttachments = issueData.issueEvidence.map(file => ({
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type
+        }));
       }
 
       // Log to ticket_history
@@ -55,6 +63,26 @@ export class TicketService {
         performedByRole: null,
         details: { ticket_number: ticketNumber, severity: 'sev3' },
       });
+
+      // Send email notification
+      try {
+        await EmailService.sendTicketCreatedNotification({
+          ticketNumber,
+          centreCode: issueData.centreCode,
+          city: issueData.city,
+          resourceId: issueData.resourceId,
+          issueCategory: issueData.issueCategory,
+          issueDescription: issueData.issueDescription,
+          submittedBy: issueData.submittedBy || 'Anonymous',
+          submittedAt: new Date(),
+          severity: 'sev3',
+          attachments: uploadedAttachments
+        });
+        console.log('📧 Email notification sent successfully for ticket:', ticketNumber);
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+        // Don't fail the ticket creation if email fails
+      }
 
       toast.success(`Ticket ${ticketNumber} created successfully`);
       return ticketNumber;
@@ -168,15 +196,47 @@ export class TicketService {
     }
   }
 
-  static async getStatusTransitions(): Promise<StatusTransition[]> {
-    try {
-      // For now, return empty array until database is updated
-      // This will be implemented after the migration
-      return [];
-    } catch (error) {
-      console.error('Error fetching status transitions:', error);
-      return [];
+  static getAllowedStatusTransitions(role: string, currentStatus: Issue['status']): Issue['status'][] {
+    // Corrected status flow
+    const empty: Issue['status'][] = [];
+    // Resolver: OPEN → IN PROGRESS, IN PROGRESS → SEND FOR APPROVAL
+    const RESOLVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
+      open: ['in_progress'],
+      in_progress: ['send_for_approval'],
+      send_for_approval: [],
+      approved: [],
+      resolved: [],
+    };
+    // Approver: SEND FOR APPROVAL → APPROVED, APPROVED → RESOLVED
+    const APPROVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
+      open: [],
+      in_progress: [],
+      send_for_approval: ['approved'],
+      approved: ['resolved'],
+      resolved: [],
+    };
+    // Super Admin: can move forward through any step
+    const SUPER_ADMIN_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
+      open: ['in_progress'],
+      in_progress: ['send_for_approval'],
+      send_for_approval: ['approved'],
+      approved: ['resolved'],
+      resolved: [],
+    };
+    switch (role) {
+      case 'approver':
+        return APPROVER_TRANSITIONS[currentStatus] || empty;
+      case 'resolver':
+        return RESOLVER_TRANSITIONS[currentStatus] || empty;
+      case 'super_admin':
+        return SUPER_ADMIN_TRANSITIONS[currentStatus] || empty;
+      default:
+        return empty;
     }
+  }
+
+  static async getStatusTransitions(role: string, currentStatus: Issue['status']): Promise<Issue['status'][]> {
+    return this.getAllowedStatusTransitions(role, currentStatus);
   }
 
   /**
@@ -217,18 +277,36 @@ export class TicketService {
 
   // --- Log status change ---
   static async updateTicketStatus(
-    ticketId: string, 
-    newStatus: Issue['status'], 
-    userId: string, 
-    resolutionNotes?: string
+    ticketId: string,
+    newStatus: Issue['status'],
+    userId: string,
+    resolutionNotes?: string,
+    userRole?: string,
+    currentStatus?: Issue['status']
   ): Promise<boolean> {
     try {
       // Fetch old status for logging
       const { data: oldTicket } = await supabase.from('tickets').select('status').eq('id', ticketId).single();
-      const oldStatus = oldTicket?.status;
+      const oldStatus = oldTicket?.status as Issue['status'];
+      // Enforce allowed transitions
+      const role = userRole || 'resolver';
+      const allowed = this.getAllowedStatusTransitions(role, oldStatus);
+      // DEBUG LOG
+      console.log('[DEBUG] updateTicketStatus:', {
+        ticketId,
+        oldStatus,
+        newStatus,
+        userRole: role,
+        allowedTransitions: allowed
+      });
+      if (role !== 'super_admin' && !allowed.includes(newStatus)) {
+        toast.error('Status transition not allowed.');
+        return false;
+      }
+      // Super admin can move tickets in any direction for management purposes
       const updates: any = {
         status: newStatus,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
       if (resolutionNotes) {
         updates.resolution_notes = resolutionNotes;
@@ -248,9 +326,38 @@ export class TicketService {
         oldValue: oldStatus,
         newValue: newStatus,
         performedBy: userId,
-        performedByRole: null,
+        performedByRole: userRole,
         details: resolutionNotes ? { resolution_notes: resolutionNotes } : null,
       });
+
+      // Send email notification for status change
+      try {
+        // Get ticket number for email
+        const { data: ticketData } = await supabase
+          .from('tickets')
+          .select('ticket_number')
+          .eq('id', ticketId)
+          .single();
+        
+        if (ticketData) {
+          // Get user details for the email
+          const userDetails = await this.getUserDetails(userId);
+          const changedBy = userDetails?.name || userId;
+          
+          await EmailService.sendStatusChangeNotification(
+            ticketData.ticket_number,
+            oldStatus,
+            newStatus,
+            changedBy,
+            resolutionNotes
+          );
+          console.log('📧 Status change email notification sent for ticket:', ticketData.ticket_number);
+        }
+      } catch (emailError) {
+        console.error('Failed to send status change email notification:', emailError);
+        // Don't fail the status update if email fails
+      }
+
       toast.success(`Ticket status updated to ${newStatus}`);
       return true;
     } catch (error) {
@@ -363,7 +470,22 @@ export class TicketService {
 
   // --- Log assignment add ---
   static async addAssignee(ticketId: string, userId: string, role: string, performedBy: string, performedByName: string, performedByRole: string) {
-    const { error } = await supabase.from('ticket_assignees').insert([{ ticket_id: ticketId, user_id: userId, role }]);
+    // Role validation: Only super_admin can assign resolvers
+    if (role === 'resolver' && performedByRole !== 'super_admin') {
+      throw new Error('Only super admins can assign resolvers');
+    }
+    
+    // Role validation: Only super_admin can assign approvers
+    if (role === 'approver' && performedByRole !== 'super_admin') {
+      throw new Error('Only super admins can assign approvers');
+    }
+
+    const { error } = await supabase.from('ticket_assignees').insert([{
+      ticket_id: ticketId,
+      user_id: userId,
+      role,
+      assigned_at: new Date().toISOString()
+    }]);
     if (!error) {
       await this.addTimelineEvent({
         ticketId,
@@ -389,6 +511,16 @@ export class TicketService {
 
   // --- Log assignment remove ---
   static async removeAssignee(ticketId: string, userId: string, role: string, performedBy: string, performedByName: string, performedByRole: string) {
+    // Role validation: Only super_admin can remove resolver assignments
+    if (role === 'resolver' && performedByRole !== 'super_admin') {
+      throw new Error('Only super admins can remove resolver assignments');
+    }
+    
+    // Role validation: Only super_admin can remove approver assignments
+    if (role === 'approver' && performedByRole !== 'super_admin') {
+      throw new Error('Only super admins can remove approver assignments');
+    }
+
     const { error } = await supabase.from('ticket_assignees').delete().match({ ticket_id: ticketId, user_id: userId, role });
     if (!error) {
       await this.addTimelineEvent({
@@ -559,6 +691,7 @@ export class TicketService {
       centreCode: data.centre_code,
       city: data.city,
       resourceId: data.resource_id,
+      awignAppTicketId: data.awign_app_ticket_id,
       issueCategory: data.issue_category,
       issueDescription: data.issue_description,
       issueDate: issueDate,

@@ -1,4 +1,3 @@
-
 import { generateTicketPDF } from './pdfGenerator';
 
 export const generateTicketFile = async (ticketInfo: { ticketNumber: string; trackingLink: string }, issueData: any) => {
@@ -38,6 +37,7 @@ Category: ${issueData.issueCategory?.replace('_', ' ').toUpperCase() || 'N/A'}
 Centre Code: ${issueData.centreCode || 'N/A'}
 City: ${issueData.city || 'N/A'}
 ${issueData.resourceId ? `Resource ID: ${issueData.resourceId}` : ''}
+${issueData.awignAppTicketId ? `Awign App Ticket ID: ${issueData.awignAppTicketId}` : ''}
 ${!issueData.isAnonymous && issueData.submittedBy ? `Submitted By: ${issueData.submittedBy}` : 'Submitted Anonymously'}
 
 DESCRIPTION

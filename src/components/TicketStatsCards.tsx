@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,40 +16,41 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
   const stats = React.useMemo(() => {
     const total = tickets.length;
     const open = tickets.filter(t => t.status === 'open').length;
-    const inProgress = tickets.filter(t => t.status === 'in_progress').length;
     const resolved = tickets.filter(t => t.status === 'resolved').length;
-    const closed = tickets.filter(t => t.status === 'closed').length;
-    
+    let pending = 0;
+    let inProgress = 0;
+    if (userRole === 'approver') {
+      pending = tickets.filter(t => ['in_progress', 'send_for_approval', 'approved'].includes(t.status)).length;
+    } else {
+      inProgress = tickets.filter(t => t.status === 'in_progress').length;
+    }
     const sev1 = tickets.filter(t => t.severity === 'sev1').length;
     const sev2 = tickets.filter(t => t.severity === 'sev2').length;
     const sev3 = tickets.filter(t => t.severity === 'sev3').length;
-    
     const today = new Date();
     const last24h = tickets.filter(t => {
       const diff = today.getTime() - t.submittedAt.getTime();
       return diff <= 24 * 60 * 60 * 1000;
     }).length;
-    
     const avgResolutionTime = tickets
       .filter(t => t.resolvedAt)
       .reduce((acc, t) => {
         const diff = t.resolvedAt!.getTime() - t.submittedAt.getTime();
         return acc + (diff / (1000 * 60 * 60)); // Convert to hours
       }, 0) / tickets.filter(t => t.resolvedAt).length || 0;
-
     return {
       total,
       open,
+      pending,
       inProgress,
       resolved,
-      closed,
       sev1,
       sev2,
       sev3,
       last24h,
       avgResolutionTime: Math.round(avgResolutionTime * 10) / 10
     };
-  }, [tickets]);
+  }, [tickets, userRole]);
 
   const statCards = [
     {
@@ -67,13 +67,21 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
       color: 'text-red-600',
       bgColor: 'bg-red-50'
     },
-    {
-      title: 'In Progress',
-      value: stats.inProgress,
-      icon: <Clock className="h-4 w-4" />,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-50'
-    },
+    userRole === 'approver'
+      ? {
+          title: 'Pending',
+          value: stats.pending,
+          icon: <Clock className="h-4 w-4" />,
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-50'
+        }
+      : {
+          title: 'In Progress',
+          value: stats.inProgress,
+          icon: <Clock className="h-4 w-4" />,
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-50'
+        },
     {
       title: 'Resolved',
       value: stats.resolved,
@@ -83,20 +91,10 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
     }
   ];
 
-  if (userRole === 'approver') {
-    statCards.push({
-      title: 'Closed',
-      value: stats.closed,
-      icon: <XCircle className="h-4 w-4" />,
-      color: 'text-gray-600',
-      bgColor: 'bg-gray-50'
-    });
-  }
-
   return (
     <div className="space-y-4">
       {/* Main Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
         {statCards.map((stat, index) => (
           <Card key={index}>
             <CardContent className="p-4">

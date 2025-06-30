@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -66,57 +65,40 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
     }
   };
 
-  const handleAssignToResolver = async () => {
-    if (!selectedResolver) {
-      toast.error('Please select a resolver');
+  const handleSaveAssignments = async () => {
+    if (!selectedResolver && !selectedApprover) {
+      toast.error('Please select at least one user to assign');
       return;
     }
-
     setLoading(true);
     try {
-      const success = await AdminService.bulkAssignTickets(ticketIds, selectedResolver);
-      if (success) {
-        const resolver = resolvers.find(r => r.id === selectedResolver);
-        toast.success(`${ticketIds.length} ticket(s) assigned to ${resolver?.name}`);
+      let resolverSuccess = true;
+      let approverSuccess = true;
+      // If resolver is selected, assign resolver
+      if (selectedResolver) {
+        resolverSuccess = await AdminService.bulkAssignTickets(ticketIds, selectedResolver);
+      }
+      // If approver is selected, assign approver
+      if (selectedApprover) {
+        const promises = ticketIds.map(ticketId => AdminService.assignToApprover(ticketId, selectedApprover));
+        const results = await Promise.all(promises);
+        approverSuccess = results.every(r => r);
+      }
+      if (resolverSuccess && approverSuccess) {
+        toast.success('Assignments updated successfully');
         setSelectedResolver('');
+        setSelectedApprover('');
         onAssignmentComplete();
+      } else if (resolverSuccess) {
+        toast.error('Only resolver assignments succeeded');
+      } else if (approverSuccess) {
+        toast.error('Only approver assignments succeeded');
       } else {
         toast.error('Failed to assign tickets');
       }
     } catch (error) {
-      console.error('Error assigning tickets:', error);
+      console.error('Error saving assignments:', error);
       toast.error('Failed to assign tickets');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAssignToApprover = async () => {
-    if (!selectedApprover) {
-      toast.error('Please select an approver');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const promises = ticketIds.map(ticketId => 
-        AdminService.assignToApprover(ticketId, selectedApprover)
-      );
-      
-      const results = await Promise.all(promises);
-      const successCount = results.filter(r => r).length;
-      
-      if (successCount === ticketIds.length) {
-        const approver = approvers.find(a => a.id === selectedApprover);
-        toast.success(`${ticketIds.length} ticket(s) assigned to approver ${approver?.name}`);
-        setSelectedApprover('');
-        onAssignmentComplete();
-      } else {
-        toast.error(`Only ${successCount}/${ticketIds.length} tickets assigned successfully`);
-      }
-    } catch (error) {
-      console.error('Error assigning to approver:', error);
-      toast.error('Failed to assign tickets to approver');
     } finally {
       setLoading(false);
     }
@@ -212,13 +194,6 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
                 ))}
               </SelectContent>
             </Select>
-            <Button 
-              onClick={handleAssignToResolver} 
-              disabled={!selectedResolver || loading || resolvers.length === 0}
-              size="sm"
-            >
-              {loading ? 'Assigning...' : 'Assign'}
-            </Button>
           </div>
         </div>
 
@@ -254,14 +229,20 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
                 ))}
               </SelectContent>
             </Select>
-            <Button 
-              onClick={handleAssignToApprover} 
-              disabled={!selectedApprover || loading || approvers.length === 0}
-              size="sm"
-            >
-              {loading ? 'Assigning...' : 'Assign'}
-            </Button>
           </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="pt-2 border-t">
+          <Button 
+            variant="default" 
+            size="sm" 
+            onClick={handleSaveAssignments}
+            disabled={loading}
+            className="w-full"
+          >
+            {loading ? 'Saving...' : 'Save'}
+          </Button>
         </div>
 
         {/* Refresh Button */}

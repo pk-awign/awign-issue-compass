@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw } from 'lucide-react';
+import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Issue } from '@/types/issue';
 import { AdminService } from '@/services/adminService';
@@ -24,6 +24,11 @@ type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string 
 export const AdminPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Get the tab parameter from URL
+  const tabParam = searchParams.get('tab');
+  const defaultTab = tabParam === 'tickets' ? 'tickets' : 'overview';
   
   // State management
   const [tickets, setTickets] = useState<Issue[]>([]);
@@ -34,15 +39,36 @@ export const AdminPage: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [analytics, setAnalytics] = useState<any>(null);
   
   // Modal states
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showTicketDetails, setShowTicketDetails] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
 
+  // Update active tab when URL changes
+  useEffect(() => {
+    const newTabParam = searchParams.get('tab');
+    const newDefaultTab = newTabParam === 'tickets' ? 'tickets' : 'overview';
+    setActiveTab(newDefaultTab);
+    console.log('🔄 URL changed, setting active tab to:', newDefaultTab);
+  }, [searchParams]);
+
+  // Handle tab changes and update URL
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    if (newTab === 'tickets') {
+      navigate('/admin?tab=tickets', { replace: true });
+    } else {
+      navigate('/admin', { replace: true });
+    }
+  };
+
   // Initialize sample users on first load
   useEffect(() => {
     initializeSystem();
+    loadAnalytics();
   }, []);
 
   const initializeSystem = async () => {
@@ -60,7 +86,6 @@ export const AdminPage: React.FC = () => {
     await loadTickets();
   };
 
-  // Load tickets
   const loadTickets = async () => {
     setIsLoading(true);
     try {
@@ -74,6 +99,15 @@ export const AdminPage: React.FC = () => {
       toast.error('Failed to load tickets');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadAnalytics = async () => {
+    try {
+      const data = await AdminService.getTicketAnalytics();
+      setAnalytics(data);
+    } catch (err) {
+      console.error('Error loading analytics:', err);
     }
   };
 
@@ -171,12 +205,67 @@ export const AdminPage: React.FC = () => {
   // Get unique cities for filter
   const uniqueCities = Array.from(new Set(tickets.map(ticket => ticket.city)));
 
-  // Analytics data
-  const totalIssues = tickets.length;
-  const openIssues = tickets.filter(issue => issue.status === 'open').length;
-  const inProgressIssues = tickets.filter(issue => issue.status === 'in_progress').length;
-  const resolvedIssues = tickets.filter(issue => issue.status === 'resolved').length;
-  const unassignedIssues = tickets.filter(issue => !issue.assignedResolver).length;
+  // Calculate System Health metrics
+  const calculateSLACompliance = () => {
+    const resolvedTickets = tickets.filter(ticket => 
+      ticket.status === 'resolved' && ticket.resolvedAt && ticket.submittedAt
+    );
+    
+    if (resolvedTickets.length === 0) return 100; // If no resolved tickets, consider 100% compliance
+    
+    const now = new Date();
+    const slaBreachedTickets = resolvedTickets.filter(ticket => {
+      const submittedAt = new Date(ticket.submittedAt);
+      const resolvedAt = new Date(ticket.resolvedAt);
+      const resolutionTime = resolvedAt.getTime() - submittedAt.getTime();
+      const resolutionHours = resolutionTime / (1000 * 60 * 60);
+      
+      // Define SLA based on severity
+      let slaHours = 24; // Default SLA
+      if (ticket.severity === 'sev1') slaHours = 4;  // 4 hours for SEV1
+      if (ticket.severity === 'sev2') slaHours = 8;  // 8 hours for SEV2
+      if (ticket.severity === 'sev3') slaHours = 24; // 24 hours for SEV3
+      
+      return resolutionHours > slaHours;
+    });
+    
+    const complianceRate = ((resolvedTickets.length - slaBreachedTickets.length) / resolvedTickets.length) * 100;
+    return Math.round(complianceRate);
+  };
+
+  const calculateAvgResolutionTime = () => {
+    const resolvedTickets = tickets.filter(ticket => 
+      ticket.status === 'resolved' && ticket.resolvedAt && ticket.submittedAt
+    );
+    
+    if (resolvedTickets.length === 0) return 0;
+    
+    const totalResolutionTime = resolvedTickets.reduce((total, ticket) => {
+      const submittedAt = new Date(ticket.submittedAt);
+      const resolvedAt = new Date(ticket.resolvedAt);
+      const resolutionTime = resolvedAt.getTime() - submittedAt.getTime();
+      return total + resolutionTime;
+    }, 0);
+    
+    const avgResolutionTimeHours = totalResolutionTime / (resolvedTickets.length * 1000 * 60 * 60);
+    return Math.round(avgResolutionTimeHours * 10) / 10; // Round to 1 decimal place
+  };
+
+  const calculateActiveUsers = () => {
+    // Count unique assigned resolvers
+    const uniqueResolvers = new Set<string>();
+    tickets.forEach(ticket => {
+      if (ticket.assignedResolver) {
+        uniqueResolvers.add(ticket.assignedResolver);
+      }
+    });
+    return uniqueResolvers.size;
+  };
+
+  // Calculate System Health metrics
+  const slaCompliance = calculateSLACompliance();
+  const avgResolutionTime = calculateAvgResolutionTime();
+  const activeUsers = calculateActiveUsers();
 
   return (
     <div className="min-h-screen bg-background">
@@ -185,17 +274,17 @@ export const AdminPage: React.FC = () => {
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-4 md:space-y-6">
           <div className="text-center space-y-2 md:space-y-4">
-            <h2 className="text-3xl font-bold">Super Admin Dashboard</h2>
+            <h2 className="text-2xl md:text-3xl font-bold">Super Admin Dashboard</h2>
             <p className="text-muted-foreground">Complete system management and analytics</p>
           </div>
 
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="tickets">All Tickets</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              <TabsTrigger value="users">User Management</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="flex flex-col items-center gap-2 w-full p-2 bg-muted rounded-xl border shadow-md my-4 md:grid md:grid-cols-5 md:gap-0 md:p-1">
+              <TabsTrigger value="overview" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Overview</TabsTrigger>
+              <TabsTrigger value="tickets" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">All Tickets</TabsTrigger>
+              <TabsTrigger value="analytics" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Analytics</TabsTrigger>
+              <TabsTrigger value="users" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">User Management</TabsTrigger>
+              <TabsTrigger value="settings" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Settings</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
@@ -206,7 +295,7 @@ export const AdminPage: React.FC = () => {
                     <div className="flex items-center justify-center mb-2">
                       <AlertCircle className="h-8 w-8 text-blue-500" />
                     </div>
-                    <div className="text-2xl font-bold">{totalIssues}</div>
+                    <div className="text-2xl font-bold">{analytics ? analytics.totalTickets : '-'}</div>
                     <div className="text-sm text-muted-foreground">Total Tickets</div>
                   </CardContent>
                 </Card>
@@ -216,7 +305,7 @@ export const AdminPage: React.FC = () => {
                     <div className="flex items-center justify-center mb-2">
                       <AlertCircle className="h-8 w-8 text-red-500" />
                     </div>
-                    <div className="text-2xl font-bold">{openIssues}</div>
+                    <div className="text-2xl font-bold">{analytics ? analytics.openTickets : '-'}</div>
                     <div className="text-sm text-muted-foreground">Open</div>
                   </CardContent>
                 </Card>
@@ -226,7 +315,7 @@ export const AdminPage: React.FC = () => {
                     <div className="flex items-center justify-center mb-2">
                       <Clock className="h-8 w-8 text-yellow-500" />
                     </div>
-                    <div className="text-2xl font-bold">{inProgressIssues}</div>
+                    <div className="text-2xl font-bold">{analytics ? analytics.inProgressTickets : '-'}</div>
                     <div className="text-sm text-muted-foreground">In Progress</div>
                   </CardContent>
                 </Card>
@@ -236,7 +325,7 @@ export const AdminPage: React.FC = () => {
                     <div className="flex items-center justify-center mb-2">
                       <CheckCircle className="h-8 w-8 text-green-500" />
                     </div>
-                    <div className="text-2xl font-bold">{resolvedIssues}</div>
+                    <div className="text-2xl font-bold">{analytics ? analytics.resolvedTickets : '-'}</div>
                     <div className="text-sm text-muted-foreground">Resolved</div>
                   </CardContent>
                 </Card>
@@ -246,7 +335,7 @@ export const AdminPage: React.FC = () => {
                     <div className="flex items-center justify-center mb-2">
                       <TrendingUp className="h-8 w-8 text-orange-500" />
                     </div>
-                    <div className="text-2xl font-bold">{unassignedIssues}</div>
+                    <div className="text-2xl font-bold">{analytics ? analytics.unassignedTickets : '-'}</div>
                     <div className="text-sm text-muted-foreground">Unassigned</div>
                   </CardContent>
                 </Card>
@@ -275,9 +364,13 @@ export const AdminPage: React.FC = () => {
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Refresh Data
                     </Button>
-                    <Button className="w-full justify-start" variant="outline">
-                      <TrendingUp className="h-4 w-4 mr-2" />
-                      Generate Report
+                    <Button 
+                      onClick={() => handleTabChange('tickets')}
+                      className="w-full justify-start" 
+                      variant="outline"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      View Tickets
                     </Button>
                   </CardContent>
                 </Card>
@@ -306,7 +399,7 @@ export const AdminPage: React.FC = () => {
                       </div>
                       <div className="flex justify-between">
                         <span>Pending assignment</span>
-                        <Badge variant="destructive">{unassignedIssues}</Badge>
+                        <Badge variant="destructive">{analytics ? analytics.unassignedTickets : '-'}</Badge>
                       </div>
                     </div>
                   </CardContent>
@@ -320,15 +413,15 @@ export const AdminPage: React.FC = () => {
                     <div className="space-y-3 text-sm">
                       <div className="flex justify-between">
                         <span>SLA Compliance</span>
-                        <Badge variant="default">95%</Badge>
+                        <Badge variant="default">{slaCompliance}%</Badge>
                       </div>
                       <div className="flex justify-between">
                         <span>Avg Resolution</span>
-                        <Badge variant="outline">4.2h</Badge>
+                        <Badge variant="outline">{avgResolutionTime}h</Badge>
                       </div>
                       <div className="flex justify-between">
                         <span>Active Users</span>
-                        <Badge variant="secondary">24</Badge>
+                        <Badge variant="secondary">{activeUsers}</Badge>
                       </div>
                     </div>
                   </CardContent>
@@ -340,55 +433,57 @@ export const AdminPage: React.FC = () => {
               {/* Filters and Search */}
               <Card>
                 <CardContent className="p-4">
-                  <div className="flex flex-col md:flex-row gap-4">
-                    <div className="flex-1">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search tickets..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
+                  <div className="space-y-4">
+                    {/* Search Bar - Full Width */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search tickets..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
                     </div>
                     
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-full md:w-40">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="resolved">Resolved</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {/* Filters - Grid Layout */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Status</SelectItem>
+                          <SelectItem value="open">Open</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="resolved">Resolved</SelectItem>
+                          <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                      </Select>
 
-                    <Select value={severityFilter} onValueChange={setSeverityFilter}>
-                      <SelectTrigger className="w-full md:w-40">
-                        <SelectValue placeholder="Severity" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Severity</SelectItem>
-                        <SelectItem value="sev1">SEV1</SelectItem>
-                        <SelectItem value="sev2">SEV2</SelectItem>
-                        <SelectItem value="sev3">SEV3</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      <Select value={severityFilter} onValueChange={setSeverityFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Severity" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Severity</SelectItem>
+                          <SelectItem value="sev1">SEV1</SelectItem>
+                          <SelectItem value="sev2">SEV2</SelectItem>
+                          <SelectItem value="sev3">SEV3</SelectItem>
+                        </SelectContent>
+                      </Select>
 
-                    <Select value={cityFilter} onValueChange={setCityFilter}>
-                      <SelectTrigger className="w-full md:w-40">
-                        <SelectValue placeholder="City" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Cities</SelectItem>
-                        {uniqueCities.map(city => (
-                          <SelectItem key={city} value={city}>{city}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <Select value={cityFilter} onValueChange={setCityFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="City" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Cities</SelectItem>
+                          {uniqueCities.map(city => (
+                            <SelectItem key={city} value={city}>{city}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -401,76 +496,167 @@ export const AdminPage: React.FC = () => {
                 />
               )}
 
-              {/* Tickets Table */}
-              <Card>
-                <CardContent className="p-0">
-                  {isLoading ? (
-                    <div className="p-8 text-center">
+              {/* Mobile Ticket Cards */}
+              <div className="block md:hidden space-y-3">
+                {isLoading ? (
+                  <Card>
+                    <CardContent className="p-8 text-center">
                       <div className="flex items-center justify-center space-x-2">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                         <span>Loading tickets...</span>
                       </div>
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12">
-                            <Checkbox
-                              checked={selectedTickets.length === filteredTickets.length && filteredTickets.length > 0}
-                              onCheckedChange={handleSelectAll}
-                            />
-                          </TableHead>
-                          <TableHead>Ticket #</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Severity</TableHead>
-                          <TableHead>City</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredTickets.map((ticket) => (
-                          <TableRow key={ticket.id}>
-                            <TableCell>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
+                    {/* Select All for Mobile */}
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            checked={selectedTickets.length === filteredTickets.length && filteredTickets.length > 0}
+                            onCheckedChange={handleSelectAll}
+                          />
+                          <span className="text-sm font-medium">
+                            Select All ({filteredTickets.length} tickets)
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Mobile Ticket Cards */}
+                    {filteredTickets.map((ticket) => (
+                      <Card key={ticket.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-3 flex-1">
                               <Checkbox
                                 checked={selectedTickets.includes(ticket.id)}
                                 onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked as boolean)}
+                                className="mt-1"
                               />
-                            </TableCell>
-                            <TableCell className="font-medium">{ticket.ticketNumber}</TableCell>
-                            <TableCell className="max-w-xs truncate">
-                              {ticket.issueDescription}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={getStatusColor(ticket.status)}>
-                                {ticket.status.replace('_', ' ').toUpperCase()}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={getSeverityColor(ticket.severity)}>
-                                {ticket.severity.toUpperCase()}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{ticket.city}</TableCell>
-                            <TableCell>{formatDate(ticket.submittedAt)}</TableCell>
-                            <TableCell>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleViewTicket(ticket)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h3 className="font-semibold text-sm truncate">{ticket.ticketNumber}</h3>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewTicket(ticket);
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {ticket.issueCategory.replace('_', ' ').toUpperCase()}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                                  {ticket.issueDescription}
+                                </p>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  <Badge variant={getStatusColor(ticket.status)} className="text-xs">
+                                    {ticket.status.replace('_', ' ').toUpperCase()}
+                                  </Badge>
+                                  <Badge variant={getSeverityColor(ticket.severity)} className="text-xs">
+                                    {ticket.severity.toUpperCase()}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>{ticket.city}</span>
+                                  <span>{formatDate(ticket.submittedAt)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </>
+                )}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block">
+                <Card>
+                  <CardContent className="p-0">
+                    {isLoading ? (
+                      <div className="p-8 text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                          <span>Loading tickets...</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12">
+                              <Checkbox
+                                checked={selectedTickets.length === filteredTickets.length && filteredTickets.length > 0}
+                                onCheckedChange={handleSelectAll}
+                              />
+                            </TableHead>
+                            <TableHead>Ticket #</TableHead>
+                            <TableHead>Issue Type</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Severity</TableHead>
+                            <TableHead>City</TableHead>
+                            <TableHead>Created</TableHead>
+                            <TableHead>Actions</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredTickets.map((ticket) => (
+                            <TableRow key={ticket.id}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedTickets.includes(ticket.id)}
+                                  onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked as boolean)}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">{ticket.ticketNumber}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                  {ticket.issueCategory.replace('_', ' ').toUpperCase()}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-xs truncate">
+                                {ticket.issueDescription}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={getStatusColor(ticket.status)}>
+                                  {ticket.status.replace('_', ' ').toUpperCase()}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={getSeverityColor(ticket.severity)}>
+                                  {ticket.severity.toUpperCase()}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{ticket.city}</TableCell>
+                              <TableCell>{formatDate(ticket.submittedAt)}</TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleViewTicket(ticket)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="analytics">

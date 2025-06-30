@@ -117,6 +117,8 @@ export const TicketResolverPage: React.FC = () => {
       all: filteredTickets,
       open: filteredTickets.filter(t => t.status === 'open'),
       in_progress: filteredTickets.filter(t => t.status === 'in_progress'),
+      approval_pending: filteredTickets.filter(t => t.status === 'send_for_approval'),
+      approved: filteredTickets.filter(t => t.status === 'approved'),
       resolved: filteredTickets.filter(t => t.status === 'resolved'),
     };
   }, [filteredTickets]);
@@ -162,14 +164,16 @@ export const TicketResolverPage: React.FC = () => {
         <div className="space-y-3">
           {/* Header */}
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
               <span className="font-mono font-semibold text-sm">{ticket.ticketNumber}</span>
-              <Badge className={getSeverityColor(ticket.severity)}>
-                {ticket.severity.toUpperCase()}
-              </Badge>
-              <Badge className={getStatusColor(ticket.status)}>
-                {ticket.status.replace('_', ' ').toUpperCase()}
-              </Badge>
+              <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                <Badge className={getSeverityColor(ticket.severity)}>
+                  {ticket.severity.toUpperCase()}
+                </Badge>
+                <Badge className={getStatusColor(ticket.status)}>
+                  {ticket.status.replace('_', ' ').toUpperCase()}
+                </Badge>
+              </div>
             </div>
             <Button
               variant="outline"
@@ -219,20 +223,6 @@ export const TicketResolverPage: React.FC = () => {
               <p className="text-green-600 line-clamp-1">{ticket.resolutionNotes}</p>
             </div>
           )}
-
-          {/* Assigned Resolvers/Approvers */}
-          <div>
-            <p className="text-sm font-medium">Assigned Resolvers:</p>
-            <p className="text-sm text-muted-foreground">
-              {(ticket as IssueWithAssignees).assignees?.filter(a => a.role === 'resolver').map(a => a.user_id).join(', ') || 'Unassigned'}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm font-medium">Assigned Approvers:</p>
-            <p className="text-sm text-muted-foreground">
-              {(ticket as IssueWithAssignees).assignees?.filter(a => a.role === 'approver').map(a => a.user_id).join(', ') || 'No approver'}
-            </p>
-          </div>
         </div>
       </CardContent>
     </Card>
@@ -294,26 +284,38 @@ export const TicketResolverPage: React.FC = () => {
 
           {/* Tickets Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="all" className="relative">
+            <TabsList className="grid grid-cols-2 sm:flex sm:flex-row w-full gap-3 sm:gap-0 bg-white p-2 rounded-xl border shadow-md my-4 z-10">
+              <TabsTrigger value="all" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 All Tickets
                 <Badge variant="secondary" className="ml-2">
                   {ticketsByStatus.all.length}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="open" className="relative">
+              <TabsTrigger value="open" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 Open
                 <Badge variant="secondary" className="ml-2">
                   {ticketsByStatus.open.length}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="in_progress" className="relative">
+              <TabsTrigger value="in_progress" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 In Progress
                 <Badge variant="secondary" className="ml-2">
                   {ticketsByStatus.in_progress.length}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="resolved" className="relative">
+              <TabsTrigger value="approval_pending" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                Approval Pending
+                <Badge variant="secondary" className="ml-2">
+                  {ticketsByStatus.approval_pending.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                Approved
+                <Badge variant="secondary" className="ml-2">
+                  {ticketsByStatus.approved.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="resolved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 Resolved
                 <Badge variant="secondary" className="ml-2">
                   {ticketsByStatus.resolved.length}
@@ -321,30 +323,127 @@ export const TicketResolverPage: React.FC = () => {
               </TabsTrigger>
             </TabsList>
 
-            {Object.entries(ticketsByStatus).map(([status, tickets]) => (
-              <TabsContent key={status} value={status} className="mt-6">
-                {loading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Loading tickets...</p>
-                  </div>
-                ) : tickets.length === 0 ? (
-                  <Card>
-                    <CardContent className="text-center py-8">
-                      <Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                      <p className="text-lg font-medium">No tickets found</p>
-                      <p className="text-sm text-muted-foreground">
-                        {activeFiltersCount > 0 ? 'Try adjusting your filters' : `No ${status === 'all' ? '' : status} tickets assigned to you`}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {tickets.map(renderTicketCard)}
-                  </div>
-                )}
-              </TabsContent>
-            ))}
+            {/* Tab contents for each status */}
+            <TabsContent value="all" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : ticketsByStatus.all.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No tickets found</p>
+                    <p className="text-sm text-muted-foreground">No tickets assigned to you</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {ticketsByStatus.all.map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="open" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : ticketsByStatus.open.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No open tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in open status</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {ticketsByStatus.open.map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="in_progress" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : ticketsByStatus.in_progress.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No in progress tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in progress</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {ticketsByStatus.in_progress.map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="approval_pending" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : ticketsByStatus.approval_pending.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No approval pending tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in send for approval status</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {ticketsByStatus.approval_pending.map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="approved" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : ticketsByStatus.approved.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No approved tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in approved status</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {ticketsByStatus.approved.map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="resolved" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : ticketsByStatus.resolved.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No resolved tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in resolved status</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {ticketsByStatus.resolved.map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
           </Tabs>
         </div>
       </main>
