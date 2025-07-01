@@ -316,35 +316,17 @@ export class AdminService {
     }
   }
 
-  static async getAllTickets(): Promise<Issue[]> {
+  static async getAllTickets(includeDeleted: boolean = false): Promise<Issue[]> {
     try {
-      const { data, error } = await supabase
+      const query = supabase
         .from('tickets')
-        .select(`
-          *,
-          comments (
-            id,
-            content,
-            author,
-            author_role,
-            is_internal,
-            created_at
-          ),
-          attachments (
-            id,
-            file_name,
-            file_size,
-            file_type,
-            storage_path,
-            uploaded_at
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching tickets:', error);
-        throw error;
+      if (!includeDeleted) {
+        query.eq('deleted', false);
       }
+      const { data, error } = await query;
+      if (error) throw error;
 
       // Get all users to map IDs to names
       const { data: users, error: usersError } = await supabase
@@ -401,37 +383,51 @@ export class AdminService {
           awignAppTicketId: ticket.awign_app_ticket_id,
           issueCategory: ticket.issue_category as any,
           issueDescription: ticket.issue_description,
-          issueDate: this.parseIssueDate(ticket.issue_date),
+          issueDate: ticket.issue_date || { type: 'single', dates: [] },
           severity: ticket.severity as any,
           status: ticket.status as any,
           isAnonymous: ticket.is_anonymous,
           submittedBy: ticket.submitted_by,
           submittedByUserId: ticket.submitted_by_user_id,
-          submittedAt: new Date(ticket.submitted_at),
-          // Use new assignment data if available, fallback to legacy fields
+          submittedAt: ticket.submitted_at ? new Date(ticket.submitted_at) : new Date(),
           assignedResolver: resolverAssignment?.user_id || ticket.assigned_resolver,
           assignedApprover: approverAssignment?.user_id || ticket.assigned_approver,
-          comments: (ticket.comments || []).map((comment: any) => ({
+          comments: ticket.comments ? ticket.comments.map((comment: any) => ({
             id: comment.id,
             content: comment.content,
             author: comment.author,
             authorRole: comment.author_role,
             timestamp: new Date(comment.created_at),
             isInternal: comment.is_internal,
-          })),
-          attachments: (ticket.attachments || []).map((attachment: any) => ({
+          })) : [],
+          attachments: ticket.attachments ? ticket.attachments.map((attachment: any) => ({
             id: attachment.id,
             fileName: attachment.file_name,
             fileSize: attachment.file_size,
             fileType: attachment.file_type,
             uploadedAt: attachment.uploaded_at ? new Date(attachment.uploaded_at) : undefined,
             downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${attachment.storage_path}`
-          })),
+          })) : [],
           resolutionNotes: ticket.resolution_notes,
           resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
-          // Add user details for assigned users
           assignedResolverDetails: userMap.get(resolverAssignment?.user_id || ticket.assigned_resolver),
           assignedApproverDetails: userMap.get(approverAssignment?.user_id || ticket.assigned_approver),
+          deleted: ticket.deleted,
+          // Safe fallbacks for enhanced fields
+          reopenCount: ticket.reopen_count || 0,
+          lastReopenedAt: ticket.last_reopened_at ? new Date(ticket.last_reopened_at) : undefined,
+          reopenedBy: ticket.reopened_by,
+          reopenedByDetails: ticket.reopened_by_name ? {
+            name: ticket.reopened_by_name,
+            role: ticket.reopened_by_role || 'super_admin'
+          } : undefined,
+          statusChangedAt: ticket.status_changed_at ? new Date(ticket.status_changed_at) : undefined,
+          statusChangedBy: ticket.status_changed_by,
+          statusChangedByDetails: ticket.status_changed_by_name ? {
+            name: ticket.status_changed_by_name,
+            role: ticket.status_changed_by_role || 'system'
+          } : undefined,
+          timeline: ticket.timeline || [],
         };
       });
     } catch (error) {
@@ -442,8 +438,11 @@ export class AdminService {
 
   static async getUsersByRole(role: 'resolver' | 'approver'): Promise<User[]> {
     try {
+      console.log(`🔄 Getting users by role: ${role}`);
+      
       // Map the new role names to database role names
       const dbRole = this.mapUserRoleToDatabaseRole(role);
+      console.log(`📋 Mapped role '${role}' to database role '${dbRole}'`);
       
       const { data, error } = await supabase
         .from('users')
@@ -453,12 +452,17 @@ export class AdminService {
         .order('name', { ascending: true });
 
       if (error) {
-        console.error('Error fetching users by role:', error);
+        console.error('❌ Error fetching users by role:', error);
         throw error;
       }
 
+      console.log(`📊 Found ${data?.length || 0} users with role '${dbRole}'`);
+      if (data && data.length > 0) {
+        console.log('👥 Users found:', data.map(u => ({ id: u.id, name: u.name, role: u.role, is_active: u.is_active })));
+      }
+
       // Map the database users to our User type
-      return (data || []).map(user => ({
+      const mappedUsers = (data || []).map(user => ({
         id: user.id,
         name: user.name,
         role: this.mapDatabaseRoleToUserRole(user.role),
@@ -469,42 +473,68 @@ export class AdminService {
         lastActivity: user.last_activity_at ? new Date(user.last_activity_at) : undefined,
         lastLogin: user.last_login_at ? new Date(user.last_login_at) : undefined
       }));
+
+      console.log(`✅ Returning ${mappedUsers.length} mapped users for role '${role}'`);
+      return mappedUsers;
     } catch (error) {
-      console.error('Error in getUsersByRole:', error);
+      console.error('❌ Error in getUsersByRole:', error);
       return [];
     }
   }
 
   static async bulkAssignTickets(ticketIds: string[], resolverId: string): Promise<boolean> {
     try {
+      console.log(`🔄 Starting bulk assignment for ${ticketIds.length} tickets to resolver ${resolverId}`);
+      
       // Use individual updates instead of bulk upsert
       const updatePromises = ticketIds.map(async ticketId => {
-        // 1. Update legacy field
-        const { error } = await supabase
-          .from('tickets')
-          .update({
-            assigned_resolver: resolverId,
-            status: 'in_progress'
-          })
-          .eq('id', ticketId);
-        if (error) return { error };
-        // 2. Add to ticket_assignees (new flow)
-        await TicketService.addAssignee(ticketId, resolverId, 'resolver', resolverId, 'System', 'resolver');
-        return { error: null };
+        try {
+          // 1. Update legacy field
+          const { error: updateError } = await supabase
+            .from('tickets')
+            .update({
+              assigned_resolver: resolverId,
+              status: 'in_progress'
+            })
+            .eq('id', ticketId);
+          
+          if (updateError) {
+            console.error(`❌ Failed to update ticket ${ticketId}:`, updateError);
+            return { success: false, error: updateError };
+          }
+          
+          // 2. Add to ticket_assignees (new flow)
+          try {
+            await TicketService.addAssignee(ticketId, resolverId, 'resolver', resolverId, 'System', 'super_admin');
+            console.log(`✅ Successfully assigned ticket ${ticketId} to resolver ${resolverId}`);
+            return { success: true, error: null };
+          } catch (assigneeError) {
+            console.error(`❌ Failed to add assignee for ticket ${ticketId}:`, assigneeError);
+            return { success: false, error: assigneeError };
+          }
+        } catch (ticketError) {
+          console.error(`❌ Error processing ticket ${ticketId}:`, ticketError);
+          return { success: false, error: ticketError };
+        }
       });
 
       const results = await Promise.all(updatePromises);
-      // Check if any updates failed
-      const hasError = results.some(result => result.error);
-      if (hasError) {
-        console.error('Some bulk assignments failed');
+      
+      // Check results
+      const successfulAssignments = results.filter(r => r.success).length;
+      const failedAssignments = results.filter(r => !r.success).length;
+      
+      console.log(`📊 Bulk assignment results: ${successfulAssignments} successful, ${failedAssignments} failed`);
+      
+      if (failedAssignments > 0) {
+        console.error('❌ Some bulk assignments failed');
         return false;
       }
 
-      console.log('Bulk assigned tickets successfully');
+      console.log('✅ Bulk assigned tickets successfully');
       return true;
     } catch (error) {
-      console.error('Error in bulkAssignTickets:', error);
+      console.error('❌ Error in bulkAssignTickets:', error);
       return false;
     }
   }
@@ -531,6 +561,8 @@ export class AdminService {
 
   static async assignToApprover(ticketId: string, approverId: string): Promise<boolean> {
     try {
+      console.log(`🔄 Assigning ticket ${ticketId} to approver ${approverId}`);
+      
       // 1. Update the legacy field for compatibility
       const { data, error } = await supabase
         .from('tickets')
@@ -538,28 +570,41 @@ export class AdminService {
         .eq('id', ticketId);
 
       if (error) {
-        console.error('Error assigning ticket to approver:', error);
+        console.error('❌ Error assigning ticket to approver:', error);
         return false;
       }
 
       // 2. Add to ticket_assignees if not already present
-      // Fetch current assignees for this ticket
-      const { data: assigneesData, error: assigneesError } = await supabase
-        .from('ticket_assignees')
-        .select('*')
-        .eq('ticket_id', ticketId)
-        .eq('user_id', approverId)
-        .eq('role', 'approver');
-      if (!assigneesError && (!assigneesData || assigneesData.length === 0)) {
-        // Add the approver to ticket_assignees
-        // Use placeholder values for performedBy fields for now
-        await TicketService.addAssignee(ticketId, approverId, 'approver', approverId, 'System', 'approver');
+      try {
+        // Fetch current assignees for this ticket
+        const { data: assigneesData, error: assigneesError } = await supabase
+          .from('ticket_assignees')
+          .select('*')
+          .eq('ticket_id', ticketId)
+          .eq('user_id', approverId)
+          .eq('role', 'approver');
+          
+        if (assigneesError) {
+          console.error('❌ Error checking existing assignees:', assigneesError);
+          return false;
+        }
+        
+        if (!assigneesData || assigneesData.length === 0) {
+          // Add the approver to ticket_assignees
+          await TicketService.addAssignee(ticketId, approverId, 'approver', approverId, 'System', 'super_admin');
+          console.log(`✅ Successfully added approver ${approverId} to ticket ${ticketId}`);
+        } else {
+          console.log(`ℹ️ Approver ${approverId} already assigned to ticket ${ticketId}`);
+        }
+      } catch (assigneeError) {
+        console.error('❌ Error adding approver to ticket_assignees:', assigneeError);
+        return false;
       }
 
-      console.log('Ticket assigned to approver successfully:', data);
+      console.log('✅ Ticket assigned to approver successfully:', data);
       return true;
     } catch (error) {
-      console.error('Error in assignToApprover:', error);
+      console.error('❌ Error in assignToApprover:', error);
       return false;
     }
   }
@@ -795,13 +840,10 @@ export class AdminService {
   // Helper method to map database roles to User type roles
   private static mapDatabaseRoleToUserRole(dbRole: string): User['role'] {
     switch (dbRole) {
-      case 'supervisor':
       case 'resolver':
         return 'resolver';
-      case 'city_owner':
       case 'approver':
         return 'approver';
-      case 'operations_head':
       case 'super_admin':
         return 'super_admin';
       case 'invigilator':
@@ -847,27 +889,19 @@ export class AdminService {
     }
   }
 
-  // Delete a ticket by ID (Super Admin only)
+  // Soft delete a ticket by ID (Super Admin only)
   static async deleteTicket(ticketId: string): Promise<boolean> {
     try {
-      console.log('Deleting ticket:', ticketId);
-      
-      // Delete related data first to avoid foreign key constraint errors
-      await supabase.from('comments').delete().eq('ticket_id', ticketId);
-      await supabase.from('attachments').delete().eq('ticket_id', ticketId);
-      await supabase.from('ticket_assignees').delete().eq('ticket_id', ticketId);
-      await supabase.from('ticket_timeline').delete().eq('ticket_id', ticketId);
-      await supabase.from('ticket_history').delete().eq('ticket_id', ticketId);
-      
-      // Delete the ticket itself
-      const { error } = await supabase.from('tickets').delete().eq('id', ticketId);
-      
+      console.log('Soft deleting ticket:', ticketId);
+      const { error } = await supabase
+        .from('tickets')
+        .update({ deleted: true })
+        .eq('id', ticketId);
       if (error) {
-        console.error('Error deleting ticket:', error);
+        console.error('Error soft deleting ticket:', error);
         return false;
       }
-      
-      console.log('Ticket deleted successfully:', ticketId);
+      console.log('Ticket soft deleted successfully:', ticketId);
       return true;
     } catch (error) {
       console.error('Error in deleteTicket:', error);

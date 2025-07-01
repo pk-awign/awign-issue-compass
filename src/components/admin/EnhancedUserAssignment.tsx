@@ -43,18 +43,22 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
       }
 
       // Load resolvers and filter by role
+      console.log('🔄 Loading resolvers...');
       const resolverData = await AdminService.getUsersByRole('resolver');
       const validResolvers = resolverData.filter(user => user.role === 'resolver');
-      console.log('✅ Loaded resolvers:', validResolvers.length);
-      setResolvers(validResolvers);
+      console.log('✅ Loaded resolvers:', validResolvers.length, validResolvers.map(r => r.name));
 
       // Load approvers and filter by role
+      console.log('🔄 Loading approvers...');
       const approverData = await AdminService.getUsersByRole('approver');
       const validApprovers = approverData.filter(user => user.role === 'approver');
-      console.log('✅ Loaded approvers:', validApprovers.length);
+      console.log('✅ Loaded approvers:', validApprovers.length, validApprovers.map(a => a.name));
+
+      setResolvers(validResolvers);
       setApprovers(validApprovers);
 
       if (validResolvers.length === 0 && validApprovers.length === 0) {
+        console.warn('⚠️ No users available for assignment');
         toast.error('No users available for assignment. Please create users first.');
       }
     } catch (error) {
@@ -70,20 +74,32 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
       toast.error('Please select at least one user to assign');
       return;
     }
+    
+    console.log(`🔄 Starting bulk assignment for ${ticketIds.length} tickets`);
+    console.log('Selected resolver:', selectedResolver);
+    console.log('Selected approver:', selectedApprover);
+    
     setLoading(true);
     try {
       let resolverSuccess = true;
       let approverSuccess = true;
+      
       // If resolver is selected, assign resolver
       if (selectedResolver) {
+        console.log(`🔄 Assigning ${ticketIds.length} tickets to resolver ${selectedResolver}`);
         resolverSuccess = await AdminService.bulkAssignTickets(ticketIds, selectedResolver);
+        console.log(`Resolver assignment result: ${resolverSuccess ? 'SUCCESS' : 'FAILED'}`);
       }
+      
       // If approver is selected, assign approver
       if (selectedApprover) {
+        console.log(`🔄 Assigning ${ticketIds.length} tickets to approver ${selectedApprover}`);
         const promises = ticketIds.map(ticketId => AdminService.assignToApprover(ticketId, selectedApprover));
         const results = await Promise.all(promises);
         approverSuccess = results.every(r => r);
+        console.log(`Approver assignment results: ${results.filter(r => r).length}/${results.length} successful`);
       }
+      
       if (resolverSuccess && approverSuccess) {
         toast.success('Assignments updated successfully');
         setSelectedResolver('');
@@ -97,7 +113,7 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
         toast.error('Failed to assign tickets');
       }
     } catch (error) {
-      console.error('Error saving assignments:', error);
+      console.error('❌ Error saving assignments:', error);
       toast.error('Failed to assign tickets');
     } finally {
       setLoading(false);

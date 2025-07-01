@@ -40,6 +40,7 @@ export interface Issue {
   statusChangedBy?: string;
   statusChangedByDetails?: { name: string; role: string };
   timeline?: TimelineEvent[];
+  deleted?: boolean;
 }
 
 export interface Comment {

@@ -93,6 +93,12 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     setTrackSearchTerm(searchTerm);
   }, [searchTerm]);
 
+  useEffect(() => {
+    if (user && user.role === 'invigilator' && formData.dateType === 'range') {
+      setFormData(prev => ({ ...prev, dateType: 'single' }));
+    }
+  }, [user]);
+
   const issueCategories = [
     { value: 'payment_delay', label: 'Payment Delay' },
     { value: 'partial_payment', label: 'Reduced/Partial Payment' },
@@ -172,27 +178,24 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      // Updated validation logic - don't require resourceId for anonymous submissions
+      // Updated validation logic - always require all fields since anonymous is disabled
       const requiredFields = [
         formData.centreCode,
         formData.city,
+        formData.resourceId,
         formData.issueCategory,
-        formData.issueDescription
+        formData.issueDescription,
+        formData.submittedBy
       ];
-      
-      // Only require resourceId if not anonymous
-      if (!formData.isAnonymous) {
-        requiredFields.push(formData.resourceId);
-      }
       
       if (requiredFields.some(field => !field)) {
         toast.error('Please fill in all required fields');
         return;
       }
 
-      // Validate name for non-anonymous reports (only for non-logged-in users)
-      if (!user && !formData.isAnonymous && !formData.submittedBy) {
-        toast.error('Name is required for non-anonymous reports');
+      // Validate name for all reports (anonymous disabled)
+      if (!formData.submittedBy) {
+        toast.error('Name is required');
         return;
       }
 
@@ -212,7 +215,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
       const issueData = {
         centreCode: formData.centreCode,
         city: formData.city,
-        resourceId: formData.isAnonymous ? undefined : formData.resourceId,
+        resourceId: formData.resourceId,
         awignAppTicketId: formData.awignAppTicketId || undefined,
         issueCategory: formData.issueCategory as Issue['issueCategory'],
         issueDescription: formData.issueDescription,
@@ -224,7 +227,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
           endDate
         },
         isAnonymous: formData.isAnonymous,
-        submittedBy: formData.isAnonymous ? undefined : formData.submittedBy
+        submittedBy: formData.submittedBy
       };
 
       const ticketNumber = await onSubmit(issueData);
@@ -259,7 +262,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
         startDate: undefined,
         endDate: undefined,
         multipleDates: [],
-        isAnonymous: defaultAnonymous,
+        isAnonymous: false,
         submittedBy: user?.name || '',
         citySearch: ''
       });
@@ -328,8 +331,8 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
               </CardHeader>
               <CardContent>
                 <form className="space-y-6" onSubmit={handleSubmit}>
-                  {/* Anonymous Checkbox - hide when logged in */}
-                  {!user && (
+                  {/* Anonymous Checkbox - HIDDEN (feature disabled) */}
+                  {/* {!user && (
                     <div className="flex items-center space-x-2 p-4 bg-blue-50 rounded-lg">
                       <Checkbox 
                         id="anonymous" 
@@ -338,7 +341,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                       />
                       <Label htmlFor="anonymous" className="text-sm font-medium">Report this issue anonymously</Label>
                     </div>
-                  )}
+                  )} */}
 
                   {/* Name and Resource ID side by side */}
                   {!formData.isAnonymous && (
@@ -456,16 +459,12 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                     <Label className="text-sm font-medium">Issue Date *</Label>
                     <RadioGroup 
                       value={formData.dateType} 
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, dateType: value as 'single' | 'range' | 'multiple' | 'ongoing' }))}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, dateType: value as 'single' | 'multiple' | 'ongoing' }))}
                       className="flex flex-wrap gap-6 mt-2"
                     >
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="single" id="single" />
                         <Label htmlFor="single">Single Date</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="range" id="range" />
-                        <Label htmlFor="range">Date Range</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="multiple" id="multiple" />
@@ -515,47 +514,6 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                               initialFocus
                               className="p-3 pointer-events-auto"
                               disabled={(date) => date > new Date()}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    )}
-
-                    {formData.dateType === 'range' && (
-                      <div className="grid grid-cols-2 gap-3 mt-3">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className="justify-start text-left font-normal">
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.startDate ? format(formData.startDate, "PPP") : "Start date"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={formData.startDate}
-                              onSelect={(date) => setFormData(prev => ({ ...prev, startDate: date }))}
-                              initialFocus
-                              className="p-3 pointer-events-auto"
-                              disabled={(date) => date > new Date()}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className="justify-start text-left font-normal">
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.endDate ? format(formData.endDate, "PPP") : "End date"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={formData.endDate}
-                              onSelect={(date) => setFormData(prev => ({ ...prev, endDate: date }))}
-                              initialFocus
-                              className="p-3 pointer-events-auto"
-                              disabled={(date) => date > new Date() || (formData.startDate && date < formData.startDate)}
                             />
                           </PopoverContent>
                         </Popover>

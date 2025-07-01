@@ -365,7 +365,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               )}
             </DialogTitle>
             <div className="flex items-center gap-2 mr-8">
-              {user?.role === 'super_admin' && (
+              {user?.role === 'super_admin' && !ticket?.deleted && (
                 <Button
                   variant="destructive"
                   size="sm"

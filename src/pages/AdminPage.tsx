@@ -19,6 +19,7 @@ import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
 import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
 import { format } from 'date-fns';
+import { Switch } from '@/components/ui/switch';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -48,6 +49,7 @@ export const AdminPage: React.FC = () => {
   const [showTicketDetails, setShowTicketDetails] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   // Update active tab when URL changes
   useEffect(() => {
@@ -92,8 +94,8 @@ export const AdminPage: React.FC = () => {
     setIsLoading(true);
     try {
       console.log('🔄 Loading tickets...');
-      const ticketsData = await AdminService.getAllTickets();
-      console.log(`✅ Loaded ${ticketsData.length} tickets`);
+      const ticketsData = await AdminService.getAllTickets(showDeleted);
+      console.log('Tickets loaded:', ticketsData); // Debug log
       setTickets(ticketsData);
       setFilteredTickets(ticketsData);
     } catch (error) {
@@ -290,6 +292,31 @@ export const AdminPage: React.FC = () => {
       setDeletingTicketId(null);
     }
   };
+
+  // Reload tickets whenever showDeleted changes
+  useEffect(() => {
+    loadTickets();
+  }, [showDeleted]);
+
+  function downloadTicketsAsCSV(ticketsToDownload: Issue[]) {
+    if (!ticketsToDownload.length) return;
+    const headers = [
+      'Ticket Number', 'Centre Code', 'City', 'Resource ID', 'Issue Category', 'Description', 'Severity', 'Status', 'Submitted By', 'Submitted At', 'Deleted'
+    ];
+    const rows = ticketsToDownload.map(t => [
+      t.ticketNumber, t.centreCode, t.city, t.resourceId, t.issueCategory, t.issueDescription, t.severity, t.status, t.submittedBy, t.submittedAt ? new Date(t.submittedAt).toISOString() : '', t.deleted ? 'Yes' : 'No'
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tickets.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -512,6 +539,21 @@ export const AdminPage: React.FC = () => {
                 </CardContent>
               </Card>
 
+              {/* Show Deleted Tickets Toggle and Download Button */}
+              <div className="flex items-center gap-4 mb-4">
+                <Switch
+                  id="show-deleted"
+                  checked={showDeleted}
+                  onCheckedChange={(checked) => setShowDeleted(checked)}
+                />
+                <label htmlFor="show-deleted" className="text-sm font-medium">
+                  {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
+                </label>
+                <Button onClick={() => downloadTicketsAsCSV(filteredTickets)} variant="outline">
+                  Download Tickets
+                </Button>
+              </div>
+
               {/* Enhanced User Assignment */}
               {selectedTickets.length > 0 && (
                 <EnhancedUserAssignment
@@ -553,11 +595,14 @@ export const AdminPage: React.FC = () => {
                       <Card key={ticket.id} className="p-4">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <Checkbox
-                              checked={selectedTickets.includes(ticket.id)}
-                              onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked as boolean)}
-                            />
                             <span className="font-mono font-semibold">{ticket.ticketNumber}</span>
+                            {ticket.deleted && (
+                              <span className="ml-2" title="This ticket is soft deleted">
+                                <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold gap-1">
+                                  <Trash2 className="h-3 w-3" />DELETED
+                                </span>
+                              </span>
+                            )}
                             <Badge variant={getStatusColor(ticket.status)}>
                               {ticket.status.replace('_', ' ')}
                             </Badge>
@@ -573,23 +618,25 @@ export const AdminPage: React.FC = () => {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDeleteTicket(ticket)}
-                              disabled={deletingTicketId === ticket.id}
-                            >
-                              {deletingTicketId === ticket.id ? (
-                                <>
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                  Deleting...
-                                </>
-                              ) : (
-                                <>
-                                  <Trash2 className="h-4 w-4" />
-                                </>
-                              )}
-                            </Button>
+                            {!ticket.deleted && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteTicket(ticket)}
+                                disabled={deletingTicketId === ticket.id}
+                              >
+                                {deletingTicketId === ticket.id ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 className="h-4 w-4" />
+                                  </>
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
                         
@@ -637,67 +684,84 @@ export const AdminPage: React.FC = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredTickets.map((ticket) => (
-                            <TableRow key={ticket.id}>
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedTickets.includes(ticket.id)}
-                                  onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked as boolean)}
-                                />
-                              </TableCell>
-                              <TableCell className="font-medium">{ticket.ticketNumber}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">
-                                  {ticket.issueCategory.replace('_', ' ').toUpperCase()}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="max-w-xs truncate">
-                                {ticket.issueDescription}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={getStatusColor(ticket.status)}>
-                                  {ticket.status.replace('_', ' ').toUpperCase()}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={getSeverityColor(ticket.severity)}>
-                                  {ticket.severity.toUpperCase()}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>{ticket.city}</TableCell>
-                              <TableCell>
-                                {ticket.submittedAt ? format(new Date(ticket.submittedAt), 'dd MMM yyyy HH:mm:ss') : 'N/A'}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleViewTicket(ticket)}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => handleDeleteTicket(ticket)}
-                                    disabled={deletingTicketId === ticket.id}
-                                  >
-                                    {deletingTicketId === ticket.id ? (
-                                      <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                        Deleting...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Trash2 className="h-4 w-4" />
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
-                              </TableCell>
+                          {filteredTickets.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center">No tickets found.</TableCell>
                             </TableRow>
-                          ))}
+                          ) : (
+                            filteredTickets.map((ticket) => (
+                              <TableRow key={ticket.id}>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedTickets.includes(ticket.id)}
+                                    onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked as boolean)}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {ticket.ticketNumber}
+                                  {ticket.deleted && (
+                                    <span className="ml-2" title="This ticket is soft deleted">
+                                      <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold gap-1">
+                                        <Trash2 className="h-3 w-3" />DELETED
+                                      </span>
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs">
+                                    {ticket.issueCategory.replace('_', ' ').toUpperCase()}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="max-w-xs truncate">
+                                  {ticket.issueDescription}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={getStatusColor(ticket.status)}>
+                                    {ticket.status.replace('_', ' ').toUpperCase()}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={getSeverityColor(ticket.severity)}>
+                                    {ticket.severity.toUpperCase()}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>{ticket.city}</TableCell>
+                                <TableCell>
+                                  {ticket.submittedAt ? format(new Date(ticket.submittedAt), 'dd MMM yyyy HH:mm:ss') : 'N/A'}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleViewTicket(ticket)}
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                    {!ticket.deleted && (
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => handleDeleteTicket(ticket)}
+                                        disabled={deletingTicketId === ticket.id}
+                                      >
+                                        {deletingTicketId === ticket.id ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            Deleting...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Trash2 className="h-4 w-4" />
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
                         </TableBody>
                       </Table>
                     )}
