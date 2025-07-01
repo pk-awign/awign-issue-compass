@@ -41,6 +41,7 @@ import { DashboardRouter } from './admin/DashboardRouter';
 import { TicketDetailsModal } from './admin/TicketDetailsModal';
 import { UserManagementModal } from './admin/UserManagementModal';
 import { EnhancedTicketManagement } from './admin/EnhancedTicketManagement';
+import { EmailTestComponent } from './dev/EmailTestComponent';
 
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -437,6 +438,12 @@ const AdminDashboard: React.FC = () => {
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-yellow-800 mb-4">Development Tools</h3>
         <RandomTicketGenerator />
+      </div>
+
+      {/* Email Test Component for debugging */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-blue-800 mb-4">Email Data Flow Test</h3>
+        <EmailTestComponent />
       </div>
 
       {/* Main Content Tabs */}

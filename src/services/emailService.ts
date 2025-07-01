@@ -29,28 +29,48 @@ export class EmailService {
     try {
       const to = recipient || this.NOTIFICATION_EMAIL;
       const emailContent = this.generateTicketEmailContent(ticketData);
-      console.log('DEBUG: Generated email content for ticket creation:', emailContent);
+      
+      console.log('🔍 DEBUG: Email Service Configuration:', {
+        EMAIL_SERVICE_ID: this.EMAIL_SERVICE_ID ? '✅ Set' : '❌ Missing',
+        EMAIL_TEMPLATE_ID: this.EMAIL_TEMPLATE_ID ? '✅ Set' : '❌ Missing',
+        EMAIL_USER_ID: this.EMAIL_USER_ID ? '✅ Set' : '❌ Missing',
+        EMAIL_API_URL: this.EMAIL_API_URL
+      });
+
+      console.log('📧 DEBUG: Generated email content for ticket creation:', {
+        to,
+        subject: `New Ticket Created: ${ticketData.ticketNumber}`,
+        content: emailContent,
+        ticketData
+      });
 
       // Option 1: Using EmailJS (if configured)
       if (this.EMAIL_SERVICE_ID && this.EMAIL_TEMPLATE_ID && this.EMAIL_USER_ID) {
-        return await this.sendViaEmailJS(emailContent, to);
+        console.log('🚀 Attempting to send via EmailJS...');
+        const result = await this.sendViaEmailJS(emailContent, to, ticketData);
+        console.log('📧 EmailJS result:', result);
+        return result;
       }
 
       // Option 2: Using a custom API endpoint
       if (this.EMAIL_API_URL && this.EMAIL_API_URL !== 'https://api.emailjs.com/api/v1.0/email/send') {
-        return await this.sendViaCustomAPI(emailContent, to);
+        console.log('🚀 Attempting to send via Custom API...');
+        const result = await this.sendViaCustomAPI(emailContent, to);
+        console.log('📧 Custom API result:', result);
+        return result;
       }
 
       // Option 3: Console log for development (fallback)
       console.log('📧 EMAIL NOTIFICATION (Development Mode):', {
         to,
         subject: `New Ticket Created: ${ticketData.ticketNumber}`,
-        content: emailContent
+        content: emailContent,
+        ticketData
       });
 
       return true;
     } catch (error) {
-      console.error('Error sending email notification:', error);
+      console.error('❌ Error sending email notification:', error);
       return false;
     }
   }
@@ -80,8 +100,33 @@ This is an automated notification from the AWIGN Escalation Management System.
     `.trim();
   }
 
-  private static async sendViaEmailJS(emailContent: string, to: string): Promise<boolean> {
+  private static async sendViaEmailJS(emailContent: string, to: string, ticketData: EmailNotificationData): Promise<boolean> {
     try {
+      // Create template parameters with all ticket data
+      const templateParams = {
+        to_email: to,
+        subject: `New Ticket Created: ${ticketData.ticketNumber}`,
+        message: emailContent,
+        // Additional parameters for EmailJS template
+        ticket_number: ticketData.ticketNumber,
+        centre_code: ticketData.centreCode,
+        city: ticketData.city,
+        resource_id: ticketData.resourceId || 'Not specified',
+        issue_category: ticketData.issueCategory,
+        issue_description: ticketData.issueDescription,
+        submitted_by: ticketData.submittedBy,
+        submitted_at: ticketData.submittedAt.toLocaleString(),
+        severity: ticketData.severity,
+        attachments_count: ticketData.attachments?.length || 0
+      };
+
+      console.log('📤 Sending to EmailJS with params:', {
+        service_id: this.EMAIL_SERVICE_ID,
+        template_id: this.EMAIL_TEMPLATE_ID,
+        user_id: this.EMAIL_USER_ID,
+        template_params: templateParams
+      });
+
       const response = await fetch(this.EMAIL_API_URL, {
         method: 'POST',
         headers: {
@@ -91,17 +136,26 @@ This is an automated notification from the AWIGN Escalation Management System.
           service_id: this.EMAIL_SERVICE_ID,
           template_id: this.EMAIL_TEMPLATE_ID,
           user_id: this.EMAIL_USER_ID,
-          template_params: {
-            to_email: to,
-            subject: 'New Ticket Created',
-            message: emailContent,
-          },
+          template_params: templateParams,
         }),
       });
 
-      return response.ok;
+      const responseText = await response.text();
+      console.log('📥 EmailJS Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: responseText
+      });
+
+      if (!response.ok) {
+        console.error('❌ EmailJS API error:', response.status, responseText);
+        return false;
+      }
+
+      console.log('✅ EmailJS email sent successfully');
+      return true;
     } catch (error) {
-      console.error('EmailJS error:', error);
+      console.error('❌ EmailJS error:', error);
       return false;
     }
   }
@@ -154,7 +208,16 @@ This is an automated notification from the AWIGN Escalation Management System.
       console.log('DEBUG: Generated email content for status change:', emailContent);
 
       if (this.EMAIL_SERVICE_ID && this.EMAIL_TEMPLATE_ID && this.EMAIL_USER_ID) {
-        return await this.sendViaEmailJS(emailContent, to);
+        return await this.sendViaEmailJS(emailContent, to, {
+          ticketNumber,
+          centreCode: '',
+          city: '',
+          issueCategory: '',
+          issueDescription: '',
+          submittedBy: changedBy,
+          submittedAt: new Date(),
+          severity: ''
+        });
       }
       if (this.EMAIL_API_URL && this.EMAIL_API_URL !== 'https://api.emailjs.com/api/v1.0/email/send') {
         return await this.sendViaCustomAPI(emailContent, to);
@@ -189,6 +252,17 @@ This is an automated notification from the AWIGN Escalation Management System.
       submittedAt: lastTicket.submittedAt,
       severity: lastTicket.severity,
       attachments: lastTicket.attachments || []
+    });
+  }
+
+  // Debug method to check EmailJS configuration
+  static debugEmailJSConfig() {
+    console.log('🔍 EmailJS Configuration Debug:', {
+      EMAIL_SERVICE_ID: this.EMAIL_SERVICE_ID,
+      EMAIL_TEMPLATE_ID: this.EMAIL_TEMPLATE_ID,
+      EMAIL_USER_ID: this.EMAIL_USER_ID,
+      EMAIL_API_URL: this.EMAIL_API_URL,
+      isConfigured: !!(this.EMAIL_SERVICE_ID && this.EMAIL_TEMPLATE_ID && this.EMAIL_USER_ID)
     });
   }
 } 
