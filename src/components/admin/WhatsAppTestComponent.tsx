@@ -11,9 +11,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, MessageSquare, Users, TestTube, Settings, Send } from 'lucide-react';
 import { WhatsAppService, WhatsAppContact, TicketNotificationData } from '@/services/whatsappService';
 import { toast } from 'sonner';
+import Papa from 'papaparse';
 
 export const WhatsAppTestComponent: React.FC = () => {
   const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
+  const [csvContacts, setCsvContacts] = useState<WhatsAppContact[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [connectionTest, setConnectionTest] = useState<boolean | null>(null);
   const [selectedCity, setSelectedCity] = useState<string>('');
@@ -39,19 +41,52 @@ export const WhatsAppTestComponent: React.FC = () => {
     errors: string[];
   } | null>(null);
 
-  // Get unique cities from contacts
-  const cities = [...new Set(contacts.map(contact => contact.city))].sort();
+  // Get unique cities from contacts (filter out empty strings)
+  const cities = [...new Set(contacts.map(contact => contact.city).filter(city => city && city.trim() !== ''))].sort();
 
   useEffect(() => {
     fetchContacts();
   }, []);
 
+  // CSV upload handler
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        // Only map Resource_ID, Name, Contact_Number
+        const parsedContacts = (results.data as any[]).map(row => ({
+          resourceId: row.Resource_ID || row.resourceId || row["Resource_ID"] || row["resourceId"] || '',
+          name: row.Name || row.name || row["Name"] || row["name"] || '',
+          contactNumber: row.Contact_Number || row.contactNumber || row["Contact_Number"] || row["contactNumber"] || '',
+          emailId: '',
+          zone: '',
+          city: '',
+        }));
+        setCsvContacts(parsedContacts);
+        setContacts(parsedContacts);
+        toast.success(`Loaded ${parsedContacts.length} contacts from CSV`);
+      },
+      error: (err) => {
+        toast.error('Failed to parse CSV: ' + err.message);
+      }
+    });
+  };
+
+  // Replace fetchContacts to use csvContacts if available
   const fetchContacts = async () => {
     setLoading(true);
     try {
-      const fetchedContacts = await WhatsAppService.fetchContactsFromSheet();
-      setContacts(fetchedContacts);
-      toast.success(`Fetched ${fetchedContacts.length} contacts from Google Sheet`);
+      if (csvContacts) {
+        setContacts(csvContacts);
+        toast.success(`Loaded ${csvContacts.length} contacts from uploaded CSV`);
+      } else {
+        const fetchedContacts = await WhatsAppService.fetchContactsFromSheet();
+        setContacts(fetchedContacts);
+        toast.success(`Fetched ${fetchedContacts.length} contacts from Google Sheet`);
+      }
     } catch (error) {
       console.error('Error fetching contacts:', error);
       toast.error('Failed to fetch contacts');
@@ -189,11 +224,18 @@ export const WhatsAppTestComponent: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div><strong>Sheet ID:</strong> {getConfig().googleSheetUrl.split('/')[5]}</div>
-                <div><strong>Tab:</strong> testing</div>
+                <div><strong>Tab:</strong> Sheet1</div>
                 <div><strong>Contacts:</strong> {contacts.length}</div>
-                <div><strong>Columns:</strong> Contact_Number | Resource_ID | Name | Email_ID</div>
+                <div><strong>Columns:</strong> Resource_ID | Name | Contact_Number</div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* CSV Upload */}
+          <div>
+            <Label htmlFor="csv-upload">Upload Contacts CSV</Label>
+            <Input id="csv-upload" type="file" accept=".csv" onChange={handleCsvUpload} />
+            <div className="text-xs text-gray-500 mt-1">Columns: Resource_ID, Name, Contact_Number</div>
           </div>
 
           {/* Connection Test */}

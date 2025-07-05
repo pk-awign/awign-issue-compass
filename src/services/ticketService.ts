@@ -117,6 +117,15 @@ export class TicketService {
 
       // Send WhatsApp notification to ticket raiser
       try {
+        console.log('🔍 [WHATSAPP DEBUG] Starting WhatsApp notification process...');
+        console.log('🔍 [WHATSAPP DEBUG] User data for WhatsApp lookup:', {
+          submittedBy: issueData.submittedBy,
+          resourceId: issueData.resourceId,
+          userId: userId,
+          centreCode: issueData.centreCode,
+          city: issueData.city
+        });
+
         const ticketData = {
           ticketNumber,
           centreCode: issueData.centreCode,
@@ -130,10 +139,17 @@ export class TicketService {
           ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`
         };
 
+        console.log('📱 [WHATSAPP DEBUG] Preparing to send WhatsApp notification with data:', ticketData);
         const result = await WhatsAppService.sendTicketCreationNotification(ticketData);
-        console.log('📱 Ticket creation notification sent to raiser:', ticketData.submittedBy, result);
+        console.log('📱 [WHATSAPP DEBUG] Ticket creation notification result:', result);
+        console.log('✅ [WHATSAPP DEBUG] WhatsApp notification process completed successfully');
       } catch (whatsappError) {
-        console.error('Failed to send ticket creation notification:', whatsappError);
+        console.error('❌ [WHATSAPP DEBUG] Failed to send ticket creation notification:', whatsappError);
+        console.error('❌ [WHATSAPP DEBUG] WhatsApp error details:', {
+          message: whatsappError.message,
+          stack: whatsappError.stack,
+          name: whatsappError.name
+        });
         // Don't fail the ticket creation if WhatsApp fails
       }
 

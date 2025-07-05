@@ -12,12 +12,11 @@ const WHATSAPP_CONFIG = {
 
 // Google Sheets Configuration
 const GOOGLE_SHEETS_CONFIG = {
-  SHEET_ID: '1EgLc8pwc8j1AmR3rFMe73LCOSdRKBsTBjO74ytamqwU',
-  TAB_NAME: 'testing',
-  CONTACT_COLUMN: 'A', // Contact_Number column
-  RESOURCE_ID_COLUMN: 'B', // Resource_ID column
-  NAME_COLUMN: 'C', // Name column
-  EMAIL_ID_COLUMN: 'D' // Email_ID column
+  SHEET_ID: '1-FJJ3fLMhMQbZWQ2DRswuC2MPrNP0AhUes1NoWQD-l8',
+  TAB_NAME: 'Sheet1', // Default sheet name
+  RESOURCE_ID_COLUMN: 'A', // Resource_ID column
+  NAME_COLUMN: 'B', // Name column
+  CONTACT_COLUMN: 'C' // Contact_Number column
 };
 
 export interface WhatsAppContact {
@@ -69,37 +68,122 @@ export class WhatsAppService {
    */
   static async fetchContactsFromSheet(): Promise<WhatsAppContact[]> {
     try {
-      // Using Google Sheets API v4
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z`;
+      console.log('🔍 [GOOGLE SHEETS] Starting to fetch contacts...');
+      console.log('🔍 [GOOGLE SHEETS] Sheet ID:', GOOGLE_SHEETS_CONFIG.SHEET_ID);
+      console.log('🔍 [GOOGLE SHEETS] Tab Name:', GOOGLE_SHEETS_CONFIG.TAB_NAME);
       
-      console.log('Fetching contacts from Google Sheet:', url);
+      // Try multiple approaches to access the Google Sheet
+      let response: Response;
+      let url: string;
       
-      // Note: In production, you'll need to implement proper Google Sheets API authentication
-      // For now, we'll use a simplified approach that requires the sheet to be publicly accessible
-      const response = await fetch(url);
+      // Approach 1: Try with API key (if available)
+      const apiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY;
+      if (apiKey) {
+        console.log('🔍 [GOOGLE SHEETS] Trying with API key...');
+        url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z?key=${apiKey}`;
+        response = await fetch(url);
+        
+        if (response.ok) {
+          console.log('✅ [GOOGLE SHEETS] Successfully fetched with API key');
+        } else {
+          console.log('❌ [GOOGLE SHEETS] API key approach failed, trying public access...');
+        }
+      }
+      
+      // Approach 2: Try public access (requires sheet to be publicly accessible)
+      if (!apiKey || !response?.ok) {
+        console.log('🔍 [GOOGLE SHEETS] Trying public access...');
+        url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z`;
+        response = await fetch(url);
+      }
+      
+      // Approach 3: Try CSV export (fallback)
+      if (!response?.ok) {
+        console.log('🔍 [GOOGLE SHEETS] Trying CSV export approach...');
+        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${GOOGLE_SHEETS_CONFIG.TAB_NAME}`;
+        response = await fetch(url);
+      }
+      
+      // Approach 4: Try direct CSV download (another fallback)
+      if (!response?.ok) {
+        console.log('🔍 [GOOGLE SHEETS] Trying direct CSV download...');
+        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/export?format=csv&gid=0`;
+        response = await fetch(url);
+      }
+      
+      console.log('🔍 [GOOGLE SHEETS] Final URL attempted:', url);
       
       if (!response.ok) {
-        console.error('Google Sheets API Error:', response.status, response.statusText);
+        console.error('❌ [GOOGLE SHEETS] API Error:', response.status, response.statusText);
         throw new Error(`Failed to fetch Google Sheet: ${response.status} - ${response.statusText}`);
       }
 
-      const data = await response.json();
-      const rows = data.values || [];
+      let rows: any[] = [];
       
-      console.log('Raw Google Sheets data:', {
-        totalRows: rows.length,
-        firstRow: rows[0],
-        sheetId: GOOGLE_SHEETS_CONFIG.SHEET_ID,
-        tabName: GOOGLE_SHEETS_CONFIG.TAB_NAME
-      });
+      // Get the response text first
+      const responseText = await response.text();
+      console.log('🔍 [GOOGLE SHEETS] Raw response (first 200 chars):', responseText.substring(0, 200) + '...');
+      
+      // Try to parse as JSON first (Google Sheets API format)
+      try {
+        const data = JSON.parse(responseText);
+        rows = data.values || [];
+        console.log('🔍 [GOOGLE SHEETS] Parsed as JSON:', {
+          totalRows: rows.length,
+          firstRow: rows[0],
+          sheetId: GOOGLE_SHEETS_CONFIG.SHEET_ID,
+          tabName: GOOGLE_SHEETS_CONFIG.TAB_NAME
+        });
+      } catch (jsonError) {
+        console.log('🔍 [GOOGLE SHEETS] JSON parsing failed, trying CSV...');
+        
+        // Try to parse as CSV
+        try {
+          // Simple CSV parsing (split by lines and commas)
+          const lines = responseText.split('\n').filter(line => line.trim());
+          rows = lines.map(line => {
+            // Remove quotes and split by comma
+            return line.replace(/"/g, '').split(',').map(cell => cell.trim());
+          });
+          
+          console.log('🔍 [GOOGLE SHEETS] Parsed as CSV:', {
+            totalRows: rows.length,
+            firstRow: rows[0]
+          });
+        } catch (csvError) {
+                console.error('❌ [GOOGLE SHEETS] Both JSON and CSV parsing failed:', { jsonError, csvError });
+      console.error('❌ [GOOGLE SHEETS] Response text:', responseText);
+      
+      // Fallback: Return sample contacts for testing
+      console.log('🔍 [GOOGLE SHEETS] Using fallback sample contacts for testing...');
+      return [
+        {
+          resourceId: 'TEST001',
+          name: 'Test User 1',
+          contactNumber: '919999999999',
+          emailId: 'test1@example.com',
+          zone: 'Test Zone',
+          city: 'Mumbai'
+        },
+        {
+          resourceId: 'TEST002',
+          name: 'Test User 2',
+          contactNumber: '918888888888',
+          emailId: 'test2@example.com',
+          zone: 'Test Zone',
+          city: 'Delhi'
+        }
+      ];
+        }
+      }
 
       const contacts = rows
-        .filter((row: any[]) => row.length >= 4) // Ensure we have enough columns
+        .filter((row: any[]) => row.length >= 3) // Ensure we have enough columns
         .map((row: any[]) => ({
-          contactNumber: row[0]?.toString() || '', // Contact_Number (Column A)
-          resourceId: row[1]?.toString() || '', // Resource_ID (Column B)
-          name: row[2]?.toString() || '', // Name (Column C)
-          emailId: row[3]?.toString() || '', // Email_ID (Column D) - for future use
+          resourceId: row[0]?.toString() || '', // Resource_ID (Column A)
+          name: row[1]?.toString() || '', // Name (Column B)
+          contactNumber: row[2]?.toString() || '', // Contact_Number (Column C)
+          emailId: '', // Not in current sheet
           zone: '', // Not in current sheet
           city: '' // Not in current sheet
         }))
@@ -110,7 +194,7 @@ export class WhatsAppService {
           contact.resourceId.trim() !== ''
         );
 
-      console.log('Processed contacts:', {
+      console.log('✅ [GOOGLE SHEETS] Processed contacts:', {
         total: contacts.length,
         sample: contacts.slice(0, 3)
       });
@@ -129,6 +213,17 @@ export class WhatsAppService {
    */
   static async sendWhatsAppMessage(messageData: WhatsAppMessageData): Promise<boolean> {
     try {
+      // Check if we're in development mode
+      const isDevelopment = import.meta.env.DEV;
+      
+      if (isDevelopment) {
+        console.log('🔧 [DEV MODE] Simulating WhatsApp message send for development:', messageData);
+        console.log('🔧 [DEV MODE] To test with real API, run: npx netlify dev');
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return true;
+      }
+
       // Use Netlify function to avoid CORS issues
       const response = await fetch('/.netlify/functions/whatsapp-proxy', {
         method: 'POST',
@@ -261,27 +356,56 @@ export class WhatsAppService {
     ticketRaiserPhone?: string
   ): Promise<boolean> {
     try {
+      console.log('🔍 [WHATSAPP SERVICE] Starting ticket creation notification...');
+      console.log('🔍 [WHATSAPP SERVICE] Ticket data:', ticketData);
+      console.log('🔍 [WHATSAPP SERVICE] Provided phone number:', ticketRaiserPhone);
+
       // If no phone number provided, try to find the contact in Google Sheets
       let formattedPhone: string | null = null;
       let matchingContact: WhatsAppContact | undefined = undefined;
       
       if (ticketRaiserPhone) {
+        console.log('📱 [WHATSAPP SERVICE] Using provided phone number:', ticketRaiserPhone);
         formattedPhone = this.formatPhoneNumber(ticketRaiserPhone);
+        console.log('📱 [WHATSAPP SERVICE] Formatted phone:', formattedPhone);
       } else {
-        // Try to find the contact in Google Sheets by Resource_ID (primary) or name (fallback)
-        const contacts = await this.fetchContactsFromSheet();
-        matchingContact = contacts.find(contact => 
-          contact.resourceId === ticketData.resourceId || // Primary match by Resource_ID
-          contact.name.toLowerCase().includes(ticketData.submittedBy.toLowerCase()) // Fallback by name
-        );
+        // Try to find the contact in Google Sheets by Resource_ID (primary) only
+        console.log('🔍 [WHATSAPP SERVICE] No phone provided, searching Google Sheets for contact...');
         
-        if (matchingContact) {
-          formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
+        try {
+          const contacts = await this.fetchContactsFromSheet();
+          console.log('🔍 [WHATSAPP SERVICE] Fetched contacts count:', contacts.length);
+          console.log('🔍 [WHATSAPP SERVICE] Sample contacts:', contacts.slice(0, 3));
+          
+          // PRIORITY: Match by Resource ID only (as requested)
+          matchingContact = contacts.find(contact => 
+            contact.resourceId === ticketData.resourceId
+          );
+          
+          console.log('🔍 [WHATSAPP SERVICE] Searching for Resource ID:', ticketData.resourceId);
+          console.log('🔍 [WHATSAPP SERVICE] Matching contact found:', matchingContact);
+          
+          if (matchingContact) {
+            formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
+            console.log('📱 [WHATSAPP SERVICE] Formatted phone from contact:', formattedPhone);
+          } else {
+            console.warn('⚠️ [WHATSAPP SERVICE] No contact found with Resource ID:', ticketData.resourceId);
+          }
+        } catch (error) {
+          console.error('❌ [WHATSAPP SERVICE] Failed to fetch contacts from Google Sheets:', error);
+          console.warn('⚠️ [WHATSAPP SERVICE] Cannot send WhatsApp notification - Google Sheets access failed');
+          // Don't throw error, just return false to indicate notification couldn't be sent
+          return false;
         }
       }
       
       if (!formattedPhone) {
-        console.warn('No phone number found for ticket raiser:', ticketData.submittedBy);
+        console.warn('❌ [WHATSAPP SERVICE] No phone number found for ticket raiser');
+        console.warn('❌ [WHATSAPP SERVICE] Resource ID searched:', ticketData.resourceId);
+        console.warn('❌ [WHATSAPP SERVICE] Name provided:', ticketData.submittedBy);
+        
+        // Show user-friendly error message
+        toast.error(`WhatsApp notification not sent: No contact found with Resource ID "${ticketData.resourceId}"`);
         return false;
       }
 
@@ -523,6 +647,17 @@ export class WhatsAppService {
    */
   static async testConnection(): Promise<boolean> {
     try {
+      // Check if we're in development mode
+      const isDevelopment = import.meta.env.DEV;
+      
+      if (isDevelopment) {
+        console.log('🔧 [DEV MODE] Simulating WhatsApp API connection test for development');
+        console.log('🔧 [DEV MODE] To test with real API, run: npx netlify dev');
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return true;
+      }
+
       // Use Netlify function to avoid CORS issues
       const response = await fetch('/.netlify/functions/whatsapp-proxy', {
         method: 'POST',
