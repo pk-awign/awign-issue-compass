@@ -12,7 +12,7 @@ const WHATSAPP_CONFIG = {
 // Google Sheets Configuration
 const GOOGLE_SHEETS_CONFIG = {
   SHEET_ID: '1EgLc8pwc8j1AmR3rFMe73LCOSdRKBsTBjO74ytamqwU',
-  TAB_NAME: 'Complete Data',
+  TAB_NAME: 'testing',
   CONTACT_COLUMN: 'A', // Contact_Number column
   NAME_COLUMN: 'E', // Name column
   ZONE_COLUMN: 'B', // Zone column
@@ -413,7 +413,7 @@ export class WhatsAppService {
   static getConfig() {
     return {
       ...WHATSAPP_CONFIG,
-      googleSheetUrl: `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/edit#gid=1021776551`
+      googleSheetUrl: `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/edit?gid=1069360210#gid=1069360210`
     };
   }
 

@@ -166,7 +166,7 @@ export const WhatsAppTestComponent: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div><strong>Sheet ID:</strong> {getConfig().googleSheetUrl.split('/')[5]}</div>
-                <div><strong>Tab:</strong> Complete Data</div>
+                <div><strong>Tab:</strong> testing</div>
                 <div><strong>Contacts:</strong> {contacts.length}</div>
                 <div><strong>Cities:</strong> {cities.length}</div>
               </CardContent>
