@@ -7,7 +7,7 @@ const WHATSAPP_CONFIG = {
   API_KEY: 'oa6EI0d9qZ4Pm1EKTYrLmHNrAK', // Test API key - replace with production key later
   NAMESPACE: '9f732540_5143_4e51_bfc2_36cab955cd7f', // Test namespace - replace with production namespace later
   TEMPLATE_NAME: 'myl_supply_initial_1', // Test template - replace with production template later
-  TICKET_CREATION_TEMPLATE: 'ticket_creation_notification' // Template for ticket creation notifications
+  TICKET_CREATION_TEMPLATE: 'myl_supply_initial_1' // Use same template for ticket creation notifications
 };
 
 // Google Sheets Configuration
@@ -287,14 +287,6 @@ export class WhatsAppService {
                 {
                   type: 'text',
                   text: ticketData.ticketNumber
-                },
-                {
-                  type: 'text',
-                  text: ticketData.issueCategory
-                },
-                {
-                  type: 'text',
-                  text: ticketData.city
                 },
                 {
                   type: 'text',

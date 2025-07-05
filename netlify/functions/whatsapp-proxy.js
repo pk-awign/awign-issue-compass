@@ -36,7 +36,7 @@ exports.handler = async function(event, context) {
       API_KEY: process.env.WHATSAPP_API_KEY || 'oa6EI0d9qZ4Pm1EKTYrLmHNrAK', // Use environment variable
       NAMESPACE: process.env.WHATSAPP_NAMESPACE || '9f732540_5143_4e51_bfc2_36cab955cd7f', // Use environment variable
       TEMPLATE_NAME: process.env.WHATSAPP_TEMPLATE_NAME || 'myl_supply_initial_1', // Use environment variable
-      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TICKET_TEMPLATE || 'ticket_creation_notification' // New template for ticket creation
+      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TEMPLATE_NAME || 'ticket_creation_notification' // Use same template name for ticket creation
     };
 
     if (action === 'sendMessage') {
@@ -84,8 +84,6 @@ exports.handler = async function(event, context) {
               parameters: [
                 { type: 'text', text: ticketData.submittedBy },
                 { type: 'text', text: ticketData.ticketNumber },
-                { type: 'text', text: ticketData.issueCategory },
-                { type: 'text', text: ticketData.city },
                 { type: 'text', text: ticketData.ticketLink }
               ]
             }
