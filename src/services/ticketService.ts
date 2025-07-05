@@ -2,6 +2,7 @@ import { supabase } from '../integrations/supabase/client';
 import { Issue, Comment, Attachment, TimelineEvent, StatusTransition, TicketDetails } from '../types/issue';
 import { toast } from 'sonner';
 import { EmailService } from './emailService';
+import { WhatsAppService } from './whatsappService';
 
 export class TicketService {
   static async createTicket(issueData: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'> & { issueEvidence?: File[] }, userId?: string): Promise<string> {
@@ -90,6 +91,28 @@ export class TicketService {
       } catch (emailError) {
         console.error('Failed to send email notification:', emailError);
         // Don't fail the ticket creation if email fails
+      }
+
+      // Send WhatsApp notification to city-specific contacts
+      try {
+        const ticketData = {
+          ticketNumber,
+          centreCode: issueData.centreCode,
+          city: issueData.city,
+          resourceId: issueData.resourceId || 'NOT_SPECIFIED',
+          issueCategory: issueData.issueCategory,
+          issueDescription: issueData.issueDescription,
+          submittedBy: issueData.submittedBy || 'Anonymous',
+          submittedAt: new Date(),
+          severity: 'sev3',
+          ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`
+        };
+
+        const result = await WhatsAppService.sendCitySpecificNotifications(issueData.city, ticketData);
+        console.log('📱 WhatsApp notifications sent for ticket:', ticketNumber, result);
+      } catch (whatsappError) {
+        console.error('Failed to send WhatsApp notification:', whatsappError);
+        // Don't fail the ticket creation if WhatsApp fails
       }
 
       toast.success(`Ticket ${ticketNumber} created successfully`);

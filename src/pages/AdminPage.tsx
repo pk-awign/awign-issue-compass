@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2 } from 'lucide-react';
+import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import { UserManagementModal } from '@/components/admin/UserManagementModal';
 import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
 import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
+import { WhatsAppTestComponent } from '@/components/admin/WhatsAppTestComponent';
 import { format } from 'date-fns';
 import { Switch } from '@/components/ui/switch';
 
@@ -330,11 +331,12 @@ export const AdminPage: React.FC = () => {
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="flex flex-col items-center gap-2 w-full p-2 bg-muted rounded-xl border shadow-md my-4 md:grid md:grid-cols-5 md:gap-0 md:p-1">
+            <TabsList className="flex flex-col items-center gap-2 w-full p-2 bg-muted rounded-xl border shadow-md my-4 md:grid md:grid-cols-6 md:gap-0 md:p-1">
               <TabsTrigger value="overview" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Overview</TabsTrigger>
               <TabsTrigger value="tickets" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">All Tickets</TabsTrigger>
               <TabsTrigger value="analytics" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Analytics</TabsTrigger>
               <TabsTrigger value="users" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">User Management</TabsTrigger>
+              <TabsTrigger value="whatsapp" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">WhatsApp</TabsTrigger>
               <TabsTrigger value="settings" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Settings</TabsTrigger>
             </TabsList>
 
@@ -422,6 +424,14 @@ export const AdminPage: React.FC = () => {
                     >
                       <FileText className="h-4 w-4 mr-2" />
                       View Tickets
+                    </Button>
+                    <Button 
+                      onClick={() => handleTabChange('whatsapp')}
+                      className="w-full justify-start" 
+                      variant="outline"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      WhatsApp Test
                     </Button>
                   </CardContent>
                 </Card>
@@ -786,6 +796,10 @@ export const AdminPage: React.FC = () => {
                   </Button>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="whatsapp">
+              <WhatsAppTestComponent />
             </TabsContent>
 
             <TabsContent value="settings">

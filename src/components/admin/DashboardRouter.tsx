@@ -9,7 +9,8 @@ import {
   CheckCircle, 
   Users,
   ArrowRight,
-  Eye
+  Eye,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -33,7 +34,7 @@ export const DashboardRouter: React.FC<DashboardRouterProps> = ({
       description: 'Complete system management and analytics',
       icon: Shield,
       color: 'bg-purple-100 text-purple-800',
-      features: ['User Management', 'System Analytics', 'Global Settings', 'All Tickets']
+      features: ['User Management', 'System Analytics', 'Global Settings', 'All Tickets', 'WhatsApp Integration']
     },
     {
       id: 'resolver',
