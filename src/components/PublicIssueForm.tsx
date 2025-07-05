@@ -253,7 +253,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
       // Reset form
       setFormData({
         centreCode: user?.centreCode || '',
-        city: user?.city || '',
+        city: '',
         resourceId: '',
         awignAppTicketId: '',
         issueCategory: '',
@@ -268,6 +268,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
         citySearch: ''
       });
       setFiles([]);
+      setCityInput('');
     } catch (error) {
       toast.error('Failed to submit issue. Please try again.');
       console.error('Issue submission error:', error);
