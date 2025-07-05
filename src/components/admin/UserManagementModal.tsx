@@ -26,6 +26,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [createdUserCreds, setCreatedUserCreds] = useState<null | { name: string; role: string; pin: string; city: string; centreCode: string; mobile: string }>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -100,6 +101,14 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
         isActive: formData.isActive
       });
       toast.success('User created successfully with PIN');
+      setCreatedUserCreds({
+        name: formData.name,
+        role: formData.role,
+        pin: formData.pin,
+        city: formData.city,
+        centreCode: formData.centreCode,
+        mobile: formData.mobile
+      });
       setIsAddingUser(false);
       resetForm();
       loadUsers();
@@ -250,6 +259,44 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
             User Management System
           </DialogTitle>
         </DialogHeader>
+
+        {/* Show Copy Credentials after user creation (always at top of modal) */}
+        {createdUserCreds && (
+          <div className="my-4 p-4 bg-green-50 border border-green-200 rounded flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="mb-2 font-semibold text-green-800">User credentials created:</div>
+              <div className="text-sm text-green-900 mb-2">
+                <div><b>Name:</b> {createdUserCreds.name}</div>
+                <div><b>Role:</b> {createdUserCreds.role}</div>
+                <div><b>PIN:</b> {createdUserCreds.pin}</div>
+                <div><b>City:</b> {createdUserCreds.city}</div>
+                <div><b>Centre Code:</b> {createdUserCreds.centreCode}</div>
+                <div><b>Mobile:</b> {createdUserCreds.mobile}</div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const creds = `Name: ${createdUserCreds.name}\nRole: ${createdUserCreds.role}\nPIN: ${createdUserCreds.pin}\nCity: ${createdUserCreds.city}\nCentre Code: ${createdUserCreds.centreCode}\nMobile: ${createdUserCreds.mobile}`;
+                  navigator.clipboard.writeText(creds);
+                  toast.success('Credentials copied to clipboard');
+                  setCreatedUserCreds(null);
+                }}
+              >
+                Copy Credentials
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCreatedUserCreds(null)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
 
         <Tabs defaultValue="users" className="w-full">
           <TabsList className="grid w-full grid-cols-2">

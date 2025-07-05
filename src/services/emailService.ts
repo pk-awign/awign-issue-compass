@@ -16,6 +16,7 @@ export interface EmailNotificationData {
     fileSize: number;
     fileType: string;
   }>;
+  ticketLink?: string;
 }
 
 export class EmailService {
@@ -82,6 +83,8 @@ export class EmailService {
         ).join('\n')}`
       : '\n\nNo attachments';
 
+    const ticketLinkInfo = ticketData.ticketLink ? `\n• Track Ticket: ${ticketData.ticketLink}` : '';
+
     return `
 Hi team,
 
@@ -92,7 +95,7 @@ There's an update:
 • Resource ID (if specified): ${ticketData.resourceId || 'Not specified'}
 • Issue Category & Severity: ${ticketData.issueCategory}, ${ticketData.severity}
 • Submitted By & Timestamp: ${ticketData.submittedBy}, ${ticketData.submittedAt.toLocaleString()}
-• Full Issue Description: ${ticketData.issueDescription}
+• Full Issue Description: ${ticketData.issueDescription}${ticketLinkInfo}
 ${attachmentInfo}
 
 ---
@@ -117,7 +120,8 @@ This is an automated notification from the AWIGN Escalation Management System.
         submitted_by: ticketData.submittedBy,
         submitted_at: ticketData.submittedAt.toLocaleString(),
         severity: ticketData.severity,
-        attachments_count: ticketData.attachments?.length || 0
+        attachments_count: ticketData.attachments?.length || 0,
+        ticket_link: ticketData.ticketLink || '',
       };
 
       console.log('📤 Sending to EmailJS with params:', {
@@ -251,7 +255,8 @@ This is an automated notification from the AWIGN Escalation Management System.
       submittedBy: lastTicket.submittedBy,
       submittedAt: lastTicket.submittedAt,
       severity: lastTicket.severity,
-      attachments: lastTicket.attachments || []
+      attachments: lastTicket.attachments || [],
+      ticketLink: lastTicket.ticketLink
     });
   }
 

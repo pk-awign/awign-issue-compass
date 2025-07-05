@@ -7,7 +7,7 @@ export class TicketService {
   static async createTicket(issueData: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'> & { issueEvidence?: File[] }, userId?: string): Promise<string> {
     try {
       const ticketNumber = await this.generateTicketNumber();
-      
+
       // Serialize issue_date for database storage
       const issueDate = {
         type: issueData.issueDate.type,
@@ -26,19 +26,19 @@ export class TicketService {
       const { data, error } = await supabase
         .from('tickets')
         .insert({
-          ticket_number: ticketNumber,
-          centre_code: issueData.centreCode,
-          city: issueData.city,
+        ticket_number: ticketNumber,
+        centre_code: issueData.centreCode,
+        city: issueData.city,
           resource_id: issueData.resourceId || 'NOT_SPECIFIED',
           awign_app_ticket_id: issueData.awignAppTicketId,
-          issue_category: issueData.issueCategory,
-          issue_description: issueData.issueDescription,
+        issue_category: issueData.issueCategory,
+        issue_description: issueData.issueDescription,
           issue_date: issueDate,
           severity: 'sev3', // Default severity
           status: 'open', // Default status
-          is_anonymous: issueData.isAnonymous,
+        is_anonymous: issueData.isAnonymous,
           submitted_by: issueData.submittedBy || 'Anonymous',
-          submitted_by_user_id: userId,
+        submitted_by_user_id: userId,
           assigned_resolver: issueData.assignedResolver,
           assigned_approver: issueData.assignedApprover,
         })
@@ -83,7 +83,8 @@ export class TicketService {
           submittedBy: issueData.submittedBy || 'Anonymous',
           submittedAt: new Date(),
           severity: 'sev3',
-          attachments: uploadedAttachments
+          attachments: uploadedAttachments,
+          ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`
         });
         console.log('📧 Email notification sent successfully for ticket:', ticketNumber);
       } catch (emailError) {
@@ -526,7 +527,7 @@ export class TicketService {
     // Role validation: Only super_admin can remove approver assignments
     if (role === 'approver' && performedByRole !== 'super_admin') {
       throw new Error('Only super admins can remove approver assignments');
-    }
+      }
 
     const { error } = await supabase.from('ticket_assignees').delete().match({ ticket_id: ticketId, user_id: userId, role });
     if (!error) {
@@ -650,7 +651,7 @@ export class TicketService {
     let randomStr = '';
     for (let i = 0; i < 6; i++) {
       randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+      }
     return `AWG-${currentYear}-${randomStr}`;
   }
 
