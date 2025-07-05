@@ -263,13 +263,14 @@ export class WhatsAppService {
     try {
       // If no phone number provided, try to find the contact in Google Sheets
       let formattedPhone: string | null = null;
+      let matchingContact: WhatsAppContact | undefined = undefined;
       
       if (ticketRaiserPhone) {
         formattedPhone = this.formatPhoneNumber(ticketRaiserPhone);
       } else {
         // Try to find the contact in Google Sheets by Resource_ID (primary) or name (fallback)
         const contacts = await this.fetchContactsFromSheet();
-        const matchingContact = contacts.find(contact => 
+        matchingContact = contacts.find(contact => 
           contact.resourceId === ticketData.resourceId || // Primary match by Resource_ID
           contact.name.toLowerCase().includes(ticketData.submittedBy.toLowerCase()) // Fallback by name
         );

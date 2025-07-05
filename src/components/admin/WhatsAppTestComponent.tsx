@@ -30,6 +30,8 @@ export const WhatsAppTestComponent: React.FC = () => {
     ticketLink: 'https://awign-invigilation-escalation.netlify.app/track/AWG-2025-TEST123'
   });
 
+  const [testMobileNumber, setTestMobileNumber] = useState<string>('');
+
   const [bulkResult, setBulkResult] = useState<{
     total: number;
     sent: number;
@@ -125,7 +127,11 @@ export const WhatsAppTestComponent: React.FC = () => {
   const testTicketCreationNotification = async () => {
     setLoading(true);
     try {
-      const success = await WhatsAppService.sendTicketCreationNotification(testTicketData);
+      // Use provided mobile number if available, otherwise let the service look it up
+      const success = await WhatsAppService.sendTicketCreationNotification(
+        testTicketData, 
+        testMobileNumber || undefined
+      );
       if (success) {
         toast.success('Ticket creation notification sent successfully!');
       } else {
@@ -212,51 +218,49 @@ export const WhatsAppTestComponent: React.FC = () => {
           {/* Test Ticket Data */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Test Ticket Data</CardTitle>
+              <CardTitle className="text-sm">Test Ticket Creation Notification</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="ticketNumber">Ticket Number</Label>
+                  <Label htmlFor="name">Name (Template Parameter 1)</Label>
+                  <Input
+                    id="name"
+                    value={testTicketData.submittedBy}
+                    onChange={(e) => setTestTicketData(prev => ({ ...prev, submittedBy: e.target.value }))}
+                    placeholder="Enter name for template"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="ticketNumber">Ticket Number (Template Parameter 2)</Label>
                   <Input
                     id="ticketNumber"
                     value={testTicketData.ticketNumber}
                     onChange={(e) => setTestTicketData(prev => ({ ...prev, ticketNumber: e.target.value }))}
+                    placeholder="Enter ticket number"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="city">City</Label>
+                  <Label htmlFor="ticketLink">Ticket Tracking Link (Template Parameter 3)</Label>
                   <Input
-                    id="city"
-                    value={testTicketData.city}
-                    onChange={(e) => setTestTicketData(prev => ({ ...prev, city: e.target.value }))}
+                    id="ticketLink"
+                    value={testTicketData.ticketLink}
+                    onChange={(e) => setTestTicketData(prev => ({ ...prev, ticketLink: e.target.value }))}
+                    placeholder="Enter tracking link"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="issueCategory">Issue Category</Label>
+                  <Label htmlFor="mobileNumber">Mobile Number (Optional - for testing)</Label>
                   <Input
-                    id="issueCategory"
-                    value={testTicketData.issueCategory}
-                    onChange={(e) => setTestTicketData(prev => ({ ...prev, issueCategory: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="submittedBy">Submitted By</Label>
-                  <Input
-                    id="submittedBy"
-                    value={testTicketData.submittedBy}
-                    onChange={(e) => setTestTicketData(prev => ({ ...prev, submittedBy: e.target.value }))}
+                    id="mobileNumber"
+                    value={testMobileNumber}
+                    onChange={(e) => setTestMobileNumber(e.target.value)}
+                    placeholder="91XXXXXXXXXX (leave blank to use Google Sheet lookup)"
                   />
                 </div>
               </div>
-              <div>
-                <Label htmlFor="issueDescription">Issue Description</Label>
-                <Textarea
-                  id="issueDescription"
-                  value={testTicketData.issueDescription}
-                  onChange={(e) => setTestTicketData(prev => ({ ...prev, issueDescription: e.target.value }))}
-                  rows={3}
-                />
+              <div className="text-sm text-muted-foreground">
+                <p><strong>Note:</strong> If mobile number is provided, it will be used directly. Otherwise, the system will look up the contact in Google Sheet using Resource_ID or Name.</p>
               </div>
             </CardContent>
           </Card>
