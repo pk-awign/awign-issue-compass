@@ -592,14 +592,15 @@ export class TicketService {
   /**
    * Add a comment as a timeline event
    */
-  static async addComment(ticketId: string, commentData: Omit<Comment, 'id' | 'timestamp'>): Promise<void> {
+  static async addComment(ticketId: string, commentData: Omit<Comment, 'id' | 'timestamp'> & { attachments?: File[] }): Promise<void> {
     try {
       console.log('Adding comment with data:', {
         ticketId,
         content: commentData.content,
         author: commentData.author,
         authorRole: commentData.authorRole,
-        isInternal: commentData.isInternal
+        isInternal: commentData.isInternal,
+        attachments: commentData.attachments?.length || 0
       });
 
       const { data, error } = await supabase
@@ -618,6 +619,14 @@ export class TicketService {
         throw error;
       }
 
+      // TODO: Enable comment attachments after database migration
+      // const commentId = data[0].id;
+
+      // // Upload comment attachments if any
+      // if (commentData.attachments && commentData.attachments.length > 0) {
+      //   await this.uploadCommentAttachments(commentId, commentData.attachments);
+      // }
+
       console.log('Comment added successfully:', data);
       toast.success('Comment added successfully');
       
@@ -629,7 +638,10 @@ export class TicketService {
         newValue: commentData.content,
         performedBy: commentData.author,
         performedByRole: commentData.authorRole,
-        details: { is_internal: commentData.isInternal },
+        details: { 
+          is_internal: commentData.isInternal,
+          attachments_count: commentData.attachments?.length || 0
+        },
       });
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -683,6 +695,36 @@ export class TicketService {
       }
     }
   }
+
+  // TODO: Enable comment attachments after database migration
+  // private static async uploadCommentAttachments(commentId: string, files: File[]): Promise<void> {
+  //   for (const file of files) {
+  //     try {
+  //       const fileName = `${commentId}/${Date.now()}-${file.name}`;
+        
+  //       const { error: uploadError } = await supabase.storage
+  //         .from('comment-attachments')
+  //         .upload(fileName, file);
+
+  //       if (uploadError) throw uploadError;
+
+  //       const { error: dbError } = await supabase
+  //         .from('comment_attachments')
+  //         .insert({
+  //           comment_id: commentId,
+  //           file_name: file.name,
+  //           file_size: file.size,
+  //           file_type: file.type,
+  //           storage_path: fileName,
+  //         });
+
+  //       if (dbError) throw dbError;
+  //     } catch (error) {
+  //       console.error('Error uploading comment attachment:', error);
+  //       // Continue with other files even if one fails
+  //     }
+  //   }
+  // }
 
   private static mapDatabaseToIssue(data: any): Issue {
     // Deserialize issue_date from database

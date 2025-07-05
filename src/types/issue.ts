@@ -50,6 +50,16 @@ export interface Comment {
   authorRole: 'invigilator' | 'admin' | 'resolver' | 'approver' | 'super_admin' | 'anonymous';
   timestamp: Date;
   isInternal: boolean;
+  attachments?: CommentAttachment[];
+}
+
+export interface CommentAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  downloadUrl: string;
+  uploadedAt: Date;
 }
 
 export interface User {

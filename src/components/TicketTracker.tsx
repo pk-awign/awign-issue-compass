@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download, Ticket, Calendar, MapPin, FileText, Send } from 'lucide-react';
+import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download, Ticket, Calendar, MapPin, FileText, Send, X } from 'lucide-react';
 import { Issue, Comment } from '@/types/issue';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +31,8 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
   const [searchLoading, setSearchLoading] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [isAddingComment, setIsAddingComment] = useState(false);
+  const [commentAttachments, setCommentAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setSearchTerm(initialSearchTerm);
@@ -153,6 +155,15 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
     setSelectedTicket(null);
   };
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setCommentAttachments(prev => [...prev, ...files]);
+  };
+
+  const removeAttachment = (index: number) => {
+    setCommentAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleAddComment = async () => {
     if (!selectedTicket || !newComment.trim()) return;
     
@@ -160,6 +171,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
       ticketId: selectedTicket.id,
       ticketNumber: selectedTicket.ticketNumber,
       newComment: newComment,
+      attachments: commentAttachments.length,
       user: user ? { id: user.id, name: user.name, role: user.role } : 'No user'
     });
     
@@ -173,14 +185,16 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
         content: newComment,
         author: authorName,
         authorRole: authorRole,
-        isInternal: false
+        isInternal: false,
+        attachments: commentAttachments
       });
       
       await TicketService.addComment(selectedTicket.id, {
         content: newComment,
         author: authorName,
         authorRole: authorRole,
-        isInternal: false
+        isInternal: false,
+        attachments: commentAttachments
       });
       
       // Refresh the ticket to get updated comments
@@ -188,6 +202,10 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
       setSelectedTicket(updatedTicket);
       
       setNewComment('');
+      setCommentAttachments([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       toast.success('Comment added successfully');
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -461,6 +479,41 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                             <span className="text-xs text-muted-foreground">{format(comment.timestamp, 'MMM dd, HH:mm')}</span>
                           </div>
                           <div className="text-sm">{comment.content}</div>
+                          
+                          {/* Comment Attachments */}
+                          {comment.attachments && comment.attachments.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-border">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  Attachments ({comment.attachments.length})
+                                </span>
+                              </div>
+                              <div className="space-y-1">
+                                {comment.attachments.map((attachment) => (
+                                  <div key={attachment.id} className="flex items-center justify-between p-2 bg-background rounded border">
+                                    <div className="flex items-center gap-2">
+                                      <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                      <div>
+                                        <p className="text-xs font-medium">{attachment.fileName}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {(attachment.fileSize / 1024).toFixed(1)} KB
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => window.open(attachment.downloadUrl, '_blank')}
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -486,6 +539,63 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                       onChange={(e) => setNewComment(e.target.value)}
                       className="min-h-[80px]"
                     />
+                    
+                    {/* File Attachment Section */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-2"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                          Attach Files
+                        </Button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          onChange={handleFileSelect}
+                          className="hidden"
+                          accept="image/*,.pdf,.doc,.docx,.txt"
+                        />
+                        {commentAttachments.length > 0 && (
+                          <span className="text-sm text-muted-foreground">
+                            {commentAttachments.length} file(s) selected
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Display selected files */}
+                      {commentAttachments.length > 0 && (
+                        <div className="space-y-2">
+                          {commentAttachments.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm font-medium">{file.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {(file.size / 1024).toFixed(1)} KB
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeAttachment(index)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
                     <Button 
                       onClick={handleAddComment}
                       disabled={!newComment.trim() || isAddingComment}
@@ -730,6 +840,41 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                           <span className="text-xs text-muted-foreground">{format(comment.timestamp, 'MMM dd, HH:mm')}</span>
                         </div>
                         <div className="text-sm">{comment.content}</div>
+                        
+                        {/* Comment Attachments */}
+                        {comment.attachments && comment.attachments.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Paperclip className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Attachments ({comment.attachments.length})
+                              </span>
+                            </div>
+                            <div className="space-y-1">
+                              {comment.attachments.map((attachment) => (
+                                <div key={attachment.id} className="flex items-center justify-between p-2 bg-background rounded border">
+                                  <div className="flex items-center gap-2">
+                                    <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                    <div>
+                                      <p className="text-xs font-medium">{attachment.fileName}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {(attachment.fileSize / 1024).toFixed(1)} KB
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => window.open(attachment.downloadUrl, '_blank')}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -755,6 +900,63 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                     onChange={(e) => setNewComment(e.target.value)}
                     className="min-h-[80px]"
                   />
+                  
+                  {/* File Attachment Section */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                        Attach Files
+                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        accept="image/*,.pdf,.doc,.docx,.txt"
+                      />
+                      {commentAttachments.length > 0 && (
+                        <span className="text-sm text-muted-foreground">
+                          {commentAttachments.length} file(s) selected
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Display selected files */}
+                    {commentAttachments.length > 0 && (
+                      <div className="space-y-2">
+                        {commentAttachments.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <Paperclip className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm font-medium">{file.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {(file.size / 1024).toFixed(1)} KB
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeAttachment(index)}
+                              className="h-6 w-6 p-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
                   <Button 
                     onClick={handleAddComment}
                     disabled={!newComment.trim() || isAddingComment}
