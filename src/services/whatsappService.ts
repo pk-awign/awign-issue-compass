@@ -15,10 +15,9 @@ const GOOGLE_SHEETS_CONFIG = {
   SHEET_ID: '1EgLc8pwc8j1AmR3rFMe73LCOSdRKBsTBjO74ytamqwU',
   TAB_NAME: 'testing',
   CONTACT_COLUMN: 'A', // Contact_Number column
-  NAME_COLUMN: 'E', // Name column
-  ZONE_COLUMN: 'B', // Zone column
-  CITY_COLUMN: 'C', // Exam_City column
-  RESOURCE_ID_COLUMN: 'D' // Resource_ID column
+  RESOURCE_ID_COLUMN: 'B', // Resource_ID column
+  NAME_COLUMN: 'C', // Name column
+  EMAIL_ID_COLUMN: 'D' // Email_ID column
 };
 
 export interface WhatsAppContact {
@@ -73,18 +72,28 @@ export class WhatsAppService {
       // Using Google Sheets API v4
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z`;
       
+      console.log('Fetching contacts from Google Sheet:', url);
+      
       // Note: In production, you'll need to implement proper Google Sheets API authentication
       // For now, we'll use a simplified approach that requires the sheet to be publicly accessible
       const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch Google Sheet: ${response.statusText}`);
+        console.error('Google Sheets API Error:', response.status, response.statusText);
+        throw new Error(`Failed to fetch Google Sheet: ${response.status} - ${response.statusText}`);
       }
 
       const data = await response.json();
       const rows = data.values || [];
+      
+      console.log('Raw Google Sheets data:', {
+        totalRows: rows.length,
+        firstRow: rows[0],
+        sheetId: GOOGLE_SHEETS_CONFIG.SHEET_ID,
+        tabName: GOOGLE_SHEETS_CONFIG.TAB_NAME
+      });
 
-      return rows
+      const contacts = rows
         .filter((row: any[]) => row.length >= 4) // Ensure we have enough columns
         .map((row: any[]) => ({
           contactNumber: row[0]?.toString() || '', // Contact_Number (Column A)
@@ -100,6 +109,13 @@ export class WhatsAppService {
           contact.name.trim() !== '' &&
           contact.resourceId.trim() !== ''
         );
+
+      console.log('Processed contacts:', {
+        total: contacts.length,
+        sample: contacts.slice(0, 3)
+      });
+
+      return contacts;
 
     } catch (error) {
       console.error('Error fetching contacts from Google Sheet:', error);
@@ -285,7 +301,7 @@ export class WhatsAppService {
               parameters: [
                 {
                   type: 'text',
-                  text: ticketData.submittedBy
+                  text: matchingContact?.name || ticketData.submittedBy // Use Name from Google Sheet
                 },
                 {
                   type: 'text',
@@ -314,7 +330,10 @@ export class WhatsAppService {
           body: JSON.stringify({
             action: 'sendTicketCreationNotification',
             data: {
-              ticketData,
+              ticketData: {
+                ...ticketData,
+                submittedBy: matchingContact?.name || ticketData.submittedBy // Use Name from Google Sheet
+              },
               phoneNumber: formattedPhone
             }
           })
@@ -324,7 +343,7 @@ export class WhatsAppService {
         success = result.success;
         
         if (success) {
-          console.log('Ticket creation notification sent via Netlify function to:', ticketData.submittedBy);
+          console.log('Ticket creation notification sent via Netlify function to:', matchingContact?.name || ticketData.submittedBy);
         } else {
           console.error('Failed to send via Netlify function:', result);
           // Fallback to direct API call
