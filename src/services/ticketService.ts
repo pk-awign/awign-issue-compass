@@ -126,10 +126,20 @@ export class TicketService {
         ticketData.submitted_by_user_id ? this.getUserDetails(ticketData.submitted_by_user_id) : null,
       ]);
 
-      // Get comments
+      // Get comments with their attachments
       const { data: commentsData, error: commentsError } = await supabase
         .from('comments')
-        .select('*')
+        .select(`
+          *,
+          comment_attachments (
+            id,
+            file_name,
+            file_size,
+            file_type,
+            storage_path,
+            uploaded_at
+          )
+        `)
         .eq('ticket_id', ticketData.id)
         .order('created_at', { ascending: true });
 
@@ -418,7 +428,15 @@ export class TicketService {
             author,
             author_role,
             is_internal,
-            created_at
+            created_at,
+            comment_attachments (
+              id,
+              file_name,
+              file_size,
+              file_type,
+              storage_path,
+              uploaded_at
+            )
           ),
           attachments (
             id,
@@ -453,7 +471,15 @@ export class TicketService {
             author,
             author_role,
             is_internal,
-            created_at
+            created_at,
+            comment_attachments (
+              id,
+              file_name,
+              file_size,
+              file_type,
+              storage_path,
+              uploaded_at
+            )
           ),
           attachments (
             id,
@@ -619,13 +645,12 @@ export class TicketService {
         throw error;
       }
 
-      // TODO: Enable comment attachments after database migration
-      // const commentId = data[0].id;
+      // Upload comment attachments if any
+      const commentId = data[0].id;
 
-      // // Upload comment attachments if any
-      // if (commentData.attachments && commentData.attachments.length > 0) {
-      //   await this.uploadCommentAttachments(commentId, commentData.attachments);
-      // }
+      if (commentData.attachments && commentData.attachments.length > 0) {
+        await this.uploadCommentAttachments(commentId, commentData.attachments);
+      }
 
       console.log('Comment added successfully:', data);
       toast.success('Comment added successfully');
@@ -696,35 +721,34 @@ export class TicketService {
     }
   }
 
-  // TODO: Enable comment attachments after database migration
-  // private static async uploadCommentAttachments(commentId: string, files: File[]): Promise<void> {
-  //   for (const file of files) {
-  //     try {
-  //       const fileName = `${commentId}/${Date.now()}-${file.name}`;
+  private static async uploadCommentAttachments(commentId: string, files: File[]): Promise<void> {
+    for (const file of files) {
+      try {
+        const fileName = `${commentId}/${Date.now()}-${file.name}`;
         
-  //       const { error: uploadError } = await supabase.storage
-  //         .from('comment-attachments')
-  //         .upload(fileName, file);
+        const { error: uploadError } = await supabase.storage
+          .from('comment-attachments')
+          .upload(fileName, file);
 
-  //       if (uploadError) throw uploadError;
+        if (uploadError) throw uploadError;
 
-  //       const { error: dbError } = await supabase
-  //         .from('comment_attachments')
-  //         .insert({
-  //           comment_id: commentId,
-  //           file_name: file.name,
-  //           file_size: file.size,
-  //           file_type: file.type,
-  //           storage_path: fileName,
-  //         });
+        const { error: dbError } = await supabase
+          .from('comment_attachments')
+          .insert({
+            comment_id: commentId,
+            file_name: file.name,
+            file_size: file.size,
+            file_type: file.type,
+            storage_path: fileName,
+          });
 
-  //       if (dbError) throw dbError;
-  //     } catch (error) {
-  //       console.error('Error uploading comment attachment:', error);
-  //       // Continue with other files even if one fails
-  //     }
-  //   }
-  // }
+        if (dbError) throw dbError;
+      } catch (error) {
+        console.error('Error uploading comment attachment:', error);
+        // Continue with other files even if one fails
+      }
+    }
+  }
 
   private static mapDatabaseToIssue(data: any): Issue {
     // Deserialize issue_date from database
@@ -787,6 +811,14 @@ export class TicketService {
         authorRole: comment.author_role,
         timestamp: new Date(comment.created_at),
         isInternal: comment.is_internal,
+        attachments: comment.comment_attachments?.map((att: any) => ({
+          id: att.id,
+          fileName: att.file_name,
+          fileSize: att.file_size,
+          fileType: att.file_type,
+          downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`,
+          uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+        })) || [],
       })) || [],
       attachments,
       issueEvidence: [], // Will be populated separately if needed

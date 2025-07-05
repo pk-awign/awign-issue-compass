@@ -589,7 +589,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                   <div className="mt-6">
                     <label className="text-sm font-medium text-gray-600 mb-2 block">Comments</label>
                     <div className="space-y-4 max-h-60 overflow-y-auto">
-                      {[...(ticket.comments || [])].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(comment => (
+                      {[...(ticket.comments || [])].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map(comment => (
                         <div key={comment.id} className="border-l-2 border-blue-500 pl-4">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-medium text-sm">{comment.author}</span>
@@ -600,6 +600,28 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                             <span className="text-xs text-gray-500">{formatDate(comment.timestamp)}</span>
                           </div>
                           <p className="text-sm">{comment.content}</p>
+                          {/* Comment Attachments */}
+                          {comment.attachments && comment.attachments.length > 0 && (
+                            <div className="mt-2">
+                              <div className="text-xs text-gray-500 mb-1">Attachments:</div>
+                              <div className="flex flex-wrap gap-2">
+                                {comment.attachments.map((attachment) => (
+                                  <div key={attachment.id} className="flex items-center gap-1 p-1 bg-gray-100 rounded text-xs">
+                                    <Paperclip className="h-3 w-3" />
+                                    <a
+                                      href={attachment.downloadUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:underline"
+                                    >
+                                      {attachment.fileName}
+                                    </a>
+                                    <span className="text-gray-500">({Math.round(attachment.fileSize / 1024)}KB)</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

@@ -318,118 +318,23 @@ export class AdminService {
 
   static async getAllTickets(includeDeleted: boolean = false): Promise<Issue[]> {
     try {
-      const query = supabase
+      // Use the existing TicketService methods to get tickets with proper comment attachments
+      const { data: tickets, error } = await supabase
         .from('tickets')
-        .select('*')
+        .select('ticket_number')
         .order('created_at', { ascending: false });
-      if (!includeDeleted) {
-        query.eq('deleted', false);
-      }
-      const { data, error } = await query;
+      
       if (error) throw error;
 
-      // Get all users to map IDs to names
-      const { data: users, error: usersError } = await supabase
-        .from('users')
-        .select('id, name, role');
-
-      if (usersError) {
-        console.error('Error fetching users:', usersError);
-      }
-
-      // Get all ticket assignments from the new ticket_assignees table
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from('ticket_assignees')
-        .select('*');
-
-      if (assignmentsError) {
-        console.error('Error fetching assignments:', assignmentsError);
-      }
-
-      const userMap = new Map();
-      if (users) {
-        users.forEach(user => {
-          userMap.set(user.id, { name: user.name, role: user.role });
-        });
-      }
-
-      // Create assignment maps
-      const ticketAssignments = new Map<string, { user_id: string; role: string }[]>();
-      if (assignments) {
-        assignments.forEach(assignment => {
-          if (!ticketAssignments.has(assignment.ticket_id)) {
-            ticketAssignments.set(assignment.ticket_id, []);
-          }
-          ticketAssignments.get(assignment.ticket_id)!.push({
-            user_id: assignment.user_id,
-            role: assignment.role
-          });
-        });
-      }
-
-      // Map database tickets to Issue type, including comments and attachments
-      return (data || []).map(ticket => {
-        // Get assignments for this ticket
-        const ticketAssigns = ticketAssignments.get(ticket.id) || [];
-        const resolverAssignment = ticketAssigns.find(a => a.role === 'resolver');
-        const approverAssignment = ticketAssigns.find(a => a.role === 'approver');
-
-        return {
-          id: ticket.id,
-          ticketNumber: ticket.ticket_number,
-          centreCode: ticket.centre_code,
-          city: ticket.city,
-          resourceId: ticket.resource_id,
-          awignAppTicketId: ticket.awign_app_ticket_id,
-          issueCategory: ticket.issue_category as any,
-          issueDescription: ticket.issue_description,
-          issueDate: ticket.issue_date || { type: 'single', dates: [] },
-          severity: ticket.severity as any,
-          status: ticket.status as any,
-          isAnonymous: ticket.is_anonymous,
-          submittedBy: ticket.submitted_by,
-          submittedByUserId: ticket.submitted_by_user_id,
-          submittedAt: ticket.submitted_at ? new Date(ticket.submitted_at) : new Date(),
-          assignedResolver: resolverAssignment?.user_id || ticket.assigned_resolver,
-          assignedApprover: approverAssignment?.user_id || ticket.assigned_approver,
-          comments: ticket.comments ? ticket.comments.map((comment: any) => ({
-            id: comment.id,
-            content: comment.content,
-            author: comment.author,
-            authorRole: comment.author_role,
-            timestamp: new Date(comment.created_at),
-            isInternal: comment.is_internal,
-          })) : [],
-          attachments: ticket.attachments ? ticket.attachments.map((attachment: any) => ({
-            id: attachment.id,
-            fileName: attachment.file_name,
-            fileSize: attachment.file_size,
-            fileType: attachment.file_type,
-            uploadedAt: attachment.uploaded_at ? new Date(attachment.uploaded_at) : undefined,
-            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${attachment.storage_path}`
-          })) : [],
-          resolutionNotes: ticket.resolution_notes,
-          resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
-          assignedResolverDetails: userMap.get(resolverAssignment?.user_id || ticket.assigned_resolver),
-          assignedApproverDetails: userMap.get(approverAssignment?.user_id || ticket.assigned_approver),
-          deleted: ticket.deleted,
-          // Safe fallbacks for enhanced fields
-          reopenCount: ticket.reopen_count || 0,
-          lastReopenedAt: ticket.last_reopened_at ? new Date(ticket.last_reopened_at) : undefined,
-          reopenedBy: ticket.reopened_by,
-          reopenedByDetails: ticket.reopened_by_name ? {
-            name: ticket.reopened_by_name,
-            role: ticket.reopened_by_role || 'super_admin'
-          } : undefined,
-          statusChangedAt: ticket.status_changed_at ? new Date(ticket.status_changed_at) : undefined,
-          statusChangedBy: ticket.status_changed_by,
-          statusChangedByDetails: ticket.status_changed_by_name ? {
-            name: ticket.status_changed_by_name,
-            role: ticket.status_changed_by_role || 'system'
-          } : undefined,
-          timeline: ticket.timeline || [],
-        };
+      // Fetch each ticket individually using TicketService to get full data with comments
+      const ticketPromises = (tickets || []).map(async (ticket) => {
+        return await TicketService.getTicketByNumber(ticket.ticket_number);
       });
+
+      const resolvedTickets = await Promise.all(ticketPromises);
+      const validTickets = resolvedTickets.filter(ticket => ticket !== null) as Issue[];
+
+      return validTickets;
     } catch (error) {
       console.error('Error in getAllTickets:', error);
       return [];

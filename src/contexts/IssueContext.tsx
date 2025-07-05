@@ -175,7 +175,15 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             author,
             author_role,
             is_internal,
-            created_at
+            created_at,
+            comment_attachments (
+              id,
+              file_name,
+              file_size,
+              file_type,
+              storage_path,
+              uploaded_at
+            )
           ),
           attachments (
             id,
@@ -246,6 +254,14 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             authorRole: comment.author_role,
             timestamp: new Date(comment.created_at),
             isInternal: comment.is_internal,
+            attachments: comment.comment_attachments?.map((att: any) => ({
+              id: att.id,
+              fileName: att.file_name,
+              fileSize: att.file_size,
+              fileType: att.file_type,
+              downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`,
+              uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            })) || [],
           })) || [],
           attachments,
           issueEvidence: [],

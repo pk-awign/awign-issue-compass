@@ -321,7 +321,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               <CardContent className="space-y-4">
                 {ticket.comments.length > 0 ? (
                   <div className="space-y-3">
-                    {ticket.comments.map((comment) => (
+                    {[...ticket.comments].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((comment) => (
                       <div key={comment.id} className="border-l-4 border-blue-200 bg-blue-50 p-3 rounded-r-md">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
@@ -340,6 +340,28 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                           </span>
                         </div>
                         <p className="text-sm">{comment.content}</p>
+                        {/* Comment Attachments */}
+                        {comment.attachments && comment.attachments.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-xs text-gray-500 mb-1">Attachments:</div>
+                            <div className="flex flex-wrap gap-2">
+                              {comment.attachments.map((attachment) => (
+                                <div key={attachment.id} className="flex items-center gap-1 p-1 bg-gray-100 rounded text-xs">
+                                  <Paperclip className="h-3 w-3" />
+                                  <a
+                                    href={attachment.downloadUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline"
+                                  >
+                                    {attachment.fileName}
+                                  </a>
+                                  <span className="text-gray-500">({Math.round(attachment.fileSize / 1024)}KB)</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -133,6 +133,44 @@ export type Database = {
           },
         ]
       }
+      comment_attachments: {
+        Row: {
+          id: string
+          comment_id: string
+          file_name: string
+          file_size: number
+          file_type: string
+          storage_path: string
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          comment_id: string
+          file_name: string
+          file_size: number
+          file_type: string
+          storage_path: string
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          comment_id?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          storage_path?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_attachments_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       escalation_log: {
         Row: {
           escalated_at: string
