@@ -33,9 +33,10 @@ exports.handler = async function(event, context) {
     // WhatsApp API Configuration
     const WHATSAPP_CONFIG = {
       API_URL: 'https://waba-v2.360dialog.io/messages',
-      API_KEY: 'oa6EI0d9qZ4Pm1EKTYrLmHNrAK', // Test API key
-      NAMESPACE: '9f732540_5143_4e51_bfc2_36cab955cd7f', // Test namespace
-      TEMPLATE_NAME: 'myl_supply_initial_1' // Test template
+      API_KEY: process.env.WHATSAPP_API_KEY || 'oa6EI0d9qZ4Pm1EKTYrLmHNrAK', // Use environment variable
+      NAMESPACE: process.env.WHATSAPP_NAMESPACE || '9f732540_5143_4e51_bfc2_36cab955cd7f', // Use environment variable
+      TEMPLATE_NAME: process.env.WHATSAPP_TEMPLATE_NAME || 'myl_supply_initial_1', // Use environment variable
+      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TICKET_TEMPLATE || 'ticket_creation_notification' // New template for ticket creation
     };
 
     if (action === 'sendMessage') {
@@ -47,6 +48,58 @@ exports.handler = async function(event, context) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+
+      return {
+        statusCode: response.status,
+        headers,
+        body: JSON.stringify({
+          success: response.ok,
+          data: result,
+          status: response.status
+        })
+      };
+    }
+
+    if (action === 'sendTicketCreationNotification') {
+      // Send ticket creation notification
+      const { ticketData, phoneNumber } = data;
+      
+      const messageData = {
+        to: phoneNumber,
+        type: 'template',
+        messaging_product: 'whatsapp',
+        template: {
+          namespace: WHATSAPP_CONFIG.NAMESPACE,
+          language: {
+            policy: 'deterministic',
+            code: 'en'
+          },
+          name: WHATSAPP_CONFIG.TICKET_CREATION_TEMPLATE,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: ticketData.submittedBy },
+                { type: 'text', text: ticketData.ticketNumber },
+                { type: 'text', text: ticketData.issueCategory },
+                { type: 'text', text: ticketData.city },
+                { type: 'text', text: ticketData.ticketLink }
+              ]
+            }
+          ]
+        }
+      };
+
+      const response = await fetch(WHATSAPP_CONFIG.API_URL, {
+        method: 'POST',
+        headers: {
+          'D360-API-KEY': WHATSAPP_CONFIG.API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messageData)
       });
 
       const result = await response.json();

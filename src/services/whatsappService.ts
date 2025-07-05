@@ -6,7 +6,8 @@ const WHATSAPP_CONFIG = {
   API_URL: 'https://waba-v2.360dialog.io/messages',
   API_KEY: 'oa6EI0d9qZ4Pm1EKTYrLmHNrAK', // Test API key - replace with production key later
   NAMESPACE: '9f732540_5143_4e51_bfc2_36cab955cd7f', // Test namespace - replace with production namespace later
-  TEMPLATE_NAME: 'myl_supply_initial_1' // Test template - replace with production template later
+  TEMPLATE_NAME: 'myl_supply_initial_1', // Test template - replace with production template later
+  TICKET_CREATION_TEMPLATE: 'ticket_creation_notification' // Template for ticket creation notifications
 };
 
 // Google Sheets Configuration
@@ -229,6 +230,125 @@ export class WhatsAppService {
 
     } catch (error) {
       console.error('Error sending ticket notification:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send ticket creation notification to ticket raiser
+   */
+  static async sendTicketCreationNotification(
+    ticketData: TicketNotificationData,
+    ticketRaiserPhone?: string
+  ): Promise<boolean> {
+    try {
+      // If no phone number provided, try to find the contact in Google Sheets
+      let formattedPhone: string | null = null;
+      
+      if (ticketRaiserPhone) {
+        formattedPhone = this.formatPhoneNumber(ticketRaiserPhone);
+      } else {
+        // Try to find the contact in Google Sheets by name or other criteria
+        const contacts = await this.fetchContactsFromSheet();
+        const matchingContact = contacts.find(contact => 
+          contact.name.toLowerCase().includes(ticketData.submittedBy.toLowerCase()) ||
+          contact.resourceId === ticketData.resourceId
+        );
+        
+        if (matchingContact) {
+          formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
+        }
+      }
+      
+      if (!formattedPhone) {
+        console.warn('No phone number found for ticket raiser:', ticketData.submittedBy);
+        return false;
+      }
+
+      const messageData: WhatsAppMessageData = {
+        to: formattedPhone,
+        type: 'template',
+        messaging_product: 'whatsapp',
+        template: {
+          namespace: WHATSAPP_CONFIG.NAMESPACE,
+          language: {
+            policy: 'deterministic',
+            code: 'en'
+          },
+          name: WHATSAPP_CONFIG.TICKET_CREATION_TEMPLATE,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                {
+                  type: 'text',
+                  text: ticketData.submittedBy
+                },
+                {
+                  type: 'text',
+                  text: ticketData.ticketNumber
+                },
+                {
+                  type: 'text',
+                  text: ticketData.issueCategory
+                },
+                {
+                  type: 'text',
+                  text: ticketData.city
+                },
+                {
+                  type: 'text',
+                  text: ticketData.ticketLink
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      // Try using Netlify function first, fallback to direct API
+      let success = false;
+      
+      try {
+        // Use Netlify function for ticket creation notifications
+        const response = await fetch('/.netlify/functions/whatsapp-proxy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'sendTicketCreationNotification',
+            data: {
+              ticketData,
+              phoneNumber: formattedPhone
+            }
+          })
+        });
+
+        const result = await response.json();
+        success = result.success;
+        
+        if (success) {
+          console.log('Ticket creation notification sent via Netlify function to:', ticketData.submittedBy);
+        } else {
+          console.error('Failed to send via Netlify function:', result);
+          // Fallback to direct API call
+          success = await this.sendWhatsAppMessage(messageData);
+        }
+      } catch (error) {
+        console.error('Netlify function error, falling back to direct API:', error);
+        // Fallback to direct API call
+        success = await this.sendWhatsAppMessage(messageData);
+      }
+      
+      if (success) {
+        console.log('Ticket creation notification sent to:', ticketData.submittedBy);
+      }
+      
+      return success;
+
+    } catch (error) {
+      console.error('Error sending ticket creation notification:', error);
       return false;
     }
   }

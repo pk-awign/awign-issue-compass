@@ -115,6 +115,28 @@ export class TicketService {
         // Don't fail the ticket creation if WhatsApp fails
       }
 
+      // Send WhatsApp notification to ticket raiser
+      try {
+        const ticketData = {
+          ticketNumber,
+          centreCode: issueData.centreCode,
+          city: issueData.city,
+          resourceId: issueData.resourceId || 'NOT_SPECIFIED',
+          issueCategory: issueData.issueCategory,
+          issueDescription: issueData.issueDescription,
+          submittedBy: issueData.submittedBy || 'Anonymous',
+          submittedAt: new Date(),
+          severity: 'sev3',
+          ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`
+        };
+
+        const result = await WhatsAppService.sendTicketCreationNotification(ticketData);
+        console.log('📱 Ticket creation notification sent to raiser:', ticketData.submittedBy, result);
+      } catch (whatsappError) {
+        console.error('Failed to send ticket creation notification:', whatsappError);
+        // Don't fail the ticket creation if WhatsApp fails
+      }
+
       toast.success(`Ticket ${ticketNumber} created successfully`);
       return ticketNumber;
     } catch (error) {

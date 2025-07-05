@@ -122,6 +122,23 @@ export const WhatsAppTestComponent: React.FC = () => {
     }
   };
 
+  const testTicketCreationNotification = async () => {
+    setLoading(true);
+    try {
+      const success = await WhatsAppService.sendTicketCreationNotification(testTicketData);
+      if (success) {
+        toast.success('Ticket creation notification sent successfully!');
+      } else {
+        toast.error('Failed to send ticket creation notification');
+      }
+    } catch (error) {
+      console.error('Ticket creation notification error:', error);
+      toast.error('Error sending ticket creation notification');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getConfig = () => {
     const config = WhatsAppService.getConfig();
     return config;
@@ -263,6 +280,16 @@ export const WhatsAppTestComponent: React.FC = () => {
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Send Bulk Notifications
+            </Button>
+
+            <Button 
+              onClick={testTicketCreationNotification} 
+              disabled={loading}
+              variant="secondary"
+              className="flex items-center gap-2"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Test Ticket Creation Notification
             </Button>
           </div>
 
