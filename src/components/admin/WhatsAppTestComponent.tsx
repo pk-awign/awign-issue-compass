@@ -185,7 +185,7 @@ export const WhatsAppTestComponent: React.FC = () => {
                 <div><strong>Sheet ID:</strong> {getConfig().googleSheetUrl.split('/')[5]}</div>
                 <div><strong>Tab:</strong> testing</div>
                 <div><strong>Contacts:</strong> {contacts.length}</div>
-                <div><strong>Cities:</strong> {cities.length}</div>
+                <div><strong>Columns:</strong> Contact_Number | Resource_ID | Name | Email_ID</div>
               </CardContent>
             </Card>
           </div>
@@ -367,7 +367,7 @@ export const WhatsAppTestComponent: React.FC = () => {
                   <div className="flex-1">
                     <div className="font-medium">{contact.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {contact.contactNumber} • {contact.city} • {contact.zone}
+                      {contact.contactNumber} • {contact.emailId}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

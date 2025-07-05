@@ -4,10 +4,10 @@ import { toast } from 'sonner';
 // WhatsApp API Configuration
 const WHATSAPP_CONFIG = {
   API_URL: 'https://waba-v2.360dialog.io/messages',
-  API_KEY: 'oa6EI0d9qZ4Pm1EKTYrLmHNrAK', // Test API key - replace with production key later
-  NAMESPACE: '9f732540_5143_4e51_bfc2_36cab955cd7f', // Test namespace - replace with production namespace later
-  TEMPLATE_NAME: 'myl_supply_initial_1', // Test template - replace with production template later
-  TICKET_CREATION_TEMPLATE: 'myl_supply_initial_1' // Use same template for ticket creation notifications
+  API_KEY: 'mOxReSysI12sL3CQIBQRVJyuAK', // Production API key
+  NAMESPACE: '74a67158_77ff_47a7_a86e_3b004a21d236', // Production namespace
+  TEMPLATE_NAME: 'ticke_raised_test', // Production template name
+  TICKET_CREATION_TEMPLATE: 'ticke_raised_test' // Use same template for ticket creation notifications
 };
 
 // Google Sheets Configuration
@@ -23,10 +23,11 @@ const GOOGLE_SHEETS_CONFIG = {
 
 export interface WhatsAppContact {
   contactNumber: string;
+  resourceId: string;
   name: string;
+  emailId: string;
   zone: string;
   city: string;
-  resourceId: string;
 }
 
 export interface WhatsAppMessageData {
@@ -84,18 +85,20 @@ export class WhatsAppService {
       const rows = data.values || [];
 
       return rows
-        .filter((row: any[]) => row.length >= 5) // Ensure we have enough columns
+        .filter((row: any[]) => row.length >= 4) // Ensure we have enough columns
         .map((row: any[]) => ({
-          contactNumber: row[0]?.toString() || '', // Contact_Number
-          name: row[4]?.toString() || '', // Name
-          zone: row[1]?.toString() || '', // Zone
-          city: row[2]?.toString() || '', // Exam_City
-          resourceId: row[3]?.toString() || '' // Resource_ID
+          contactNumber: row[0]?.toString() || '', // Contact_Number (Column A)
+          resourceId: row[1]?.toString() || '', // Resource_ID (Column B)
+          name: row[2]?.toString() || '', // Name (Column C)
+          emailId: row[3]?.toString() || '', // Email_ID (Column D) - for future use
+          zone: '', // Not in current sheet
+          city: '' // Not in current sheet
         }))
         .filter((contact: WhatsAppContact) => 
           contact.contactNumber && 
           contact.contactNumber.length >= 10 &&
-          contact.name.trim() !== ''
+          contact.name.trim() !== '' &&
+          contact.resourceId.trim() !== ''
         );
 
     } catch (error) {
@@ -248,11 +251,11 @@ export class WhatsAppService {
       if (ticketRaiserPhone) {
         formattedPhone = this.formatPhoneNumber(ticketRaiserPhone);
       } else {
-        // Try to find the contact in Google Sheets by name or other criteria
+        // Try to find the contact in Google Sheets by Resource_ID (primary) or name (fallback)
         const contacts = await this.fetchContactsFromSheet();
         const matchingContact = contacts.find(contact => 
-          contact.name.toLowerCase().includes(ticketData.submittedBy.toLowerCase()) ||
-          contact.resourceId === ticketData.resourceId
+          contact.resourceId === ticketData.resourceId || // Primary match by Resource_ID
+          contact.name.toLowerCase().includes(ticketData.submittedBy.toLowerCase()) // Fallback by name
         );
         
         if (matchingContact) {
@@ -548,9 +551,8 @@ export class WhatsAppService {
                 {
                   type: 'body',
                   parameters: [
-                    { type: 'text', text: 'Test' },
-                    { type: 'text', text: 'Test' },
-                    { type: 'text', text: 'Test' },
+                    { type: 'text', text: 'Test User' },
+                    { type: 'text', text: 'TEST123' },
                     { type: 'text', text: 'https://example.com' }
                   ]
                 }

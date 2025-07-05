@@ -33,10 +33,10 @@ exports.handler = async function(event, context) {
     // WhatsApp API Configuration
     const WHATSAPP_CONFIG = {
       API_URL: 'https://waba-v2.360dialog.io/messages',
-      API_KEY: process.env.WHATSAPP_API_KEY || 'oa6EI0d9qZ4Pm1EKTYrLmHNrAK', // Use environment variable
-      NAMESPACE: process.env.WHATSAPP_NAMESPACE || '9f732540_5143_4e51_bfc2_36cab955cd7f', // Use environment variable
-      TEMPLATE_NAME: process.env.WHATSAPP_TEMPLATE_NAME || 'myl_supply_initial_1', // Use environment variable
-      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TEMPLATE_NAME || 'ticket_creation_notification' // Use same template name for ticket creation
+      API_KEY: process.env.WHATSAPP_API_KEY || 'mOxReSysI12sL3CQIBQRVJyuAK', // Use environment variable
+      NAMESPACE: process.env.WHATSAPP_NAMESPACE || '74a67158_77ff_47a7_a86e_3b004a21d236', // Use environment variable
+      TEMPLATE_NAME: process.env.WHATSAPP_TEMPLATE_NAME || 'ticke_raised_test', // Use environment variable
+      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TEMPLATE_NAME || 'ticke_raised_test' // Use same template name for ticket creation
     };
 
     if (action === 'sendMessage') {
@@ -130,9 +130,8 @@ exports.handler = async function(event, context) {
             {
               type: 'body',
               parameters: [
-                { type: 'text', text: 'Test' },
-                { type: 'text', text: 'Test' },
-                { type: 'text', text: 'Test' },
+                { type: 'text', text: 'Test User' },
+                { type: 'text', text: 'TEST123' },
                 { type: 'text', text: 'https://example.com' }
               ]
             }
@@ -151,6 +150,17 @@ exports.handler = async function(event, context) {
 
       const result = await response.json();
 
+      console.log('WhatsApp API test response:', {
+        status: response.status,
+        ok: response.ok,
+        result: result,
+        config: {
+          namespace: WHATSAPP_CONFIG.NAMESPACE,
+          template: WHATSAPP_CONFIG.TEMPLATE_NAME,
+          apiKey: WHATSAPP_CONFIG.API_KEY.substring(0, 8) + '...'
+        }
+      });
+
       return {
         statusCode: 200,
         headers,
@@ -158,7 +168,11 @@ exports.handler = async function(event, context) {
           success: true,
           connected: response.ok || result.error?.code === 'invalid_phone_number',
           data: result,
-          status: response.status
+          status: response.status,
+          config: {
+            namespace: WHATSAPP_CONFIG.NAMESPACE,
+            template: WHATSAPP_CONFIG.TEMPLATE_NAME
+          }
         })
       };
     }
