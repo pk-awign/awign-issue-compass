@@ -158,7 +158,22 @@ export class TicketService {
       
       return this.mapDatabaseToIssue({
         ...ticketData,
-        comments: commentsData || [],
+        comments: commentsData?.map((comment: any) => ({
+          id: comment.id,
+          content: comment.content,
+          author: comment.author,
+          authorRole: comment.author_role,
+          timestamp: new Date(comment.created_at),
+          isInternal: comment.is_internal,
+          attachments: (comment.comment_attachments || []).map((att: any) => ({
+            id: att.id,
+            fileName: att.file_name,
+            fileSize: att.file_size,
+            fileType: att.file_type,
+            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`
+          }))
+        })) || [],
         attachments: attachmentsData || [],
         assigned_resolver_name: resolverDetails?.name,
         assigned_resolver_role: resolverDetails?.role,
@@ -452,7 +467,33 @@ export class TicketService {
 
       if (error) throw error;
 
-      return data.map(this.mapDatabaseToIssue);
+      return (data || []).map((ticket: any) => ({
+        ...ticket,
+        comments: (ticket.comments || []).map((comment: any) => ({
+          id: comment.id,
+          content: comment.content,
+          author: comment.author,
+          authorRole: comment.author_role,
+          timestamp: comment.created_at ? new Date(comment.created_at) : null,
+          isInternal: comment.is_internal,
+          attachments: (comment.comment_attachments || []).map((att: any) => ({
+            id: att.id,
+            fileName: att.file_name,
+            fileSize: att.file_size,
+            fileType: att.file_type,
+            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`
+          }))
+        })),
+        attachments: (ticket.attachments || []).map((att: any) => ({
+          id: att.id,
+          fileName: att.file_name,
+          fileSize: att.file_size,
+          fileType: att.file_type,
+          uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+          downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${att.storage_path}`
+        }))
+      }));
     } catch (error) {
       console.error('Error fetching user tickets:', error);
       return [];
@@ -495,7 +536,33 @@ export class TicketService {
 
       if (error) throw error;
 
-      return data.map(this.mapDatabaseToIssue);
+      return (data || []).map((ticket: any) => ({
+        ...ticket,
+        comments: (ticket.comments || []).map((comment: any) => ({
+          id: comment.id,
+          content: comment.content,
+          author: comment.author,
+          authorRole: comment.author_role,
+          timestamp: comment.created_at ? new Date(comment.created_at) : null,
+          isInternal: comment.is_internal,
+          attachments: (comment.comment_attachments || []).map((att: any) => ({
+            id: att.id,
+            fileName: att.file_name,
+            fileSize: att.file_size,
+            fileType: att.file_type,
+            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`
+          }))
+        })),
+        attachments: (ticket.attachments || []).map((att: any) => ({
+          id: att.id,
+          fileName: att.file_name,
+          fileSize: att.file_size,
+          fileType: att.file_type,
+          uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+          downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${att.storage_path}`
+        }))
+      }));
     } catch (error) {
       console.error('Error fetching city tickets:', error);
       return [];
@@ -647,7 +714,6 @@ export class TicketService {
 
       // Upload comment attachments if any
       const commentId = data[0].id;
-
       if (commentData.attachments && commentData.attachments.length > 0) {
         await this.uploadCommentAttachments(commentId, commentData.attachments);
       }
@@ -725,7 +791,6 @@ export class TicketService {
     for (const file of files) {
       try {
         const fileName = `${commentId}/${Date.now()}-${file.name}`;
-        
         const { error: uploadError } = await supabase.storage
           .from('comment-attachments')
           .upload(fileName, file);
