@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   User, 
   Calendar, 
@@ -27,9 +28,10 @@ import {
   Download,
   Eye,
   Trash2,
-  X
+  X,
+  Send
 } from 'lucide-react';
-import { Issue, User as UserType, TimelineEvent, StatusTransition } from '@/types/issue';
+import { Issue, User as UserType, TimelineEvent, StatusTransition, Comment } from '@/types/issue';
 import { AdminService } from '@/services/adminService';
 import { TicketService } from '@/services/ticketService';
 import { toast } from 'sonner';
@@ -66,10 +68,13 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const [commentText, setCommentText] = useState('');
   const [isAssigneeLoading, setIsAssigneeLoading] = useState(false);
   const [isCommentLoading, setIsCommentLoading] = useState(false);
+  const [isInternalComment, setIsInternalComment] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [isTimelineLoading, setIsTimelineLoading] = useState(false);
   const [availableTransitions, setAvailableTransitions] = useState<Issue['status'][]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [commentAttachments, setCommentAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -277,14 +282,23 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
     }
   };
 
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+  const formatDate = (date: Date | string | null | undefined) => {
+    if (!date) return 'Unknown date';
+    
+    try {
+      const dateObj = date instanceof Date ? date : new Date(date);
+      
+      // Check if the date is valid
+      if (isNaN(dateObj.getTime())) {
+        console.error('Invalid date value:', date);
+        return 'Invalid date';
+      }
+      
+      return format(dateObj, 'MMM dd, yyyy HH:mm');
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Date value:', date);
+      return 'Invalid date';
+    }
   };
 
   const handleDownloadAttachment = (attachment: any) => {
@@ -315,15 +329,34 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const handleAddComment = async () => {
     if (!ticket?.id || !user || !commentText.trim()) return;
     setIsCommentLoading(true);
-    await TicketService.addComment(ticket.id, {
-      content: commentText,
-      author: user.name,
-      authorRole: user.role,
-      isInternal: false
-    });
-    setCommentText('');
-    onTicketUpdate();
-    setIsCommentLoading(false);
+    try {
+      await TicketService.addComment(ticket.id, {
+        content: commentText,
+        author: user.name,
+        authorRole: user.role,
+        isInternal: isInternalComment,
+        attachments: commentAttachments
+      });
+      setCommentText('');
+      setIsInternalComment(false);
+      setCommentAttachments([]);
+      onTicketUpdate();
+      toast.success('Comment added successfully');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast.error('Failed to add comment');
+    } finally {
+      setIsCommentLoading(false);
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setCommentAttachments(prev => [...prev, ...files]);
+  };
+
+  const removeAttachment = (index: number) => {
+    setCommentAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleDeleteTicket = async () => {
@@ -437,6 +470,14 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               className="justify-start sm:justify-center"
             >
               Timeline
+            </Button>
+            <Button
+              variant={activeTab === 'comments' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveTab('comments')}
+              className="justify-start sm:justify-center"
+            >
+              Comments ({ticket.comments.length})
             </Button>
           </div>
 
@@ -634,6 +675,22 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         onChange={e => setCommentText(e.target.value)}
                         className="min-h-[60px]"
                       />
+                      {/* Internal Comment Checkbox - Only for Super Admin, Resolver, and Approver */}
+                      {user && ['super_admin', 'resolver', 'approver'].includes(user.role) && (
+                        <div className="mt-2 flex items-center space-x-2">
+                          <Checkbox
+                            id="internal-comment"
+                            checked={isInternalComment}
+                            onCheckedChange={(checked) => setIsInternalComment(checked as boolean)}
+                          />
+                          <label
+                            htmlFor="internal-comment"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            Internal Comment (not visible to ticket raiser)
+                          </label>
+                        </div>
+                      )}
                       <Button
                         className="mt-2"
                         size="sm"
@@ -853,6 +910,184 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                     })}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Comments Tab */}
+          {activeTab === 'comments' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5" />
+                  Comments ({ticket.comments.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {ticket.comments.length > 0 ? (
+                  <div className="space-y-3">
+                    {[...ticket.comments].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((comment) => (
+                      <div key={comment.id} className="border-l-4 border-blue-200 bg-blue-50 p-3 rounded-r-md">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{comment.author} ({comment.authorRole})</span>
+                            {comment.isInternal && (
+                              <Badge variant="secondary" className="text-xs">
+                                Internal
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {(() => {
+                              try {
+                                if (!comment.timestamp) return 'N/A';
+                                const dateObj = new Date(comment.timestamp);
+                                if (isNaN(dateObj.getTime())) {
+                                  console.error('Invalid comment timestamp:', comment.timestamp);
+                                  return 'N/A';
+                                }
+                                return formatDate(comment.timestamp);
+                              } catch (e) {
+                                console.error('Error formatting comment timestamp:', comment.timestamp, e);
+                                return 'N/A';
+                              }
+                            })()}
+                          </span>
+                        </div>
+                        <p className="text-sm">{comment.content}</p>
+                        {/* Comment Attachments */}
+                        {comment.attachments && comment.attachments.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-xs text-gray-500 mb-1">Attachments:</div>
+                            <div className="flex flex-wrap gap-2">
+                              {comment.attachments.map((attachment) => (
+                                <div key={attachment.id} className="flex items-center gap-1 p-1 bg-gray-100 rounded text-xs">
+                                  <Paperclip className="h-3 w-3" />
+                                  <a
+                                    href={attachment.downloadUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline"
+                                  >
+                                    {attachment.fileName}
+                                  </a>
+                                  <span className="text-gray-500">({Math.round(attachment.fileSize / 1024)}KB)</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No comments yet
+                  </p>
+                )}
+                
+                {/* Add Comment */}
+                <Separator />
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Add Comment</p>
+                  <Textarea
+                    placeholder="Enter your comment..."
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    className="min-h-[80px]"
+                  />
+                  
+                  {/* File Attachment Section */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                        Attach Files
+                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        accept="image/*,.pdf,.doc,.docx,.txt"
+                      />
+                      {commentAttachments.length > 0 && (
+                        <span className="text-sm text-muted-foreground">
+                          {commentAttachments.length} file(s) selected
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Display selected files */}
+                    {commentAttachments.length > 0 && (
+                      <div className="space-y-2">
+                        {commentAttachments.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <Paperclip className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm font-medium">{file.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {(file.size / 1024).toFixed(1)} KB
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeAttachment(index)}
+                              className="h-6 w-6 p-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Internal Comment Checkbox - Only for Super Admin, Resolver, and Approver */}
+                  {user && ['super_admin', 'resolver', 'approver'].includes(user.role) && (
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="internal-comment"
+                        checked={isInternalComment}
+                        onCheckedChange={(checked) => setIsInternalComment(checked as boolean)}
+                      />
+                      <label
+                        htmlFor="internal-comment"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Internal Comment (not visible to ticket raiser)
+                      </label>
+                    </div>
+                  )}
+                  <Button 
+                    onClick={handleAddComment}
+                    disabled={!commentText.trim() || isCommentLoading}
+                    size="sm"
+                    className="flex items-center gap-2"
+                  >
+                    {isCommentLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        Add Comment
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}

@@ -469,10 +469,27 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                   <div className="mt-6">
                     <h4 className="font-semibold mb-2 flex items-center gap-2">
                       <MessageSquare className="h-4 w-4" />
-                      Comments ({selectedTicket.comments.length})
+                      Comments ({selectedTicket.comments.filter(comment => {
+                        if (comment.isInternal) {
+                          return user && ['resolver', 'approver', 'admin', 'super_admin'].includes(user.role);
+                        }
+                        return true;
+                      }).length})
                     </h4>
                     <div className="space-y-3">
-                      {selectedTicket.comments.map((comment) => (
+                      {selectedTicket.comments
+                        .filter(comment => {
+                          // Filter out internal comments for regular users
+                          if (comment.isInternal) {
+                            // Show internal comments only to staff (resolver, approver, admin, super_admin)
+                            if (user && ['resolver', 'approver', 'admin', 'super_admin'].includes(user.role)) {
+                              return true;
+                            }
+                            return false;
+                          }
+                          return true;
+                        })
+                        .map((comment) => (
                         <div key={comment.id} className="bg-muted p-3 rounded-lg">
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-semibold">{getCommentDisplayName(comment)}</span>
@@ -830,10 +847,27 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                 <div className="mt-6">
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
                     <MessageSquare className="h-4 w-4" />
-                    Comments ({selectedTicket.comments.length})
+                    Comments ({selectedTicket.comments.filter(comment => {
+                      if (comment.isInternal) {
+                        return user && ['resolver', 'approver', 'admin', 'super_admin'].includes(user.role);
+                      }
+                      return true;
+                    }).length})
                   </h4>
                   <div className="space-y-3">
-                    {selectedTicket.comments.map((comment) => (
+                    {selectedTicket.comments
+                      .filter(comment => {
+                        // Filter out internal comments for regular users
+                        if (comment.isInternal) {
+                          // Show internal comments only to staff (resolver, approver, admin, super_admin)
+                          if (user && ['resolver', 'approver', 'admin', 'super_admin'].includes(user.role)) {
+                            return true;
+                          }
+                          return false;
+                        }
+                        return true;
+                      })
+                      .map((comment) => (
                       <div key={comment.id} className="bg-muted p-3 rounded-lg">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-semibold">{getCommentDisplayName(comment)}</span>

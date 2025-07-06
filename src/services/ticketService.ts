@@ -219,22 +219,7 @@ export class TicketService {
       
       return this.mapDatabaseToIssue({
         ...ticketData,
-        comments: commentsData?.map((comment: any) => ({
-          id: comment.id,
-          content: comment.content,
-          author: comment.author,
-          authorRole: comment.author_role,
-          timestamp: new Date(comment.created_at),
-          isInternal: comment.is_internal,
-          attachments: (comment.comment_attachments || []).map((att: any) => ({
-            id: att.id,
-            fileName: att.file_name,
-            fileSize: att.file_size,
-            fileType: att.file_type,
-            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`
-          }))
-        })) || [],
+        comments: commentsData || [],
         attachments: attachmentsData || [],
         assigned_resolver_name: resolverDetails?.name,
         assigned_resolver_role: resolverDetails?.role,
@@ -917,7 +902,18 @@ export class TicketService {
       isAnonymous: data.is_anonymous,
       submittedBy: data.submitted_by,
       submittedByUserId: data.submitted_by_user_id,
-      submittedAt: new Date(data.submitted_at),
+      submittedAt: (() => {
+        if (!data.submitted_at) {
+          console.error('Ticket missing submitted_at:', data);
+          return new Date();
+        }
+        const timestamp = new Date(data.submitted_at);
+        if (isNaN(timestamp.getTime())) {
+          console.error('Invalid ticket submitted_at:', data.submitted_at, 'for ticket:', data);
+          return new Date();
+        }
+        return timestamp;
+      })(),
       assignedResolver: data.assigned_resolver,
       assignedApprover: data.assigned_approver,
       assignedResolverDetails: data.assigned_resolver_name ? {
@@ -930,22 +926,34 @@ export class TicketService {
       } : undefined,
       resolutionNotes: data.resolution_notes,
       resolvedAt: data.resolved_at ? new Date(data.resolved_at) : undefined,
-      comments: data.comments?.map((comment: any) => ({
-        id: comment.id,
-        content: comment.content,
-        author: comment.author,
-        authorRole: comment.author_role,
-        timestamp: new Date(comment.created_at),
-        isInternal: comment.is_internal,
-        attachments: comment.comment_attachments?.map((att: any) => ({
-          id: att.id,
-          fileName: att.file_name,
-          fileSize: att.file_size,
-          fileType: att.file_type,
-          downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`,
-          uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-        })) || [],
-      })) || [],
+      comments: data.comments?.map((comment: any) => {
+        // Add logging to debug timestamp issues
+        if (!comment.created_at) {
+          console.error('Comment missing created_at:', comment);
+        } else {
+          const timestamp = new Date(comment.created_at);
+          if (isNaN(timestamp.getTime())) {
+            console.error('Invalid comment timestamp:', comment.created_at, 'for comment:', comment);
+          }
+        }
+        
+        return {
+          id: comment.id,
+          content: comment.content,
+          author: comment.author,
+          authorRole: comment.author_role,
+          timestamp: comment.created_at ? new Date(comment.created_at) : new Date(),
+          isInternal: comment.is_internal,
+          attachments: (comment.comment_attachments || []).map((att: any) => ({
+            id: att.id,
+            fileName: att.file_name,
+            fileSize: att.file_size,
+            fileType: att.file_type,
+            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`,
+            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+          })),
+        };
+      }) || [],
       attachments,
       issueEvidence: [], // Will be populated separately if needed
       
