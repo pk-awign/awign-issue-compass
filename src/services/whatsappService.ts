@@ -7,7 +7,8 @@ const WHATSAPP_CONFIG = {
   API_KEY: 'mOxReSysI12sL3CQIBQRVJyuAK', // Production API key
   NAMESPACE: '74a67158_77ff_47a7_a86e_3b004a21d236', // Production namespace
   TEMPLATE_NAME: 'ticke_raised_test', // Production template name
-  TICKET_CREATION_TEMPLATE: 'ticke_raised_test' // Use same template for ticket creation notifications
+  TICKET_CREATION_TEMPLATE: 'ticke_raised_test', // Use same template for ticket creation notifications
+  COMMENT_UPDATE_TEMPLATE: 'awign_escalation_management_ticket_update_2' // Template for comment notifications
 };
 
 // Google Sheets Configuration
@@ -59,6 +60,13 @@ export interface TicketNotificationData {
   submittedBy: string;
   submittedAt: Date;
   severity: string;
+  ticketLink: string;
+}
+
+export interface CommentNotificationData {
+  ticketNumber: string;
+  resourceId: string;
+  submittedBy: string;
   ticketLink: string;
 }
 
@@ -612,6 +620,132 @@ export class WhatsAppService {
       console.error('Error in city-specific notification:', error);
       toast.error(`Failed to send notifications to ${city}`);
       return { total: 0, sent: 0, failed: 1, errors: [error.toString()] };
+    }
+  }
+
+  /**
+   * Send comment notification to ticket raiser
+   */
+  static async sendCommentNotification(
+    commentData: CommentNotificationData
+  ): Promise<boolean> {
+    try {
+      console.log('🔍 [WHATSAPP SERVICE] Starting comment notification...');
+      console.log('🔍 [WHATSAPP SERVICE] Comment data:', commentData);
+
+      // Find the contact in Google Sheets by Resource_ID
+      let formattedPhone: string | null = null;
+      let matchingContact: WhatsAppContact | undefined = undefined;
+      
+      try {
+        const contacts = await this.fetchContactsFromSheet();
+        console.log('🔍 [WHATSAPP SERVICE] Fetched contacts count:', contacts.length);
+        
+        // Match by Resource ID
+        matchingContact = contacts.find(contact => 
+          contact.resourceId === commentData.resourceId
+        );
+        
+        console.log('🔍 [WHATSAPP SERVICE] Searching for Resource ID:', commentData.resourceId);
+        console.log('🔍 [WHATSAPP SERVICE] Matching contact found:', matchingContact);
+        
+        if (matchingContact) {
+          formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
+          console.log('📱 [WHATSAPP SERVICE] Formatted phone from contact:', formattedPhone);
+        } else {
+          console.warn('⚠️ [WHATSAPP SERVICE] No contact found with Resource ID:', commentData.resourceId);
+        }
+      } catch (error) {
+        console.error('❌ [WHATSAPP SERVICE] Failed to fetch contacts from Google Sheets:', error);
+        return false;
+      }
+      
+      if (!formattedPhone) {
+        console.warn('❌ [WHATSAPP SERVICE] No phone number found for comment notification');
+        console.warn('❌ [WHATSAPP SERVICE] Resource ID searched:', commentData.resourceId);
+        return false;
+      }
+
+      const messageData: WhatsAppMessageData = {
+        to: formattedPhone,
+        type: 'template',
+        messaging_product: 'whatsapp',
+        template: {
+          namespace: WHATSAPP_CONFIG.NAMESPACE,
+          language: {
+            policy: 'deterministic',
+            code: 'en'
+          },
+          name: WHATSAPP_CONFIG.COMMENT_UPDATE_TEMPLATE,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                {
+                  type: 'text',
+                  text: matchingContact?.name || commentData.submittedBy // Use Name from Google Sheet
+                },
+                {
+                  type: 'text',
+                  text: commentData.ticketNumber
+                },
+                {
+                  type: 'text',
+                  text: commentData.ticketLink
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      // Try using Netlify function first, fallback to direct API
+      let success = false;
+      
+      try {
+        // Use Netlify function for comment notifications
+        const response = await fetch('/.netlify/functions/whatsapp-proxy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'sendCommentNotification',
+            data: {
+              commentData: {
+                ...commentData,
+                submittedBy: matchingContact?.name || commentData.submittedBy // Use Name from Google Sheet
+              },
+              phoneNumber: formattedPhone
+            }
+          })
+        });
+
+        const result = await response.json();
+        success = result.success;
+        
+        if (success) {
+          console.log('Comment notification sent via Netlify function to:', matchingContact?.name || commentData.submittedBy);
+        } else {
+          console.error('Failed to send via Netlify function:', result);
+          // Fallback to direct API call
+          success = await this.sendWhatsAppMessage(messageData);
+        }
+      } catch (error) {
+        console.error('Netlify function error, falling back to direct API:', error);
+        // Fallback to direct API call
+        success = await this.sendWhatsAppMessage(messageData);
+      }
+      
+      if (success) {
+        console.log('Comment notification sent to:', commentData.submittedBy);
+      }
+      
+      return success;
+
+    } catch (error) {
+      console.error('Error sending comment notification:', error);
+      return false;
     }
   }
 

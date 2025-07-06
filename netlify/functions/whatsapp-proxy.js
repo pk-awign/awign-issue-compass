@@ -36,7 +36,8 @@ export const handler = async function(event, context) {
       API_KEY: process.env.WHATSAPP_API_KEY || 'mOxReSysI12sL3CQIBQRVJyuAK', // Use environment variable
       NAMESPACE: process.env.WHATSAPP_NAMESPACE || '74a67158_77ff_47a7_a86e_3b004a21d236', // Use environment variable
       TEMPLATE_NAME: process.env.WHATSAPP_TEMPLATE_NAME || 'ticke_raised_test', // Use environment variable
-      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TEMPLATE_NAME || 'ticke_raised_test' // Use same template name for ticket creation
+      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TEMPLATE_NAME || 'ticke_raised_test', // Use same template name for ticket creation
+      COMMENT_UPDATE_TEMPLATE: 'awign_escalation_management_ticket_update_2' // Template for comment notifications
     };
 
     if (action === 'sendMessage') {
@@ -85,6 +86,56 @@ export const handler = async function(event, context) {
                 { type: 'text', text: ticketData.submittedBy }, // This will be Name from Google Sheet
                 { type: 'text', text: ticketData.ticketNumber },
                 { type: 'text', text: ticketData.ticketLink }
+              ]
+            }
+          ]
+        }
+      };
+
+      const response = await fetch(WHATSAPP_CONFIG.API_URL, {
+        method: 'POST',
+        headers: {
+          'D360-API-KEY': WHATSAPP_CONFIG.API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messageData)
+      });
+
+      const result = await response.json();
+
+      return {
+        statusCode: response.status,
+        headers,
+        body: JSON.stringify({
+          success: response.ok,
+          data: result,
+          status: response.status
+        })
+      };
+    }
+
+    if (action === 'sendCommentNotification') {
+      // Send comment notification
+      const { commentData, phoneNumber } = data;
+      
+      const messageData = {
+        to: phoneNumber,
+        type: 'template',
+        messaging_product: 'whatsapp',
+        template: {
+          namespace: WHATSAPP_CONFIG.NAMESPACE,
+          language: {
+            policy: 'deterministic',
+            code: 'en'
+          },
+          name: WHATSAPP_CONFIG.COMMENT_UPDATE_TEMPLATE,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: commentData.submittedBy }, // This will be Name from Google Sheet
+                { type: 'text', text: commentData.ticketNumber },
+                { type: 'text', text: commentData.ticketLink }
               ]
             }
           ]

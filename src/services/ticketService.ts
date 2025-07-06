@@ -780,6 +780,34 @@ export class TicketService {
           attachments_count: commentData.attachments?.length || 0
         },
       });
+
+      // Send WhatsApp notification for non-internal comments
+      if (!commentData.isInternal) {
+        try {
+          // Get ticket details for notification
+          const { data: ticketData, error: ticketError } = await supabase
+            .from('tickets')
+            .select('ticket_number, resource_id, submitted_by')
+            .eq('id', ticketId)
+            .single();
+
+          if (!ticketError && ticketData) {
+            const commentNotificationData = {
+              ticketNumber: ticketData.ticket_number,
+              resourceId: ticketData.resource_id || 'NOT_SPECIFIED',
+              submittedBy: ticketData.submitted_by || 'Anonymous',
+              ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketData.ticket_number}`
+            };
+
+            console.log('📱 [WHATSAPP DEBUG] Sending comment notification with data:', commentNotificationData);
+            const result = await WhatsAppService.sendCommentNotification(commentNotificationData);
+            console.log('📱 [WHATSAPP DEBUG] Comment notification result:', result);
+          }
+        } catch (whatsappError) {
+          console.error('❌ [WHATSAPP DEBUG] Failed to send comment notification:', whatsappError);
+          // Don't fail the comment addition if WhatsApp notification fails
+        }
+      }
     } catch (error) {
       console.error('Error adding comment:', error);
       console.error('Error details:', {
