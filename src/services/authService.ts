@@ -110,7 +110,12 @@ export class AuthService {
         query = query.eq('mobile_number', identifier);
       }
 
+      console.log('🔍 [AUTH SERVICE] Querying for mobile number:', identifier);
+      console.log('🔍 [AUTH SERVICE] Query:', query);
+
       const { data, error } = await query.maybeSingle();
+
+      console.log('🔍 [AUTH SERVICE] Query result:', { data, error });
 
       if (error) {
         console.error('Error fetching user:', error);

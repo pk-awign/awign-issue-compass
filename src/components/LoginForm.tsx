@@ -28,9 +28,30 @@ export const LoginForm: React.FC = () => {
       return;
     }
 
+    let processedIdentifier = identifier;
+
     // Validate identifier based on login type
     if (loginType === 'mobile') {
-      if (!/^[6-9]\d{9}$/.test(identifier)) {
+      // Handle both formats: with country code (91XXXXXXXXXX) or without (XXXXXXXXXX)
+      const cleanNumber = identifier.replace(/\D/g, ''); // Remove all non-digits
+      if (cleanNumber.length === 12 && cleanNumber.startsWith('91')) {
+        // If it's 12 digits and starts with 91, validate the remaining 10 digits
+        const numberWithoutCode = cleanNumber.substring(2);
+        if (!/^[6-9]\d{9}$/.test(numberWithoutCode)) {
+          toast.error('Please enter a valid 10-digit mobile number');
+          return;
+        }
+        // Use the clean number without country code
+        processedIdentifier = numberWithoutCode;
+      } else if (cleanNumber.length === 10) {
+        // If it's exactly 10 digits, validate directly
+        if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
+          toast.error('Please enter a valid 10-digit mobile number');
+          return;
+        }
+        // Use the clean number
+        processedIdentifier = cleanNumber;
+      } else {
         toast.error('Please enter a valid 10-digit mobile number');
         return;
       }
@@ -49,7 +70,7 @@ export const LoginForm: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const success = await loginWithPin(identifier, pin, loginType);
+      const success = await loginWithPin(processedIdentifier, pin, loginType);
       
       if (success) {
         toast.success('Login successful!');
@@ -136,9 +157,10 @@ export const LoginForm: React.FC = () => {
                   type="tel"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Enter mobile number"
+                  placeholder="Enter mobile number (10 digits or with +91)"
                   required
                   className="mt-1"
+                  maxLength={15}
                 />
               </div>
               

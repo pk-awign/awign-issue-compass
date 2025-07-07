@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,7 +28,10 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad'];
+  // Final deduplicated, sorted list of cities
+  const cities = [
+    "Agartala","Agra","Ahmedabad","Aizwal","Ajmer","Akola","Alappuzha","Aligarh","Alwar","Amravati","Anantapur","Asansol","Bangalore","Balasore","Banda","Bardoli","Bareilly","Bhandara","Bhopal","Bhubaneswar","Bikaner","Bankura","Baruipur","Bathinda","Bardoli","Bhandara","Bhopal","Bhubaneswar","Bikaner","Chandigarh","Chandrapur","Chhatrapati Sambhaji Nagar","Cuttack","Darbhanga","Dehradun","Delhi","Dhanbad","Durgapur","Ernakulam","Faridabad","Ghaziabad","Greater Noida","Gorakhpur","Gulbarga","Gurugram","Guwahati","Gwalior","Haldwani","Hamirpur","Hanamkonda","Hanumanghar","Hisar","Hubballi","Hyderabad","IMPHAL","Imphal","Indore","Jabalpur","Jaipur","Jalandhar","Jammu","Jamshedpur","Jodhpur","Jhansi","Kakching","Kalyani","Kanpur","Karimnagar","Kannur","Khurda","Khammam","Kochi","Kohima","Kolhapur","Kolkata","Kota","KOTHAGUDEM","Kottayam","Kozhikode","Kurnool","Lucknow","Ludhiana","Mangaluru","Mapusa","Mahabubnagar","Mohali","Moradabad","Mumbai","Muzaffarpur","Mysuru","Nagpur","Naharlagun","Nalgonda","Nanded","Narsampet","Nashik","New Delhi","Nizamabad","Noida","Ongole","Panaji","Parbhani","Patiala","Patna","Prayagraj","Pune","Raigad","Raipur","Rajkot","Ranchi","Rourkela","Roorkee","Samba","Sambalpur","Satna","Secundarabad","Shillong","Shivamogga","Siddipet","Sikar","Siliguri","Solan","SOLAPUR","Srikakulam","Suryapet","Surat","Tirupathi","Thrissur","Udaipur","Udupi","Ujjain","Varanasi","Vijayawada","Visakhapatnam","Warangal","vijayawada","Ri-Bhoi","Sathupally","Bardoli"
+  ].filter((v, i, a) => a.indexOf(v) === i).sort();
 
   const validateForm = () => {
     if (!formData.mobileNumber || !formData.name || !formData.pin || !formData.confirmPin) {
@@ -37,7 +39,26 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({
       return false;
     }
 
-    if (!/^[6-9]\d{9}$/.test(formData.mobileNumber)) {
+    // Handle both formats: with country code (91XXXXXXXXXX) or without (XXXXXXXXXX)
+    const cleanNumber = formData.mobileNumber.replace(/\D/g, ''); // Remove all non-digits
+    if (cleanNumber.length === 12 && cleanNumber.startsWith('91')) {
+      // If it's 12 digits and starts with 91, validate the remaining 10 digits
+      const numberWithoutCode = cleanNumber.substring(2);
+      if (!/^[6-9]\d{9}$/.test(numberWithoutCode)) {
+        toast.error('Please enter a valid 10-digit mobile number');
+        return false;
+      }
+      // Update the form data with the clean number without country code
+      setFormData(prev => ({ ...prev, mobileNumber: numberWithoutCode }));
+    } else if (cleanNumber.length === 10) {
+      // If it's exactly 10 digits, validate directly
+      if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
+        toast.error('Please enter a valid 10-digit mobile number');
+        return false;
+      }
+      // Update the form data with the clean number
+      setFormData(prev => ({ ...prev, mobileNumber: cleanNumber }));
+    } else {
       toast.error('Please enter a valid 10-digit mobile number');
       return false;
     }
@@ -116,10 +137,10 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({
                 type="tel"
                 value={formData.mobileNumber}
                 onChange={(e) => setFormData(prev => ({ ...prev, mobileNumber: e.target.value }))}
-                placeholder="Enter 10-digit mobile number"
+                placeholder="Enter mobile number (10 digits or with +91)"
                 className="pl-10"
                 required
-                maxLength={10}
+                maxLength={15}
               />
             </div>
           </div>

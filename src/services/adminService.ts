@@ -141,6 +141,16 @@ export class AdminService {
           pin_hash: 'default_pin_hash',
           pin: '0123',
         },
+        {
+          name: 'Test User with Country Code',
+          role: 'invigilator',
+          city: 'Mumbai',
+          centre_code: 'TEST001',
+          mobile_number: '9163164789',
+          is_active: true,
+          pin_hash: 'default_pin_hash',
+          pin: '1234',
+        },
       ];
 
       // Insert sample users into the database
