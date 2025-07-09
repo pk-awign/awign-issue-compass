@@ -326,28 +326,105 @@ export class AdminService {
     }
   }
 
-  static async getAllTickets(includeDeleted: boolean = false): Promise<Issue[]> {
+  static async getAllTickets(includeDeleted: boolean = false, page: number = 1, limit: number = 50): Promise<{ tickets: Issue[]; total: number; hasMore: boolean }> {
     try {
-      // Use the existing TicketService methods to get tickets with proper comment attachments
+      // Get total count for analytics
+      const { count: totalCount, error: countError } = await supabase
+        .from('tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('deleted', includeDeleted);
+      if (countError) throw countError;
+
+      // Get paginated ticket numbers
       const { data: tickets, error } = await supabase
         .from('tickets')
         .select('ticket_number')
-        .order('created_at', { ascending: false });
-      
+        .eq('deleted', includeDeleted)
+        .order('created_at', { ascending: false })
+        .range((page - 1) * limit, page * limit - 1);
       if (error) throw error;
 
       // Fetch each ticket individually using TicketService to get full data with comments
       const ticketPromises = (tickets || []).map(async (ticket) => {
         return await TicketService.getTicketByNumber(ticket.ticket_number);
       });
-
       const resolvedTickets = await Promise.all(ticketPromises);
       const validTickets = resolvedTickets.filter(ticket => ticket !== null) as Issue[];
 
-      return validTickets;
+      const hasMore = (page * limit) < (totalCount || 0);
+      return {
+        tickets: validTickets,
+        total: totalCount || 0,
+        hasMore
+      };
     } catch (error) {
       console.error('Error in getAllTickets:', error);
-      return [];
+      return { tickets: [], total: 0, hasMore: false };
+    }
+  }
+
+  static async getFilteredTickets(
+    includeDeleted: boolean = false,
+    page: number = 1,
+    limit: number = 50,
+    filters: {
+      searchQuery?: string;
+      statusFilter?: string;
+      severityFilter?: string;
+      categoryFilter?: string;
+      cityFilter?: string;
+    }
+  ): Promise<{ tickets: Issue[]; total: number; hasMore: boolean }> {
+    try {
+      // Build the base query
+      let query = supabase
+        .from('tickets')
+        .select('ticket_number')
+        .eq('deleted', includeDeleted);
+
+      // Apply filters
+      if (filters.searchQuery) {
+        query = query.or(`ticket_number.ilike.%${filters.searchQuery}%,issue_description.ilike.%${filters.searchQuery}%,city.ilike.%${filters.searchQuery}%,centre_code.ilike.%${filters.searchQuery}%`);
+      }
+      if (filters.statusFilter && filters.statusFilter !== 'all') {
+        query = query.eq('status', filters.statusFilter);
+      }
+      if (filters.severityFilter && filters.severityFilter !== 'all') {
+        query = query.eq('severity', filters.severityFilter);
+      }
+      if (filters.categoryFilter && filters.categoryFilter !== 'all') {
+        query = query.eq('issue_category', filters.categoryFilter);
+      }
+      if (filters.cityFilter && filters.cityFilter !== 'all') {
+        query = query.eq('city', filters.cityFilter);
+      }
+
+      // Get total count for analytics
+      const { count: totalCount, error: countError } = await query;
+      if (countError) throw countError;
+
+      // Get paginated ticket numbers
+      const { data: tickets, error } = await query
+        .order('created_at', { ascending: false })
+        .range((page - 1) * limit, page * limit - 1);
+      if (error) throw error;
+
+      // Fetch each ticket individually using TicketService to get full data with comments
+      const ticketPromises = (tickets || []).map(async (ticket) => {
+        return await TicketService.getTicketByNumber(ticket.ticket_number);
+      });
+      const resolvedTickets = await Promise.all(ticketPromises);
+      const validTickets = resolvedTickets.filter(ticket => ticket !== null) as Issue[];
+
+      const hasMore = (page * limit) < (totalCount || 0);
+      return {
+        tickets: validTickets,
+        total: totalCount || 0,
+        hasMore
+      };
+    } catch (error) {
+      console.error('Error in getFilteredTickets:', error);
+      return { tickets: [], total: 0, hasMore: false };
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from '@/components/navigation/Header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +53,12 @@ export const AdminPage: React.FC = () => {
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
 
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const limit = 50;
+  const [hasMore, setHasMore] = useState(false);
+  const [totalTickets, setTotalTickets] = useState(0);
+
   // Update active tab when URL changes
   useEffect(() => {
     const newTabParam = searchParams.get('tab');
@@ -92,21 +98,69 @@ export const AdminPage: React.FC = () => {
     await loadTickets();
   };
 
-  const loadTickets = async () => {
+  // Update loadTickets to support pagination and filtering
+  const loadTickets = useCallback(async (reset = false) => {
     setIsLoading(true);
     try {
-      console.log('🔄 Loading tickets...');
-      const ticketsData = await AdminService.getAllTickets(showDeleted);
-      console.log('Tickets loaded:', ticketsData); // Debug log
-      setTickets(ticketsData);
-      setFilteredTickets(ticketsData);
+      // Check if any filters are applied
+      const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all';
+      
+      let result;
+      if (hasFilters) {
+        // Use filtered method when filters are applied
+        result = await AdminService.getFilteredTickets(showDeleted, reset ? 1 : page, limit, {
+          searchQuery,
+          statusFilter,
+          severityFilter,
+          categoryFilter,
+          cityFilter
+        });
+      } else {
+        // Use regular method when no filters
+        result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit);
+      }
+      
+      const { tickets: newTickets, total, hasMore: more } = result;
+      setTotalTickets(total);
+      setHasMore(more);
+      if (reset) {
+        setTickets(newTickets);
+        setFilteredTickets(newTickets);
+        setPage(1);
+      } else {
+        setTickets(prev => [...prev, ...newTickets]);
+        setFilteredTickets(prev => [...prev, ...newTickets]);
+      }
     } catch (error) {
       console.error('❌ Error loading tickets:', error);
       toast.error('Failed to load tickets');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter]);
+
+  // On initial load and when filters/search change, reset pagination and fetch fresh data
+  useEffect(() => {
+    // Reset pagination and fetch fresh data when filters change
+    setPage(1);
+    setTickets([]);
+    setFilteredTickets([]);
+    loadTickets(true);
+    // eslint-disable-next-line
+  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter]);
+
+  // Fix handleLoadMore to be a no-arg function
+  const handleLoadMore = useCallback(() => {
+    setPage(prev => prev + 1);
+  }, []);
+
+  // When page changes (and not reset), load next page
+  useEffect(() => {
+    if (page > 1) {
+      loadTickets();
+    }
+    // eslint-disable-next-line
+  }, [page]);
 
   const loadAnalytics = async () => {
     try {
@@ -116,43 +170,6 @@ export const AdminPage: React.FC = () => {
       console.error('Error loading analytics:', err);
     }
   };
-
-  // Filter tickets based on search and filters
-  useEffect(() => {
-    let filtered = tickets;
-
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(ticket =>
-        ticket.ticketNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ticket.issueDescription.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ticket.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ticket.centreCode.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.status === statusFilter);
-    }
-
-    // Severity filter
-    if (severityFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.severity === severityFilter);
-    }
-
-    // Category filter
-    if (categoryFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.issueCategory === categoryFilter);
-    }
-
-    // City filter
-    if (cityFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.city === cityFilter);
-    }
-
-    setFilteredTickets(filtered);
-  }, [tickets, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter]);
 
   const handleLogout = () => {
     logout();
@@ -416,7 +433,7 @@ export const AdminPage: React.FC = () => {
                       Manage Users
                     </Button>
                     <Button 
-                      onClick={loadTickets}
+                      onClick={() => loadTickets(true)}
                       className="w-full justify-start" 
                       variant="outline"
                     >
@@ -802,6 +819,13 @@ export const AdminPage: React.FC = () => {
                   </CardContent>
                 </Card>
               </div>
+              {hasMore && (
+                <div className="flex justify-center my-4">
+                  <Button onClick={handleLoadMore} disabled={isLoading}>
+                    {isLoading ? 'Loading...' : 'Load More'}
+                  </Button>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="analytics">
