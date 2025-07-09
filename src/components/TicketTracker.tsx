@@ -140,6 +140,8 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
       improvement_request: 'Improvement Request',
       facility_issue: 'Facility Issue',
       penalty_issue: 'Penalty Issue',
+      malpractice: 'Malpractice',
+      app_issue: 'App Issue',
       other: 'Other'
     };
     return labels[category];

@@ -40,6 +40,7 @@ export const AdminPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -140,13 +141,18 @@ export const AdminPage: React.FC = () => {
       filtered = filtered.filter(ticket => ticket.severity === severityFilter);
     }
 
+    // Category filter
+    if (categoryFilter !== 'all') {
+      filtered = filtered.filter(ticket => ticket.issueCategory === categoryFilter);
+    }
+
     // City filter
     if (cityFilter !== 'all') {
       filtered = filtered.filter(ticket => ticket.city === cityFilter);
     }
 
     setFilteredTickets(filtered);
-  }, [tickets, searchQuery, statusFilter, severityFilter, cityFilter]);
+  }, [tickets, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter]);
 
   const handleLogout = () => {
     logout();
@@ -507,7 +513,7 @@ export const AdminPage: React.FC = () => {
                     </div>
                     
                     {/* Filters - Grid Layout */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                       <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger>
                           <SelectValue placeholder="Status" />
@@ -530,6 +536,24 @@ export const AdminPage: React.FC = () => {
                           <SelectItem value="sev1">SEV1</SelectItem>
                           <SelectItem value="sev2">SEV2</SelectItem>
                           <SelectItem value="sev3">SEV3</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Categories</SelectItem>
+                          <SelectItem value="payment_delay">Payment Delay</SelectItem>
+                          <SelectItem value="partial_payment">Partial Payment</SelectItem>
+                          <SelectItem value="behavioral_complaint">Behavioral Complaint</SelectItem>
+                          <SelectItem value="improvement_request">Improvement Request</SelectItem>
+                          <SelectItem value="facility_issue">Facility Issue</SelectItem>
+                          <SelectItem value="penalty_issue">Penalty Issue</SelectItem>
+                          <SelectItem value="malpractice">Malpractice</SelectItem>
+                          <SelectItem value="app_issue">App Issue</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>
 

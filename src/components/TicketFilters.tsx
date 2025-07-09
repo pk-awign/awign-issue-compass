@@ -122,6 +122,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
                 <SelectItem value="facility_issue">Facility Issue</SelectItem>
                 <SelectItem value="penalty_issue">Penalty Issue</SelectItem>
                 <SelectItem value="malpractice">Malpractice</SelectItem>
+                <SelectItem value="app_issue">App Issue</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>

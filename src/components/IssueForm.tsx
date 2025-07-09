@@ -46,6 +46,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
     { value: 'facility_issue', label: 'Facility Issue' },
     { value: 'penalty_issue', label: 'Penalty Issue' },
     { value: 'malpractice', label: 'Malpractice' },
+    { value: 'app_issue', label: 'App Issue' },
     { value: 'other', label: 'Other Issue' }
   ];
 

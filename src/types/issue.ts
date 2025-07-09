@@ -7,7 +7,7 @@ export interface Issue {
   city: string;
   resourceId: string;
   awignAppTicketId?: string;
-  issueCategory: 'payment_delay' | 'partial_payment' | 'behavioral_complaint' | 'improvement_request' | 'facility_issue' | 'penalty_issue' | 'malpractice' | 'other';
+  issueCategory: 'payment_delay' | 'partial_payment' | 'behavioral_complaint' | 'improvement_request' | 'facility_issue' | 'penalty_issue' | 'malpractice' | 'app_issue' | 'other';
   issueDescription: string;
   issueEvidence?: File[];
   issueDate: {
@@ -17,7 +17,7 @@ export interface Issue {
     endDate?: Date;
   };
   severity: 'sev1' | 'sev2' | 'sev3';
-  status: 'open' | 'in_progress' | 'send_for_approval' | 'approved' | 'resolved';
+  status: 'open' | 'in_progress' | 'send_for_approval' | 'approved' | 'resolved' | 'closed';
   isAnonymous: boolean;
   submittedBy?: string;
   submittedByUserId?: string;

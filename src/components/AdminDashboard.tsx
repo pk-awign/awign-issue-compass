@@ -54,6 +54,7 @@ const AdminDashboard: React.FC = () => {
   const [showUserManagementModal, setShowUserManagementModal] = useState(false);
   const [showDashboardRouter, setShowDashboardRouter] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterCity, setFilterCity] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -184,13 +185,14 @@ const AdminDashboard: React.FC = () => {
 
   const filteredIssues = issues.filter(issue => {
     const matchesStatus = filterStatus === 'all' || issue.status === filterStatus;
+    const matchesCategory = filterCategory === 'all' || issue.issueCategory === filterCategory;
     const matchesCity = filterCity === 'all' || issue.city === filterCity;
     const matchesSearch = searchTerm === '' || 
       issue.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       issue.issueDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
       issue.submittedBy?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    return matchesStatus && matchesCity && matchesSearch;
+    return matchesStatus && matchesCategory && matchesCity && matchesSearch;
   });
 
   const stats = {
@@ -486,6 +488,23 @@ const AdminDashboard: React.FC = () => {
                     <SelectItem value="in_progress">In Progress</SelectItem>
                     <SelectItem value="resolved">Resolved</SelectItem>
                     <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="payment_delay">Payment Delay</SelectItem>
+                    <SelectItem value="partial_payment">Partial Payment</SelectItem>
+                    <SelectItem value="behavioral_complaint">Behavioral Complaint</SelectItem>
+                    <SelectItem value="improvement_request">Improvement Request</SelectItem>
+                    <SelectItem value="facility_issue">Facility Issue</SelectItem>
+                    <SelectItem value="penalty_issue">Penalty Issue</SelectItem>
+                    <SelectItem value="malpractice">Malpractice</SelectItem>
+                    <SelectItem value="app_issue">App Issue</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={filterCity} onValueChange={setFilterCity}>

@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Issue } from '@/types/issue';
 
 const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad'];
-const issueCategories: Issue['issueCategory'][] = ['payment_delay', 'partial_payment', 'behavioral_complaint', 'improvement_request', 'facility_issue', 'penalty_issue', 'other'];
+const issueCategories: Issue['issueCategory'][] = ['payment_delay', 'partial_payment', 'behavioral_complaint', 'improvement_request', 'facility_issue', 'penalty_issue', 'malpractice', 'app_issue', 'other'];
 const severities: Issue['severity'][] = ['sev1', 'sev2', 'sev3'];
 const statuses: Issue['status'][] = ['open', 'in_progress', 'resolved', 'closed'];
 
