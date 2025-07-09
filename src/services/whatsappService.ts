@@ -579,7 +579,7 @@ export class WhatsAppService {
       );
 
       if (cityContacts.length === 0) {
-        toast.error(`No contacts found for city: ${city}`);
+        console.log(`No contacts found for city: ${city} - skipping WhatsApp notifications`);
         return { total: 0, sent: 0, failed: 0, errors: [`No contacts found for ${city}`] };
       }
 
