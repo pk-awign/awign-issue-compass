@@ -45,6 +45,8 @@ export const AdminPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [analytics, setAnalytics] = useState<any>(null);
+  const [resolverFilter, setResolverFilter] = useState<string>('all');
+  const [resolvers, setResolvers] = useState<{ id: string; name: string }[]>([]);
   
   // Modal states
   const [showUserManagement, setShowUserManagement] = useState(false);
@@ -103,7 +105,7 @@ export const AdminPage: React.FC = () => {
     setIsLoading(true);
     try {
       // Check if any filters are applied
-      const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all';
+      const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter !== 'all';
       
       let result;
       if (hasFilters) {
@@ -113,7 +115,8 @@ export const AdminPage: React.FC = () => {
           statusFilter,
           severityFilter,
           categoryFilter,
-          cityFilter
+          cityFilter,
+          resolverFilter
         });
       } else {
         // Use regular method when no filters
@@ -137,7 +140,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter]);
+  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   useEffect(() => {
@@ -147,7 +150,16 @@ export const AdminPage: React.FC = () => {
     setFilteredTickets([]);
     loadTickets(true);
     // eslint-disable-next-line
-  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter]);
+  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter]);
+
+  // Fetch resolvers for filter dropdown
+  useEffect(() => {
+    const fetchResolvers = async () => {
+      const users = await AdminService.getUsersByRole('resolver');
+      setResolvers(users.map(u => ({ id: u.id, name: u.name })));
+    };
+    fetchResolvers();
+  }, []);
 
   // Fix handleLoadMore to be a no-arg function
   const handleLoadMore = useCallback(() => {
@@ -530,7 +542,7 @@ export const AdminPage: React.FC = () => {
                     </div>
                     
                     {/* Filters - Grid Layout */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                       <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger>
                           <SelectValue placeholder="Status" />
@@ -582,6 +594,19 @@ export const AdminPage: React.FC = () => {
                           <SelectItem value="all">All Cities</SelectItem>
                           {uniqueCities.map(city => (
                             <SelectItem key={city} value={city}>{city}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* Resolver Filter */}
+                      <Select value={resolverFilter} onValueChange={setResolverFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Resolver" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Resolvers</SelectItem>
+                          {resolvers.map(resolver => (
+                            <SelectItem key={resolver.id} value={resolver.id}>{resolver.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

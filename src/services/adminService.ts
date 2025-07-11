@@ -22,6 +22,16 @@ export interface TicketAnalytics {
   approverBreakdown: Array<{ approver: string; count: number }>;
 }
 
+// Define a named interface for ticket filters to avoid deep type instantiation
+export interface TicketFilters {
+  searchQuery?: string;
+  statusFilter?: string;
+  severityFilter?: string;
+  categoryFilter?: string;
+  cityFilter?: string;
+  resolverFilter?: string;
+}
+
 export class AdminService {
   static async initializeSampleUsers(): Promise<boolean> {
     try {
@@ -367,19 +377,13 @@ export class AdminService {
     includeDeleted: boolean = false,
     page: number = 1,
     limit: number = 50,
-    filters: {
-      searchQuery?: string;
-      statusFilter?: string;
-      severityFilter?: string;
-      categoryFilter?: string;
-      cityFilter?: string;
-    }
+    filters: TicketFilters
   ): Promise<{ tickets: Issue[]; total: number; hasMore: boolean }> {
     try {
       // Build the base query
       let query = supabase
         .from('tickets')
-        .select('ticket_number')
+        .select('ticket_number, assigned_resolver') // <-- fetch assigned_resolver for filtering
         .eq('deleted', includeDeleted);
 
       // Apply filters
@@ -397,6 +401,9 @@ export class AdminService {
       }
       if (filters.cityFilter && filters.cityFilter !== 'all') {
         query = query.eq('city', filters.cityFilter);
+      }
+      if (filters.resolverFilter && filters.resolverFilter !== 'all') {
+        query = query.eq('assigned_resolver', filters.resolverFilter);
       }
 
       // Get total count for analytics
@@ -887,7 +894,7 @@ export class AdminService {
       console.log('Soft deleting ticket:', ticketId);
       const { error } = await supabase
         .from('tickets')
-        .update({ deleted: true })
+        .update({ deleted: true } as any) // Cast to any to avoid type error
         .eq('id', ticketId);
       if (error) {
         console.error('Error soft deleting ticket:', error);
