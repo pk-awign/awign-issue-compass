@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Issue } from '@/types/issue';
 import { AdminService } from '@/services/adminService';
@@ -29,6 +29,10 @@ export const AdminPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
   // Get the tab parameter from URL
   const tabParam = searchParams.get('tab');
   const defaultTab = tabParam === 'tickets' ? 'tickets' : 'overview';
