@@ -21,6 +21,7 @@ import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignmen
 import { WhatsAppTestComponent } from '@/components/admin/WhatsAppTestComponent';
 import { format } from 'date-fns';
 import { Switch } from '@/components/ui/switch';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -51,6 +52,8 @@ export const AdminPage: React.FC = () => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [resolverFilter, setResolverFilter] = useState<string>('all');
   const [resolvers, setResolvers] = useState<{ id: string; name: string }[]>([]);
+  const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
+  const [resourceIds, setResourceIds] = useState<{ value: string; label: string }[]>([]);
   
   // Modal states
   const [showUserManagement, setShowUserManagement] = useState(false);
@@ -109,7 +112,7 @@ export const AdminPage: React.FC = () => {
     setIsLoading(true);
     try {
       // Check if any filters are applied
-      const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter !== 'all';
+      const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter !== 'all' || resourceIdFilter.length > 0;
       
       let result;
       if (hasFilters) {
@@ -120,7 +123,8 @@ export const AdminPage: React.FC = () => {
           severityFilter,
           categoryFilter,
           cityFilter,
-          resolverFilter
+          resolverFilter,
+          resourceIdFilter
         });
       } else {
         // Use regular method when no filters
@@ -144,7 +148,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter]);
+  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   useEffect(() => {
@@ -154,7 +158,7 @@ export const AdminPage: React.FC = () => {
     setFilteredTickets([]);
     loadTickets(true);
     // eslint-disable-next-line
-  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter]);
+  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter]);
 
   // Fetch resolvers for filter dropdown
   useEffect(() => {
@@ -248,6 +252,15 @@ export const AdminPage: React.FC = () => {
 
   // Get unique cities for filter
   const uniqueCities = Array.from(new Set(tickets.map(ticket => ticket.city)));
+
+  // Get unique resource IDs for filter
+  useEffect(() => {
+    const uniqueResourceIds = Array.from(new Set(tickets.map(ticket => ticket.resourceId)))
+      .filter(id => id && id.trim() !== '')
+      .sort();
+    
+    setResourceIds(uniqueResourceIds.map(id => ({ value: id, label: id })));
+  }, [tickets]);
 
   // Calculate System Health metrics
   const calculateSLACompliance = () => {
@@ -546,7 +559,7 @@ export const AdminPage: React.FC = () => {
                     </div>
                     
                     {/* Filters - Grid Layout */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                       <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger>
                           <SelectValue placeholder="Status" />
@@ -614,6 +627,28 @@ export const AdminPage: React.FC = () => {
                           ))}
                         </SelectContent>
                       </Select>
+
+                                    {/* Resource ID Filter */}
+              <div className="lg:col-span-2">
+                <label className="text-sm font-medium mb-1 block">
+                  Resource ID {resourceIdFilter.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      {resourceIdFilter.length} selected
+                    </Badge>
+                  )}
+                </label>
+                <MultiSelect
+                  selected={resourceIdFilter}
+                  onChange={setResourceIdFilter}
+                  placeholder="Enter Resource IDs (comma-separated)..."
+                  className="w-full"
+                />
+                {resourceIdFilter.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enter comma-separated Resource IDs to filter tickets
+                  </p>
+                )}
+              </div>
                     </div>
                   </div>
                 </CardContent>

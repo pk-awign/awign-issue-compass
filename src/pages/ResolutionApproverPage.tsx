@@ -29,6 +29,7 @@ import {
   History,
   UserCheck
 } from 'lucide-react';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -47,6 +48,7 @@ export const ResolutionApproverPage: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
+  const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
 
   useEffect(() => {
     refreshIssues();
@@ -114,8 +116,13 @@ export const ResolutionApproverPage: React.FC = () => {
       filtered = filtered.filter(ticket => ticket.city === cityFilter);
     }
 
+    // Resource ID filter
+    if (resourceIdFilter.length > 0) {
+      filtered = filtered.filter(ticket => resourceIdFilter.includes(ticket.resourceId));
+    }
+
     return filtered;
-  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, user.id]);
+  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, user.id, resourceIdFilter]);
 
   // Categorize tickets by approval status
   const ticketsByStatus = useMemo(() => {
@@ -128,7 +135,7 @@ export const ResolutionApproverPage: React.FC = () => {
   }, [filteredTickets]);
 
   const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter]
-    .filter(filter => filter && filter !== 'all').length;
+    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length;
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -136,7 +143,17 @@ export const ResolutionApproverPage: React.FC = () => {
     setSeverityFilter('all');
     setCategoryFilter('all');
     setCityFilter('all');
+    setResourceIdFilter([]);
   };
+
+  // Get unique cities for filter
+  const uniqueCities = Array.from(new Set(approverTickets.map(ticket => ticket.city)));
+
+  // Get unique resource IDs for filter
+  const uniqueResourceIds = Array.from(new Set(approverTickets.map(ticket => ticket.resourceId)))
+    .filter(id => id && typeof id === 'string' && id.trim() !== '')
+    .sort()
+    .map(id => ({ value: id, label: id }));
 
   const getSeverityColor = (severity: Issue['severity']) => {
     switch (severity) {
@@ -482,6 +499,8 @@ export const ResolutionApproverPage: React.FC = () => {
             setCategoryFilter={setCategoryFilter}
             cityFilter={cityFilter}
             setCityFilter={setCityFilter}
+            resourceIdFilter={resourceIdFilter}
+            setResourceIdFilter={setResourceIdFilter}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
           />

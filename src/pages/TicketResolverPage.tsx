@@ -24,6 +24,7 @@ import {
   Calendar,
   User
 } from 'lucide-react';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -42,6 +43,7 @@ export const TicketResolverPage: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
+  const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
 
   useEffect(() => {
     refreshIssues();
@@ -108,8 +110,13 @@ export const TicketResolverPage: React.FC = () => {
       filtered = filtered.filter(ticket => ticket.city === cityFilter);
     }
 
+    // Resource ID filter
+    if (resourceIdFilter.length > 0) {
+      filtered = filtered.filter(ticket => resourceIdFilter.includes(ticket.resourceId));
+    }
+
     return filtered;
-  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter]);
+  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter]);
 
   // Categorize tickets by status
   const ticketsByStatus = useMemo(() => {
@@ -124,7 +131,7 @@ export const TicketResolverPage: React.FC = () => {
   }, [filteredTickets]);
 
   const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter]
-    .filter(filter => filter && filter !== 'all').length;
+    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length;
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -132,6 +139,7 @@ export const TicketResolverPage: React.FC = () => {
     setSeverityFilter('all');
     setCategoryFilter('all');
     setCityFilter('all');
+    setResourceIdFilter([]);
   };
 
   const getSeverityColor = (severity: Issue['severity']) => {
@@ -244,6 +252,15 @@ export const TicketResolverPage: React.FC = () => {
     );
   }
 
+  // Get unique cities for filter
+  const uniqueCities = Array.from(new Set(assignedTickets.map(ticket => ticket.city)));
+
+  // Get unique resource IDs for filter
+  const uniqueResourceIds = Array.from(new Set(assignedTickets.map(ticket => ticket.resourceId)))
+    .filter(id => id && id.trim() !== '')
+    .sort()
+    .map(id => ({ value: id, label: id }));
+
   return (
     <div className="min-h-screen bg-background">
       <Header onLogout={handleLogout} />
@@ -278,6 +295,8 @@ export const TicketResolverPage: React.FC = () => {
             setCategoryFilter={setCategoryFilter}
             cityFilter={cityFilter}
             setCityFilter={setCityFilter}
+            resourceIdFilter={resourceIdFilter}
+            setResourceIdFilter={setResourceIdFilter}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
           />

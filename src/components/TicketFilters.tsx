@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Search, Filter, X } from 'lucide-react';
 import { Issue } from '@/types/issue';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 interface TicketFiltersProps {
   searchTerm: string;
@@ -18,6 +19,8 @@ interface TicketFiltersProps {
   setCategoryFilter: (category: string) => void;
   cityFilter: string;
   setCityFilter: (city: string) => void;
+  resourceIdFilter?: string[];
+  setResourceIdFilter?: (resourceIds: string[]) => void;
   onClearFilters: () => void;
   activeFiltersCount: number;
 }
@@ -33,6 +36,8 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   setCategoryFilter,
   cityFilter,
   setCityFilter,
+  resourceIdFilter = [],
+  setResourceIdFilter,
   onClearFilters,
   activeFiltersCount
 }) => {
@@ -146,6 +151,30 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
             </Select>
           </div>
         </div>
+
+        {/* Resource ID Filter */}
+        {setResourceIdFilter && (
+          <div>
+            <label className="text-sm font-medium mb-1 block">
+              Resource ID {resourceIdFilter.length > 0 && (
+                <Badge variant="secondary" className="ml-2 text-xs">
+                  {resourceIdFilter.length} selected
+                </Badge>
+              )}
+            </label>
+            <MultiSelect
+              selected={resourceIdFilter}
+              onChange={setResourceIdFilter}
+              placeholder="Enter Resource IDs (comma-separated)..."
+              className="w-full"
+            />
+            {resourceIdFilter.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Enter comma-separated Resource IDs to filter tickets
+              </p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

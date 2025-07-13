@@ -30,6 +30,7 @@ export interface TicketFilters {
   categoryFilter?: string;
   cityFilter?: string;
   resolverFilter?: string;
+  resourceIdFilter?: string[]; // Array of resource IDs for multiselect
 }
 
 export class AdminService {
@@ -383,7 +384,7 @@ export class AdminService {
       // Build the base query
       let query = supabase
         .from('tickets')
-        .select('ticket_number, assigned_resolver') // <-- fetch assigned_resolver for filtering
+        .select('ticket_number, assigned_resolver, resource_id') // <-- fetch resource_id for filtering
         .eq('deleted', includeDeleted);
 
       // Apply filters
@@ -404,6 +405,9 @@ export class AdminService {
       }
       if (filters.resolverFilter && filters.resolverFilter !== 'all') {
         query = query.eq('assigned_resolver', filters.resolverFilter);
+      }
+      if (filters.resourceIdFilter && filters.resourceIdFilter.length > 0) {
+        query = query.in('resource_id', filters.resourceIdFilter);
       }
 
       // Get total count for analytics
