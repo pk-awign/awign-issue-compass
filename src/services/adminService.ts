@@ -374,6 +374,39 @@ export class AdminService {
     }
   }
 
+  static async getAllTicketsUnpaginated(includeDeleted: boolean = false) {
+    try {
+      // First, get the total count
+      const { count, error: countError } = await supabase
+        .from('tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('deleted', includeDeleted);
+      if (countError) throw countError;
+      const total = count || 0;
+      const batchSize = 1000;
+      let allTicketNumbers: any[] = [];
+      for (let offset = 0; offset < total; offset += batchSize) {
+        const { data, error } = await supabase
+          .from('tickets')
+          .select('ticket_number')
+          .eq('deleted', includeDeleted)
+          .order('created_at', { ascending: false })
+          .range(offset, Math.min(offset + batchSize - 1, total - 1));
+        if (error) throw error;
+        allTicketNumbers = allTicketNumbers.concat(data || []);
+      }
+      // Fetch each ticket individually using TicketService to get full data with comments
+      const ticketPromises = (allTicketNumbers || []).map(async (ticket) => {
+        return await TicketService.getTicketByNumber(ticket.ticket_number);
+      });
+      const resolvedTickets = await Promise.all(ticketPromises);
+      return resolvedTickets.filter(ticket => ticket !== null);
+    } catch (error) {
+      console.error('Error in getAllTicketsUnpaginated:', error);
+      return [];
+    }
+  }
+
   static async getFilteredTickets(
     includeDeleted: boolean = false,
     page: number = 1,

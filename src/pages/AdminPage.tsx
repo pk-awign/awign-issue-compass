@@ -22,6 +22,7 @@ import { WhatsAppTestComponent } from '@/components/admin/WhatsAppTestComponent'
 import { format } from 'date-fns';
 import { Switch } from '@/components/ui/switch';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -61,6 +62,7 @@ export const AdminPage: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [downloadingDetailed, setDownloadingDetailed] = useState(false);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -354,11 +356,45 @@ export const AdminPage: React.FC = () => {
   function downloadTicketsAsCSV(ticketsToDownload: Issue[]) {
     if (!ticketsToDownload.length) return;
     const headers = [
-      'Ticket Number', 'Centre Code', 'City', 'Resource ID', 'Issue Category', 'Description', 'Severity', 'Status', 'Submitted By', 'Submitted At', 'Deleted'
+      'Ticket Number', 'Centre Code', 'City', 'Resource ID', 'Issue Category', 'Description', 'Severity', 'Status', 'Submitted By', 'Submitted At', 'Issue Date', 'Deleted'
     ];
     const rows = ticketsToDownload.map(t => [
-      t.ticketNumber, t.centreCode, t.city, t.resourceId, t.issueCategory, t.issueDescription, t.severity, t.status, t.submittedBy, t.submittedAt ? new Date(t.submittedAt).toISOString() : '', t.deleted ? 'Yes' : 'No'
+      t.ticketNumber,
+      t.centreCode,
+      t.city,
+      t.resourceId,
+      t.issueCategory,
+      t.issueDescription,
+      t.severity,
+      t.status,
+      t.submittedBy || '',
+      t.submittedAt ? new Date(t.submittedAt).toISOString() : '',
+      formatIssueDateForCSV(t.issueDate),
+      t.deleted ? 'Yes' : 'No'
     ]);
+    function formatIssueDateForCSV(issueDate: Issue['issueDate']): string {
+      if (!issueDate) return '';
+      if (issueDate.type === 'single') {
+        return issueDate.dates && issueDate.dates[0] ? new Date(issueDate.dates[0] as string | number | Date).toISOString() : '';
+      }
+      if (issueDate.type === 'multiple') {
+        return (issueDate.dates as any[])
+          .map(d => {
+            if (d && typeof d === 'object' && 'date' in d) {
+              return new Date((d as { date: string | number | Date }).date).toISOString();
+            } else {
+              return new Date(d as string | number | Date).toISOString();
+            }
+          })
+          .join('; ');
+      }
+      if (issueDate.type === 'range') {
+        const start = issueDate.startDate ? new Date(issueDate.startDate as string | number | Date).toISOString() : '';
+        const end = issueDate.endDate ? new Date(issueDate.endDate as string | number | Date).toISOString() : '';
+        return start && end ? `${start} to ${end}` : start || end;
+      }
+      return '';
+    }
     const csv = [headers, ...rows].map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -369,6 +405,117 @@ export const AdminPage: React.FC = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  const [downloadingAll, setDownloadingAll] = useState(false);
+
+  async function handleDownloadAllTickets() {
+    setDownloadingAll(true);
+    try {
+      const allTickets = await AdminService.getAllTicketsUnpaginated(showDeleted);
+      downloadTicketsAsCSV(allTickets);
+    } catch (e) {
+      alert('Failed to download all tickets.');
+    } finally {
+      setDownloadingAll(false);
+    }
+  }
+
+  const handleDownloadDetailedTickets = async () => {
+    setDownloadingDetailed(true);
+    try {
+      // Fetch all tickets in batches (already implemented in getAllTicketsUnpaginated)
+      const allTickets = await AdminService.getAllTicketsUnpaginated(showDeleted);
+      const rows: any[] = [];
+      allTickets.forEach(ticket => {
+        if (ticket.issueDate?.type === 'multiple' && Array.isArray(ticket.issueDate.dates)) {
+          for (const d of ticket.issueDate.dates) {
+            let dateObj: Date;
+            let dateDescription = '';
+            if (d && typeof d === 'object' && 'date' in d) {
+              dateObj = new Date(d.date);
+              dateDescription = d.description || '';
+            } else {
+              dateObj = new Date(d as string | number | Date);
+            }
+            // Convert UTC to IST (+5:30)
+            const istDate = new Date(dateObj.getTime() + 5.5 * 60 * 60 * 1000);
+            const istDateStr = istDate.toISOString().slice(0, 10);
+            rows.push({
+              derivedTicketNumber: `${ticket.ticketNumber}_${istDateStr}`,
+              ticketNumber: ticket.ticketNumber,
+              resourceId: ticket.resourceId,
+              city: ticket.city,
+              centreCode: ticket.centreCode,
+              date: istDateStr,
+              dateDescription,
+              ticketDescription: ticket.issueDescription,
+              issueCategory: ticket.issueCategory,
+              submittedAt: ticket.submittedAt ? new Date(ticket.submittedAt).toLocaleString('en-IN') : ''
+            });
+          }
+        } else if (ticket.issueDate?.type === 'single' && Array.isArray(ticket.issueDate.dates)) {
+          const dateObj = ticket.issueDate.dates[0] ? new Date(ticket.issueDate.dates[0] as string | number | Date) : null;
+          const istDate = dateObj ? new Date(dateObj.getTime() + 5.5 * 60 * 60 * 1000) : null;
+          const istDateStr = istDate ? istDate.toISOString().slice(0, 10) : '';
+          rows.push({
+            derivedTicketNumber: `${ticket.ticketNumber}${istDateStr ? '_' + istDateStr : ''}`,
+            ticketNumber: ticket.ticketNumber,
+            resourceId: ticket.resourceId,
+            city: ticket.city,
+            centreCode: ticket.centreCode,
+            date: istDateStr,
+            dateDescription: '',
+            ticketDescription: ticket.issueDescription,
+            issueCategory: ticket.issueCategory,
+            submittedAt: ticket.submittedAt ? new Date(ticket.submittedAt).toLocaleString('en-IN') : ''
+          });
+        } else {
+          rows.push({
+            derivedTicketNumber: ticket.ticketNumber,
+            ticketNumber: ticket.ticketNumber,
+            resourceId: ticket.resourceId,
+            city: ticket.city,
+            centreCode: ticket.centreCode,
+            date: '',
+            dateDescription: '',
+            ticketDescription: ticket.issueDescription,
+            issueCategory: ticket.issueCategory,
+            submittedAt: ticket.submittedAt ? new Date(ticket.submittedAt).toLocaleString('en-IN') : ''
+          });
+        }
+      });
+      // Generate CSV
+      const headers = [
+        'Derived Ticket Number', 'Ticket Number', 'Resource ID', 'City', 'Center Code', 'Date (IST)', 'Date Description', 'Ticket Description', 'Issue Category', 'Submitted At'
+      ];
+      const csvRows = rows.map(row => [
+        row.derivedTicketNumber,
+        row.ticketNumber,
+        row.resourceId,
+        row.city,
+        row.centreCode,
+        row.date,
+        row.dateDescription,
+        row.ticketDescription,
+        row.issueCategory,
+        row.submittedAt
+      ]);
+      const csv = [headers, ...csvRows].map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'detailed_tickets.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Failed to download detailed tickets.');
+    } finally {
+      setDownloadingDetailed(false);
+    }
   }
 
   return (
@@ -666,6 +813,12 @@ export const AdminPage: React.FC = () => {
                 </label>
                 <Button onClick={() => downloadTicketsAsCSV(filteredTickets)} variant="outline">
                   Download Tickets
+                </Button>
+                <Button onClick={handleDownloadAllTickets} variant="outline" disabled={downloadingAll}>
+                  {downloadingAll ? 'Downloading All...' : 'Download All Tickets'}
+                </Button>
+                <Button onClick={handleDownloadDetailedTickets} variant="outline" disabled={downloadingDetailed}>
+                  {downloadingDetailed ? 'Downloading Detailed...' : 'Download Detailed Tickets'}
                 </Button>
               </div>
 
