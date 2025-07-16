@@ -985,4 +985,35 @@ export class AdminService {
       return false;
     }
   }
+
+  static async getAllCentreCodesFromTestCenterDetails(): Promise<string[]> {
+    try {
+      // First, get the total count
+      const { count, error: countError } = await supabase
+        .from('test_center_details')
+        .select('id', { count: 'exact', head: true });
+      if (countError) throw countError;
+      const total = count || 0;
+      const batchSize = 1000;
+      let allCodes: any[] = [];
+      for (let offset = 0; offset < total; offset += batchSize) {
+        const { data, error } = await supabase
+          .from('test_center_details')
+          .select('test_center_code')
+          .range(offset, Math.min(offset + batchSize - 1, total - 1));
+        if (error) throw error;
+        allCodes = allCodes.concat(data || []);
+      }
+      // Extract unique, non-empty centre codes
+      const codes = Array.from(new Set((allCodes || [])
+        .map((row: { test_center_code: any }) => row.test_center_code)
+        .filter(code => typeof code !== 'undefined' && code !== null && String(code).trim() !== '')
+        .map(code => String(code).trim())
+      ));
+      return codes;
+    } catch (error) {
+      console.error('Error fetching centre codes from test_center_details:', error);
+      return [];
+    }
+  }
 }

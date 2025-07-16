@@ -482,7 +482,25 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
+      },
+      test_center_details: {
+        Row: {
+          id: string;
+          test_center_code: string;
+          // Add other columns as needed
+        };
+        Insert: {
+          id?: string;
+          test_center_code: string;
+          // Add other columns as needed
+        };
+        Update: {
+          id?: string;
+          test_center_code?: string;
+          // Add other columns as needed
+        };
+        Relationships: [];
+      },
       ticket_timeline: {
         Row: {
           id: string;

@@ -22,6 +22,8 @@ import { TicketTracker } from './TicketTracker';
 import { generateTicketFile, generateWhatsAppMessage } from '@/utils/ticketDownload';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '@/components/ui/command';
+import { supabase } from '@/integrations/supabase/client';
+import { AdminService } from '@/services/adminService';
 
 interface PublicIssueFormProps {
   onSubmit: (issue: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'>) => Promise<string>;
@@ -52,7 +54,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     awignAppTicketId: '',
     issueCategory: '' as Issue['issueCategory'] | '',
     issueDescription: '',
-    dateType: 'single' as 'single' | 'range' | 'multiple' | 'ongoing',
+    dateType: 'single' as 'single' | 'multiple',
     singleDate: undefined as Date | undefined,
     startDate: undefined as Date | undefined,
     endDate: undefined as Date | undefined,
@@ -70,6 +72,11 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
   const [cityInput, setCityInput] = useState('');
   const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
   const cityInputRef = useRef<HTMLInputElement>(null);
+
+  const [centreCodes, setCentreCodes] = useState<string[]>([]);
+  const [centreCodeInput, setCentreCodeInput] = useState('');
+  const [centreCodeDropdownOpen, setCentreCodeDropdownOpen] = useState(false);
+  const centreCodeInputRef = useRef<HTMLInputElement>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -98,6 +105,16 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
       setFormData(prev => ({ ...prev, dateType: 'single' }));
     }
   }, [user]);
+
+  // Fetch all unique centre codes from test_center_details table
+  useEffect(() => {
+    async function fetchCentreCodes() {
+      const codes = await AdminService.getAllCentreCodesFromTestCenterDetails();
+      console.log('Fetched centre codes:', codes.length, codes);
+      setCentreCodes(codes);
+    }
+    fetchCentreCodes();
+  }, []);
 
   const issueCategories = [
     { value: 'payment_delay', label: 'Payment Delay' },
@@ -208,9 +225,6 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
       if (formData.dateType === 'single' && formData.singleDate) {
         dates = [formData.singleDate];
-      } else if (formData.dateType === 'range') {
-        startDate = formData.startDate;
-        endDate = formData.endDate;
       } else if (formData.dateType === 'multiple') {
         dates = formData.multipleDates;
       }
@@ -406,14 +420,45 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     <div>
                       <Label htmlFor="centreCode" className="text-sm font-medium">Centre Code *</Label>
-                      <Input
-                        id="centreCode"
-                        value={formData.centreCode}
-                        onChange={(e) => setFormData(prev => ({ ...prev, centreCode: e.target.value }))}
-                        placeholder="e.g., TCS-MUM-001"
-                        required
-                        className="mt-2"
-                      />
+                      <div className="w-full mt-2 relative">
+                        <input
+                          ref={centreCodeInputRef}
+                          type="text"
+                          className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Search centre code..."
+                          value={formData.centreCode || centreCodeInput}
+                          onFocus={() => setCentreCodeDropdownOpen(true)}
+                          onChange={e => {
+                            setCentreCodeInput(e.target.value);
+                            setFormData(prev => ({ ...prev, centreCode: '', }));
+                            setCentreCodeDropdownOpen(true);
+                          }}
+                          onBlur={() => setTimeout(() => setCentreCodeDropdownOpen(false), 150)}
+                          autoComplete="off"
+                          required
+                        />
+                        {centreCodeDropdownOpen && centreCodes.length > 0 && (
+                          <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto mt-1">
+                            {centreCodes.filter(code => (centreCodeInput ? code.toLowerCase().includes(centreCodeInput.toLowerCase()) : true)).length === 0 ? (
+                              <div className="p-2 text-sm text-gray-500">No centre code found.</div>
+                            ) : (
+                              centreCodes.filter(code => (centreCodeInput ? code.toLowerCase().includes(centreCodeInput.toLowerCase()) : true)).map(code => (
+                                <div
+                                  key={code}
+                                  className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${formData.centreCode === code ? 'bg-blue-100 text-blue-900' : ''}`}
+                                  onMouseDown={() => {
+                                    setFormData(prev => ({ ...prev, centreCode: code }));
+                                    setCentreCodeInput(code);
+                                    setCentreCodeDropdownOpen(false);
+                                  }}
+                                >
+                                  {code}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <Label className="text-sm font-medium">City *</Label>
@@ -463,7 +508,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                     <Label className="text-sm font-medium">Issue Date *</Label>
                     <RadioGroup 
                       value={formData.dateType} 
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, dateType: value as 'single' | 'multiple' | 'ongoing' }))}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, dateType: value as 'single' | 'multiple' }))}
                       className="flex flex-wrap gap-6 mt-2"
                     >
                       <div className="flex items-center space-x-2">
@@ -474,25 +519,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                         <RadioGroupItem value="multiple" id="multiple" />
                         <Label htmlFor="multiple">Multiple Dates</Label>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="ongoing" id="ongoing" />
-                        <Label htmlFor="ongoing">Ongoing</Label>
-                      </div>
                     </RadioGroup>
-
-                    {/* Ongoing Alert - properly centered content */}
-                    {formData.dateType === 'ongoing' && (
-                      <div className="mt-3">
-                        <Alert className="border-orange-200 bg-orange-50 h-10 flex items-center justify-start p-0">
-                          <div className="flex items-center h-full w-full px-4">
-                            <AlertCircle className="h-4 w-4 text-orange-600 flex-shrink-0" />
-                            <AlertDescription className="text-orange-800 text-sm ml-2 leading-none">
-                              This issue is ongoing and requires immediate attention.
-                            </AlertDescription>
-                          </div>
-                        </Alert>
-                      </div>
-                    )}
 
                     {/* Date pickers */}
                     {formData.dateType === 'single' && (
