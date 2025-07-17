@@ -356,7 +356,7 @@ export const AdminPage: React.FC = () => {
   function downloadTicketsAsCSV(ticketsToDownload: Issue[]) {
     if (!ticketsToDownload.length) return;
     const headers = [
-      'Ticket Number', 'Centre Code', 'City', 'Resource ID', 'Issue Category', 'Description', 'Severity', 'Status', 'Submitted By', 'Submitted At', 'Issue Date', 'Deleted'
+      'Ticket Number', 'Centre Code', 'City', 'Resource ID', 'Issue Category', 'Description', 'Severity', 'Status', 'Submitted By', 'Submitted At', 'Issue Date', 'Deleted', 'Evidence Uploaded', 'Comments Added'
     ];
     const rows = ticketsToDownload.map(t => [
       t.ticketNumber,
@@ -370,7 +370,9 @@ export const AdminPage: React.FC = () => {
       t.submittedBy || '',
       t.submittedAt ? new Date(t.submittedAt).toISOString() : '',
       formatIssueDateForCSV(t.issueDate),
-      t.deleted ? 'Yes' : 'No'
+      t.deleted ? 'Yes' : 'No',
+      t.attachments && t.attachments.length > 0 ? 'TRUE' : 'FALSE',
+      t.comments && t.comments.length > 0 ? 'TRUE' : 'FALSE'
     ]);
     function formatIssueDateForCSV(issueDate: Issue['issueDate']): string {
       if (!issueDate) return '';
