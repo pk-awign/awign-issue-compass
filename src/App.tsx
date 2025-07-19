@@ -9,7 +9,7 @@ import { IssueProvider } from "@/contexts/IssueContext";
 import { UserProvider } from "@/contexts/UserContext";
 import Index from "./pages/Index";
 import { LoginPage } from "./pages/LoginPage";
-import { AdminPage } from "./pages/AdminPage";
+import { AdminPageSimple } from "./pages/AdminPageSimple";
 import { TicketResolverPage } from "./pages/TicketResolverPage";
 import { ResolutionApproverPage } from "./pages/ResolutionApproverPage";
 import { WorkforcePage } from "./pages/WorkforcePage";
@@ -30,7 +30,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<LoginPage />} />
-                <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin" element={<AdminPageSimple />} />
                 <Route path="/ticket-resolver" element={<TicketResolverPage />} />
                 <Route path="/resolution-approver" element={<ResolutionApproverPage />} />
                 <Route path="/invigilator" element={<WorkforcePage />} />
