@@ -100,6 +100,23 @@ export const updateTicketStatus = async (ticketNumber: string, newStatus: string
   }
 };
 
+// Legacy TicketService export for compatibility
+export const TicketService = {
+  getTickets,
+  getTicketByNumber,
+  updateTicketStatus,
+  submitIssue: (issueData: IssueFormData) => submitIssue(issueData),
+  // Placeholder methods for missing functionality
+  getStatusTransitions: async () => [],
+  getTicketTimeline: async () => [],
+  getTicketHistory: async () => [],
+  getAssignees: async () => [],
+  addAssignee: async () => {},
+  removeAssignee: async () => {},
+  addComment: async () => {},
+  updateTicketSeverity: async () => {}
+};
+
 export const submitIssue = async (issueData: IssueFormData): Promise<string> => {
   try {
     console.log('🎫 [TICKET SERVICE] Starting ticket submission...');
@@ -123,7 +140,7 @@ export const submitIssue = async (issueData: IssueFormData): Promise<string> => 
       resource_id: issueData.resourceId,
       issue_category: issueData.issueCategory,
       issue_description: issueData.issueDescription,
-      issue_date: issueData.issueDate,
+      issue_date: issueData.issueDate.toISOString(),
       severity: issueData.severity,
       is_anonymous: issueData.isAnonymous,
       submitted_by: issueData.isAnonymous ? null : issueData.submittedBy,
@@ -164,7 +181,7 @@ export const submitIssue = async (issueData: IssueFormData): Promise<string> => 
             file_name: attachment.name,
             file_type: attachment.type,
             file_size: attachment.size,
-            storage_path: attachment.path || `tickets/${ticket.id}/${attachment.name}`,
+            storage_path: `tickets/${ticket.id}/${attachment.name}`,
           };
 
           const { error: attachmentError } = await supabase
