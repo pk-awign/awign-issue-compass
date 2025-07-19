@@ -107,14 +107,17 @@ export const TicketService = {
   updateTicketStatus,
   submitIssue: (issueData: IssueFormData) => submitIssue(issueData),
   // Placeholder methods for missing functionality
-  getStatusTransitions: async () => [],
-  getTicketTimeline: async () => [],
-  getTicketHistory: async () => [],
-  getAssignees: async () => [],
-  addAssignee: async () => {},
-  removeAssignee: async () => {},
-  addComment: async () => {},
-  updateTicketSeverity: async () => {}
+  getStatusTransitions: async (from?: string, to?: string) => [],
+  getTicketTimeline: async (ticketId: string) => [],
+  getTicketHistory: async (ticketId: string) => [],
+  getAssignees: async (ticketId: string) => ({ data: [], error: null }),
+  addAssignee: async (...args: any[]) => {},
+  removeAssignee: async (...args: any[]) => {},
+  addComment: async (ticketId: string, comment: string) => {},
+  updateTicketSeverity: async (...args: any[]) => {},
+  createTicket: async (ticketData: any) => submitIssue(ticketData),
+  getTicketsByCity: async (city: string) => [],
+  getTicketsByUser: async (userId: string) => []
 };
 
 export const submitIssue = async (issueData: IssueFormData): Promise<string> => {
