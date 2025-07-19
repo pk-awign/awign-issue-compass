@@ -240,24 +240,23 @@ This is an automated notification from the AWIGN Escalation Management System.
 
   // Helper for dev: send email for the last ticket
   static async sendEmailForLastTicket() {
-    const tickets = await TicketService.getTickets();
-    const lastTicket = tickets && tickets.length > 0 ? tickets[tickets.length - 1] : null;
+    const lastTicket = await TicketService.getLastTicket();
     if (!lastTicket) {
-      console.error('No tickets found');
+      console.error('No last ticket found');
       return false;
     }
     return EmailService.sendTicketCreatedNotification({
-      ticketNumber: lastTicket.ticket_number || 'Unknown',
-      centreCode: lastTicket.centre_code || 'Unknown',
-      city: lastTicket.city || 'Unknown',
-      resourceId: lastTicket.resource_id || 'Unknown',
-      issueCategory: lastTicket.issue_category || 'Unknown',
-      issueDescription: lastTicket.issue_description || 'Unknown',
-      submittedBy: lastTicket.submitted_by || 'Unknown',
-      submittedAt: new Date(lastTicket.submitted_at || Date.now()),
-      severity: lastTicket.severity || 'Unknown',
-      attachments: [],
-      ticketLink: `${window.location.origin}/track/${lastTicket.ticket_number}`
+      ticketNumber: lastTicket.ticketNumber,
+      centreCode: lastTicket.centreCode,
+      city: lastTicket.city,
+      resourceId: lastTicket.resourceId,
+      issueCategory: lastTicket.issueCategory,
+      issueDescription: lastTicket.issueDescription,
+      submittedBy: lastTicket.submittedBy,
+      submittedAt: lastTicket.submittedAt,
+      severity: lastTicket.severity,
+      attachments: lastTicket.attachments || [],
+      ticketLink: lastTicket.ticketLink
     });
   }
 

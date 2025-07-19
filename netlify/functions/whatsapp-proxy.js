@@ -83,7 +83,7 @@ export const handler = async function(event, context) {
             {
               type: 'body',
               parameters: [
-                { type: 'text', text: ticketData.submittedBy },
+                { type: 'text', text: ticketData.submittedBy }, // This will be Name from Google Sheet
                 { type: 'text', text: ticketData.ticketNumber },
                 { type: 'text', text: ticketData.ticketLink }
               ]

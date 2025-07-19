@@ -100,26 +100,6 @@ export const updateTicketStatus = async (ticketNumber: string, newStatus: string
   }
 };
 
-// Legacy TicketService export for compatibility
-export const TicketService = {
-  getTickets,
-  getTicketByNumber,
-  updateTicketStatus,
-  submitIssue: (issueData: IssueFormData) => submitIssue(issueData),
-  // Placeholder methods for missing functionality
-  getStatusTransitions: async (from?: string, to?: string) => [],
-  getTicketTimeline: async (ticketId: string) => [],
-  getTicketHistory: async (ticketId: string) => [],
-  getAssignees: async (ticketId: string) => ({ data: [], error: null }),
-  addAssignee: async (...args: any[]) => {},
-  removeAssignee: async (...args: any[]) => {},
-  addComment: async (ticketId: string, comment: string) => {},
-  updateTicketSeverity: async (...args: any[]) => {},
-  createTicket: async (ticketData: any) => submitIssue(ticketData),
-  getTicketsByCity: async (city: string) => [],
-  getTicketsByUser: async (userId: string) => []
-};
-
 export const submitIssue = async (issueData: IssueFormData): Promise<string> => {
   try {
     console.log('🎫 [TICKET SERVICE] Starting ticket submission...');
@@ -143,7 +123,7 @@ export const submitIssue = async (issueData: IssueFormData): Promise<string> => 
       resource_id: issueData.resourceId,
       issue_category: issueData.issueCategory,
       issue_description: issueData.issueDescription,
-      issue_date: issueData.issueDate.toISOString(),
+      issue_date: issueData.issueDate,
       severity: issueData.severity,
       is_anonymous: issueData.isAnonymous,
       submitted_by: issueData.isAnonymous ? null : issueData.submittedBy,
@@ -184,7 +164,7 @@ export const submitIssue = async (issueData: IssueFormData): Promise<string> => 
             file_name: attachment.name,
             file_type: attachment.type,
             file_size: attachment.size,
-            storage_path: `tickets/${ticket.id}/${attachment.name}`,
+            storage_path: attachment.path || `tickets/${ticket.id}/${attachment.name}`,
           };
 
           const { error: attachmentError } = await supabase

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PublicIssueForm } from '@/components/PublicIssueForm';
 import { useIssues } from '@/contexts/IssueContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -7,18 +8,24 @@ export const WorkforcePage: React.FC = () => {
   const { addIssue } = useIssues();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+
+  // Overlay state
+  const [step, setStep] = useState(1); // 1: Welcome, 2: Choose mode (HIDDEN), 3: Show form
+  const [reportAnonymously, setReportAnonymously] = useState(false); // Always false - anonymous disabled
 
   const handleSubmitIssue = async (issueData: any) => {
-    const ticketNumber = await addIssue(issueData);
+    // Pass user ID if logged in, otherwise undefined for anonymous
+    const ticketNumber = await addIssue(issueData, user?.id);
     return ticketNumber;
   };
 
   const handleAdminLogin = () => {
+    setShowAdminLogin(true);
     navigate('/login');
   };
 
-  // Welcome overlay
+  // Overlay Step 1: Welcome
   if (step === 1) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white bg-opacity-95 p-2 sm:p-6 overflow-auto">
@@ -27,10 +34,15 @@ export const WorkforcePage: React.FC = () => {
           <h2 className="text-base sm:text-lg font-semibold mb-4 text-gray-700">For Exam Invigilators only</h2>
           <div className="mb-4 text-left text-sm sm:text-base">
             <div className="font-semibold text-red-600 flex items-center mb-2">⚠️ Important:</div>
-            <p className="mb-2">This portal is only for issues already reported to your Team Leader or Support but not solved yet.</p>
+            <p className="mb-2">This portal is only for issues already reported to your Team Leader or Support but not solved yet.<br/>If it's your first time reporting, please use the usual channels.</p>
+            <p className="mb-2">Use this portal to:</p>
+            <ul className="list-disc ml-6 mb-2">
+              <li>✅ Raise an issue that hasn't been resolved</li>
+              <li>✅ Get faster attention from the leadership team</li>
+            </ul>
             <div className="mt-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
               <span className="font-semibold text-yellow-800 block mb-1">Saw something wrong at the exam centre?</span>
-              <span className="text-yellow-700">Report any malpractice here. Your name will stay confidential.</span>
+              <span className="text-yellow-700">Report any malpractice here.<br/>Your name will stay confidential, and if your report is correct, you may get a reward.</span>
             </div>
           </div>
           <button
@@ -44,12 +56,13 @@ export const WorkforcePage: React.FC = () => {
     );
   }
 
+  // Step 3: Show the form (Step 2 is hidden - anonymous feature disabled)
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <h2 className="text-2xl font-bold mb-6">Workforce Page</h2>
-        <p className="text-muted-foreground">This page is being enhanced for better functionality.</p>
-      </div>
-    </div>
+    <PublicIssueForm 
+      onSubmit={handleSubmitIssue}
+      onAdminLogin={handleAdminLogin}
+      defaultAnonymous={false} // Always false - anonymous disabled
+      hideHeader={true}
+    />
   );
 };

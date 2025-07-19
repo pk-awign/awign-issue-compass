@@ -1,57 +1,47 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Overview } from "@/components/Overview"
+import { Analytics } from "@/components/Analytics"
+import { Users } from "@/components/Users"
+import { Tickets } from "@/components/Tickets"
+import { System } from "@/components/System"
+import { Header } from "@/components/Header"
+import { Stats } from "@/components/Stats"
 import { WhatsAppDebugPanel } from './admin/WhatsAppDebugPanel';
-import { SimpleIssueForm } from './SimpleIssueForm';
-import { Button } from "@/components/ui/button";
 
 export const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState("create");
+  const [activeTab, setActiveTab] = useState("tickets");
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">1532</div>
-            <div className="text-sm text-muted-foreground">Total Tickets</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">24</div>
-            <div className="text-sm text-muted-foreground">Total Users</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">162</div>
-            <div className="text-sm text-muted-foreground">Total Comments</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">✅</div>
-            <div className="text-sm text-muted-foreground">WhatsApp Ready</div>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="space-y-6">
+      <Header />
+      <Stats />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="create">Create Ticket</TabsTrigger>
-          <TabsTrigger value="debug">WhatsApp Debug</TabsTrigger>
-          <TabsTrigger value="system">System Status</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="tickets">Tickets</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+          <TabsTrigger value="debug">Debug</TabsTrigger>
+          <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="create" className="space-y-6">
-          <div className="flex justify-center">
-            <SimpleIssueForm />
-          </div>
+        <TabsContent value="tickets" className="space-y-6">
+          <Tickets />
+        </TabsContent>
+
+        <TabsContent value="users" className="space-y-6">
+          <Users />
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <Analytics />
+        </TabsContent>
+
+        <TabsContent value="whatsapp" className="space-y-6">
+          <Overview />
         </TabsContent>
 
         <TabsContent value="debug" className="space-y-6">
@@ -59,31 +49,7 @@ export const AdminDashboard: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="system" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>System Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Database</span>
-                  <span className="text-green-600">✅ Connected</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Google Sheets</span>
-                  <span className="text-green-600">✅ Connected</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>WhatsApp API</span>
-                  <span className="text-green-600">✅ Ready</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>WhatsApp Template</span>
-                  <span className="text-green-600">✅ 3 Parameters</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <System />
         </TabsContent>
       </Tabs>
     </div>

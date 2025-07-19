@@ -472,6 +472,8 @@ export const TicketResolverPage: React.FC = () => {
         ticket={selectedTicket}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
+        userRole="resolver"
+        currentUser={user.name}
       />
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">

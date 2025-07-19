@@ -1,12 +1,23 @@
+
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { PublicIssueForm } from '@/components/PublicIssueForm';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { useIssues } from '@/contexts/IssueContext';
 
-const TrackTicket = () => {
+const TrackTicketContent = () => {
   const { ticketNumber } = useParams();
   const navigate = useNavigate();
+  const { addIssue } = useIssues();
+
+  const handleSubmitIssue = (issueData: any) => {
+    return addIssue(issueData);
+  };
+
+  const handleAdminLogin = () => {
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -28,14 +39,20 @@ const TrackTicket = () => {
             </p>
           </div>
         )}
-        
-        <div className="text-center py-8">
-          <h2 className="text-xl font-semibold mb-4">Track Ticket</h2>
-          <p className="text-muted-foreground">This feature is being enhanced.</p>
-        </div>
       </div>
+      
+      <PublicIssueForm 
+        onSubmit={handleSubmitIssue} 
+        onAdminLogin={handleAdminLogin}
+        defaultTab="track"
+        searchTerm={ticketNumber || ''}
+      />
     </div>
   );
+};
+
+const TrackTicket = () => {
+  return <TrackTicketContent />;
 };
 
 export default TrackTicket;
