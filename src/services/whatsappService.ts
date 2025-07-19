@@ -72,7 +72,7 @@ export interface CommentNotificationData {
 
 export class WhatsAppService {
   /**
-   * Fetch contacts from Google Sheets with improved error handling
+   * Fetch contacts from Google Sheets
    */
   static async fetchContactsFromSheet(): Promise<WhatsAppContact[]> {
     try {
@@ -80,130 +80,138 @@ export class WhatsAppService {
       console.log('🔍 [GOOGLE SHEETS] Sheet ID:', GOOGLE_SHEETS_CONFIG.SHEET_ID);
       console.log('🔍 [GOOGLE SHEETS] Tab Name:', GOOGLE_SHEETS_CONFIG.TAB_NAME);
       
-      // Check for API key first
-      const apiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY;
-      console.log('🔍 [GOOGLE SHEETS] API Key available:', !!apiKey);
-      
+      // Try multiple approaches to access the Google Sheet
       let response: Response;
       let url: string;
-      let approachUsed: string;
       
-      // Try multiple approaches to access the Google Sheet
+      // Approach 1: Try with API key (if available)
+      const apiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY;
       if (apiKey) {
         console.log('🔍 [GOOGLE SHEETS] Trying with API key...');
-        approachUsed = 'API Key';
         url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z?key=${apiKey}`;
         response = await fetch(url);
         
         if (response.ok) {
           console.log('✅ [GOOGLE SHEETS] Successfully fetched with API key');
         } else {
-          console.log('❌ [GOOGLE SHEETS] API key approach failed:', response.status, response.statusText);
-          throw new Error(`API key approach failed: ${response.status}`);
-        }
-      } else {
-        console.log('🔍 [GOOGLE SHEETS] No API key, trying public access...');
-        approachUsed = 'Public Access';
-        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/export?format=csv&gid=0`;
-        response = await fetch(url);
-        
-        if (!response.ok) {
-          console.log('❌ [GOOGLE SHEETS] Public access failed:', response.status, response.statusText);
-          throw new Error(`Public access failed: ${response.status}`);
+          console.log('❌ [GOOGLE SHEETS] API key approach failed, trying public access...');
         }
       }
       
+      // Approach 2: Try public access (requires sheet to be publicly accessible)
+      if (!apiKey || !response?.ok) {
+        console.log('🔍 [GOOGLE SHEETS] Trying public access...');
+        url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z`;
+        response = await fetch(url);
+      }
+      
+      // Approach 3: Try CSV export (fallback)
+      if (!response?.ok) {
+        console.log('🔍 [GOOGLE SHEETS] Trying CSV export approach...');
+        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${GOOGLE_SHEETS_CONFIG.TAB_NAME}`;
+        response = await fetch(url);
+      }
+      
+      // Approach 4: Try direct CSV download (another fallback)
+      if (!response?.ok) {
+        console.log('🔍 [GOOGLE SHEETS] Trying direct CSV download...');
+        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/export?format=csv&gid=0`;
+        response = await fetch(url);
+      }
+      
       console.log('🔍 [GOOGLE SHEETS] Final URL attempted:', url);
-      console.log('🔍 [GOOGLE SHEETS] Approach used:', approachUsed);
+      
+      if (!response.ok) {
+        console.error('❌ [GOOGLE SHEETS] API Error:', response.status, response.statusText);
+        throw new Error(`Failed to fetch Google Sheet: ${response.status} - ${response.statusText}`);
+      }
 
       let rows: any[] = [];
       
       // Get the response text first
       const responseText = await response.text();
-      console.log('🔍 [GOOGLE SHEETS] Raw response length:', responseText.length);
       console.log('🔍 [GOOGLE SHEETS] Raw response (first 200 chars):', responseText.substring(0, 200) + '...');
       
-      // Try to parse based on API key vs CSV approach
-      if (apiKey) {
-        try {
-          const data = JSON.parse(responseText);
-          rows = data.values || [];
-          console.log('🔍 [GOOGLE SHEETS] Parsed as JSON:', {
-            totalRows: rows.length,
-            firstRow: rows[0],
-            sampleRows: rows.slice(0, 3)
-          });
-        } catch (jsonError) {
-          console.error('❌ [GOOGLE SHEETS] JSON parsing failed:', jsonError);
-          throw new Error('Failed to parse JSON response from Google Sheets API');
-        }
-      } else {
+      // Try to parse as JSON first (Google Sheets API format)
+      try {
+        const data = JSON.parse(responseText);
+        rows = data.values || [];
+        console.log('🔍 [GOOGLE SHEETS] Parsed as JSON:', {
+          totalRows: rows.length,
+          firstRow: rows[0],
+          sheetId: GOOGLE_SHEETS_CONFIG.SHEET_ID,
+          tabName: GOOGLE_SHEETS_CONFIG.TAB_NAME
+        });
+      } catch (jsonError) {
+        console.log('🔍 [GOOGLE SHEETS] JSON parsing failed, trying CSV...');
+        
+        // Try to parse as CSV
         try {
           // Simple CSV parsing (split by lines and commas)
           const lines = responseText.split('\n').filter(line => line.trim());
-          // Skip header row (first line)
-          rows = lines.slice(1).map(line => {
+          rows = lines.map(line => {
             // Remove quotes and split by comma
             return line.replace(/"/g, '').split(',').map(cell => cell.trim());
           });
           
           console.log('🔍 [GOOGLE SHEETS] Parsed as CSV:', {
             totalRows: rows.length,
-            firstRow: rows[0],
-            sampleRows: rows.slice(0, 3)
+            firstRow: rows[0]
           });
         } catch (csvError) {
-          console.error('❌ [GOOGLE SHEETS] CSV parsing failed:', csvError);
-          throw new Error('Failed to parse CSV response from Google Sheets');
+                console.error('❌ [GOOGLE SHEETS] Both JSON and CSV parsing failed:', { jsonError, csvError });
+      console.error('❌ [GOOGLE SHEETS] Response text:', responseText);
+      
+      // Fallback: Return sample contacts for testing
+      console.log('🔍 [GOOGLE SHEETS] Using fallback sample contacts for testing...');
+      return [
+        {
+          resourceId: 'TEST001',
+          name: 'Test User 1',
+          contactNumber: '919999999999',
+          emailId: 'test1@example.com',
+          zone: 'Test Zone',
+          city: 'Mumbai'
+        },
+        {
+          resourceId: 'TEST002',
+          name: 'Test User 2',
+          contactNumber: '918888888888',
+          emailId: 'test2@example.com',
+          zone: 'Test Zone',
+          city: 'Delhi'
+        }
+      ];
         }
       }
 
-      // Process and validate contacts
       const contacts = rows
-        .filter((row: any[]) => row && row.length >= 3) // Ensure we have enough columns
+        .filter((row: any[]) => row.length >= 3) // Ensure we have enough columns
         .map((row: any[]) => ({
-          resourceId: (row[0]?.toString() || '').trim(), // Resource_ID (Column A)
-          name: (row[1]?.toString() || '').trim(), // Name (Column B)
-          contactNumber: (row[2]?.toString() || '').trim(), // Contact_Number (Column C)
+          resourceId: row[0]?.toString() || '', // Resource_ID (Column A)
+          name: row[1]?.toString() || '', // Name (Column B)
+          contactNumber: row[2]?.toString() || '', // Contact_Number (Column C)
           emailId: '', // Not in current sheet
           zone: '', // Not in current sheet
           city: '' // Not in current sheet
         }))
-        .filter((contact: WhatsAppContact) => {
-          const isValid = contact.contactNumber && 
-                         contact.contactNumber.length >= 10 &&
-                         contact.name.trim() !== '' &&
-                         contact.resourceId.trim() !== '';
-          
-          if (!isValid) {
-            console.log('🔍 [GOOGLE SHEETS] Filtered out invalid contact:', contact);
-          }
-          
-          return isValid;
-        });
+        .filter((contact: WhatsAppContact) => 
+          contact.contactNumber && 
+          contact.contactNumber.length >= 10 &&
+          contact.name.trim() !== '' &&
+          contact.resourceId.trim() !== ''
+        );
 
-      console.log('✅ [GOOGLE SHEETS] Successfully processed contacts:', {
+      console.log('✅ [GOOGLE SHEETS] Processed contacts:', {
         total: contacts.length,
-        sample: contacts.slice(0, 3),
-        approachUsed
+        sample: contacts.slice(0, 3)
       });
-
-      // Show user feedback
-      if (contacts.length > 0) {
-        toast.success(`Loaded ${contacts.length} contacts from Google Sheets`);
-      } else {
-        toast.warning('No valid contacts found in Google Sheets');
-      }
 
       return contacts;
 
     } catch (error) {
-      console.error('❌ [GOOGLE SHEETS] Error fetching contacts:', error);
-      
-      // Show user-friendly error message
-      toast.error(`Failed to fetch contacts: ${error.message}`);
-      
-      // Return empty array instead of throwing to prevent app crashes
+      console.error('Error fetching contacts from Google Sheet:', error);
+      toast.error('Failed to fetch contacts from Google Sheet');
       return [];
     }
   }
@@ -349,89 +357,66 @@ export class WhatsAppService {
   }
 
   /**
-   * Send ticket creation notification to ticket raiser with enhanced debugging
+   * Send ticket creation notification to ticket raiser
    */
   static async sendTicketCreationNotification(
     ticketData: TicketNotificationData,
     ticketRaiserPhone?: string
   ): Promise<boolean> {
     try {
-      console.log('🔍 [WHATSAPP NOTIFICATION] Starting ticket creation notification...');
-      console.log('🔍 [WHATSAPP NOTIFICATION] Ticket data:', {
-        ticketNumber: ticketData.ticketNumber,
-        resourceId: ticketData.resourceId,
-        submittedBy: ticketData.submittedBy,
-        city: ticketData.city
-      });
-      console.log('🔍 [WHATSAPP NOTIFICATION] Provided phone number:', ticketRaiserPhone);
+      console.log('🔍 [WHATSAPP SERVICE] Starting ticket creation notification...');
+      console.log('🔍 [WHATSAPP SERVICE] Ticket data:', ticketData);
+      console.log('🔍 [WHATSAPP SERVICE] Provided phone number:', ticketRaiserPhone);
 
       // If no phone number provided, try to find the contact in Google Sheets
       let formattedPhone: string | null = null;
       let matchingContact: WhatsAppContact | undefined = undefined;
       
       if (ticketRaiserPhone) {
-        console.log('📱 [WHATSAPP NOTIFICATION] Using provided phone number:', ticketRaiserPhone);
+        console.log('📱 [WHATSAPP SERVICE] Using provided phone number:', ticketRaiserPhone);
         formattedPhone = this.formatPhoneNumber(ticketRaiserPhone);
-        console.log('📱 [WHATSAPP NOTIFICATION] Formatted phone:', formattedPhone);
+        console.log('📱 [WHATSAPP SERVICE] Formatted phone:', formattedPhone);
       } else {
-        // Try to find the contact in Google Sheets by Resource_ID
-        console.log('🔍 [WHATSAPP NOTIFICATION] No phone provided, searching Google Sheets...');
+        // Try to find the contact in Google Sheets by Resource_ID (primary) only
+        console.log('🔍 [WHATSAPP SERVICE] No phone provided, searching Google Sheets for contact...');
         
         try {
           const contacts = await this.fetchContactsFromSheet();
-          console.log('🔍 [WHATSAPP NOTIFICATION] Fetched contacts count:', contacts.length);
+          console.log('🔍 [WHATSAPP SERVICE] Fetched contacts count:', contacts.length);
+          console.log('🔍 [WHATSAPP SERVICE] Sample contacts:', contacts.slice(0, 3));
           
-          if (contacts.length === 0) {
-            console.warn('⚠️ [WHATSAPP NOTIFICATION] No contacts available from Google Sheets');
-            toast.error('WhatsApp notification failed: No contacts available from Google Sheets');
-            return false;
-          }
-
-          // Search by Resource ID (exact match, case sensitive)
+          // PRIORITY: Match by Resource ID only (as requested)
           matchingContact = contacts.find(contact => 
             contact.resourceId === ticketData.resourceId
           );
           
-          console.log('🔍 [WHATSAPP NOTIFICATION] Searching for Resource ID:', ticketData.resourceId);
-          console.log('🔍 [WHATSAPP NOTIFICATION] Available Resource IDs:', 
-            contacts.slice(0, 10).map(c => c.resourceId)); // Show first 10 for debugging
-          console.log('🔍 [WHATSAPP NOTIFICATION] Matching contact found:', matchingContact);
+          console.log('🔍 [WHATSAPP SERVICE] Searching for Resource ID:', ticketData.resourceId);
+          console.log('🔍 [WHATSAPP SERVICE] Matching contact found:', matchingContact);
           
           if (matchingContact) {
             formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
-            console.log('📱 [WHATSAPP NOTIFICATION] Formatted phone from contact:', formattedPhone);
-            toast.success(`Found contact: ${matchingContact.name} (${matchingContact.contactNumber})`);
+            console.log('📱 [WHATSAPP SERVICE] Formatted phone from contact:', formattedPhone);
           } else {
-            console.warn('⚠️ [WHATSAPP NOTIFICATION] No contact found with Resource ID:', ticketData.resourceId);
-            
-            // Try partial match as fallback
-            const partialMatch = contacts.find(contact => 
-              contact.resourceId.includes(ticketData.resourceId) || 
-              ticketData.resourceId.includes(contact.resourceId)
-            );
-            
-            if (partialMatch) {
-              console.log('🔍 [WHATSAPP NOTIFICATION] Found partial match:', partialMatch);
-              matchingContact = partialMatch;
-              formattedPhone = this.formatPhoneNumber(partialMatch.contactNumber);
-              toast.warning(`Using partial match: ${partialMatch.name} (Resource ID: ${partialMatch.resourceId})`);
-            }
+            console.warn('⚠️ [WHATSAPP SERVICE] No contact found with Resource ID:', ticketData.resourceId);
           }
         } catch (error) {
-          console.error('❌ [WHATSAPP NOTIFICATION] Failed to fetch contacts from Google Sheets:', error);
-          toast.error('WhatsApp notification failed: Google Sheets access error');
+          console.error('❌ [WHATSAPP SERVICE] Failed to fetch contacts from Google Sheets:', error);
+          console.warn('⚠️ [WHATSAPP SERVICE] Cannot send WhatsApp notification - Google Sheets access failed');
+          // Don't throw error, just return false to indicate notification couldn't be sent
           return false;
         }
       }
       
       if (!formattedPhone) {
-        const errorMsg = `WhatsApp notification not sent: No contact found with Resource ID "${ticketData.resourceId}"`;
-        console.warn('❌ [WHATSAPP NOTIFICATION]', errorMsg);
-        toast.error(errorMsg);
+        console.warn('❌ [WHATSAPP SERVICE] No phone number found for ticket raiser');
+        console.warn('❌ [WHATSAPP SERVICE] Resource ID searched:', ticketData.resourceId);
+        console.warn('❌ [WHATSAPP SERVICE] Name provided:', ticketData.submittedBy);
+        
+        // Show user-friendly error message
+        toast.error(`WhatsApp notification not sent: No contact found with Resource ID "${ticketData.resourceId}"`);
         return false;
       }
 
-      // Prepare message data
       const messageData: WhatsAppMessageData = {
         to: formattedPhone,
         type: 'template',
@@ -465,12 +450,6 @@ export class WhatsAppService {
         }
       };
 
-      console.log('📤 [WHATSAPP NOTIFICATION] Sending message:', {
-        to: formattedPhone,
-        recipient: matchingContact?.name || ticketData.submittedBy,
-        template: WHATSAPP_CONFIG.TICKET_CREATION_TEMPLATE
-      });
-
       // Try using Netlify function first, fallback to direct API
       let success = false;
       
@@ -497,29 +476,26 @@ export class WhatsAppService {
         success = result.success;
         
         if (success) {
-          console.log('✅ [WHATSAPP NOTIFICATION] Sent via Netlify function to:', 
-            matchingContact?.name || ticketData.submittedBy);
-          toast.success(`WhatsApp notification sent to ${matchingContact?.name || ticketData.submittedBy}`);
+          console.log('Ticket creation notification sent via Netlify function to:', matchingContact?.name || ticketData.submittedBy);
         } else {
-          console.error('❌ [WHATSAPP NOTIFICATION] Netlify function failed:', result);
+          console.error('Failed to send via Netlify function:', result);
           // Fallback to direct API call
           success = await this.sendWhatsAppMessage(messageData);
         }
       } catch (error) {
-        console.error('❌ [WHATSAPP NOTIFICATION] Netlify function error:', error);
+        console.error('Netlify function error, falling back to direct API:', error);
         // Fallback to direct API call
         success = await this.sendWhatsAppMessage(messageData);
       }
       
-      if (!success) {
-        toast.error('Failed to send WhatsApp notification');
+      if (success) {
+        console.log('Ticket creation notification sent to:', ticketData.submittedBy);
       }
       
       return success;
 
     } catch (error) {
-      console.error('❌ [WHATSAPP NOTIFICATION] Error sending ticket creation notification:', error);
-      toast.error(`WhatsApp notification error: ${error.message}`);
+      console.error('Error sending ticket creation notification:', error);
       return false;
     }
   }
@@ -921,4 +897,4 @@ export class WhatsAppService {
     Object.assign(WHATSAPP_CONFIG, newConfig);
     console.log('WhatsApp configuration updated:', WHATSAPP_CONFIG);
   }
-}
+} 
