@@ -328,10 +328,6 @@ export class WhatsAppService {
               parameters: [
                 {
                   type: 'text',
-                  text: contact.name
-                },
-                {
-                  type: 'text',
                   text: ticketData.submittedBy
                 },
                 {
