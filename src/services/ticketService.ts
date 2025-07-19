@@ -20,7 +20,8 @@ export interface IssueFormData {
   phoneNumber?: string; // Optional phone number for WhatsApp
 }
 
-export const getTickets = async () => {
+export class TicketService {
+  static async getTickets() {
   const { data: tickets, error } = await supabase
     .from('tickets')
     .select('*');
@@ -30,26 +31,28 @@ export const getTickets = async () => {
     return [];
   }
 
-  return tickets;
-};
-
-export const getTicketByNumber = async (ticketNumber: string) => {
-  const { data: ticket, error } = await supabase
-    .from('tickets')
-    .select('*')
-    .eq('ticket_number', ticketNumber)
-    .single();
-
-  if (error) {
-    console.error("Error fetching ticket:", error);
-    return null;
+    return tickets;
   }
 
-  return ticket;
-};
+  static async getTicketByNumber(ticketNumber: string) {
 
-export const updateTicketStatus = async (ticketNumber: string, newStatus: string, userName: string) => {
-  try {
+    const { data: ticket, error } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('ticket_number', ticketNumber)
+      .single();
+
+    if (error) {
+      console.error("Error fetching ticket:", error);
+      return null;
+    }
+
+    return ticket;
+  }
+
+  static async updateTicketStatus(ticketNumber: string, newStatus: string, userName: string) {
+
+    try {
     // Get the existing ticket
     const { data: existingTicket, error: selectError } = await supabase
       .from('tickets')
@@ -95,13 +98,14 @@ export const updateTicketStatus = async (ticketNumber: string, newStatus: string
 
     return updatedTicket;
   } catch (error: any) {
-    console.error("Error in updateTicketStatus:", error);
-    throw error;
+      console.error("Error in updateTicketStatus:", error);
+      throw error;
+    }
   }
-};
 
-export const submitIssue = async (issueData: IssueFormData): Promise<string> => {
-  try {
+  static async submitIssue(issueData: IssueFormData): Promise<string> {
+
+    try {
     console.log('🎫 [TICKET SERVICE] Starting ticket submission...');
     console.log('🎫 [TICKET SERVICE] Issue data:', {
       centreCode: issueData.centreCode,
@@ -138,7 +142,10 @@ export const submitIssue = async (issueData: IssueFormData): Promise<string> => 
     // Insert the ticket into the database
     const { data: ticket, error } = await supabase
       .from('tickets')
-      .insert(ticketInsertData)
+      .insert({
+        ...ticketInsertData,
+        issue_date: ticketInsertData.issue_date.toISOString()
+      })
       .select()
       .single();
 
@@ -164,7 +171,7 @@ export const submitIssue = async (issueData: IssueFormData): Promise<string> => 
             file_name: attachment.name,
             file_type: attachment.type,
             file_size: attachment.size,
-            storage_path: attachment.path || `tickets/${ticket.id}/${attachment.name}`,
+            storage_path: `tickets/${ticket.id}/${attachment.name}`,
           };
 
           const { error: attachmentError } = await supabase
@@ -254,8 +261,14 @@ export const submitIssue = async (issueData: IssueFormData): Promise<string> => 
     return ticketNumber;
 
   } catch (error) {
-    console.error('❌ [TICKET SERVICE] Ticket submission failed:', error);
-    toast.error(`Failed to create ticket: ${error.message}`);
-    throw error;
+      console.error('❌ [TICKET SERVICE] Ticket submission failed:', error);
+      toast.error(`Failed to create ticket: ${error.message}`);
+      throw error;
+    }
   }
-};
+}
+
+export const getTickets = TicketService.getTickets;
+export const getTicketByNumber = TicketService.getTicketByNumber;
+export const updateTicketStatus = TicketService.updateTicketStatus;
+export const submitIssue = TicketService.submitIssue;
