@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WhatsAppDebugPanel } from './admin/WhatsAppDebugPanel';
+import { SimpleIssueForm } from './SimpleIssueForm';
 import { Button } from "@/components/ui/button";
 
 export const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState("debug");
+  const [activeTab, setActiveTab] = useState("create");
 
   return (
     <div className="space-y-6 p-6">
@@ -34,37 +35,27 @@ export const AdminDashboard: React.FC = () => {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold">957</div>
-            <div className="text-sm text-muted-foreground">Total Attachments</div>
+            <div className="text-2xl font-bold">✅</div>
+            <div className="text-sm text-muted-foreground">WhatsApp Ready</div>
           </CardContent>
         </Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="create">Create Ticket</TabsTrigger>
           <TabsTrigger value="debug">WhatsApp Debug</TabsTrigger>
-          <TabsTrigger value="tickets">Tickets</TabsTrigger>
-          <TabsTrigger value="system">System</TabsTrigger>
+          <TabsTrigger value="system">System Status</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="create" className="space-y-6">
+          <div className="flex justify-center">
+            <SimpleIssueForm />
+          </div>
+        </TabsContent>
 
         <TabsContent value="debug" className="space-y-6">
           <WhatsAppDebugPanel />
-        </TabsContent>
-
-        <TabsContent value="tickets" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ticket Management</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                The system is working correctly with 1532 tickets and WhatsApp integration.
-              </p>
-              <Button variant="outline" onClick={() => setActiveTab("debug")}>
-                Test WhatsApp Integration
-              </Button>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="system" className="space-y-6">
@@ -84,7 +75,11 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span>WhatsApp API</span>
-                  <span className="text-yellow-600">⚠️ Ready for Testing</span>
+                  <span className="text-green-600">✅ Ready</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>WhatsApp Template</span>
+                  <span className="text-green-600">✅ 3 Parameters</span>
                 </div>
               </div>
             </CardContent>
