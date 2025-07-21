@@ -27,14 +27,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
 export const AdminPage: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
   // Get the tab parameter from URL
   const tabParam = searchParams.get('tab');
   const defaultTab = tabParam === 'tickets' ? 'tickets' : 'overview';
@@ -141,8 +137,18 @@ export const AdminPage: React.FC = () => {
         setFilteredTickets(newTickets);
         setPage(1);
       } else {
-        setTickets(prev => [...prev, ...newTickets]);
-        setFilteredTickets(prev => [...prev, ...newTickets]);
+        setTickets(prev => {
+          const merged = [...prev, ...newTickets].filter(
+            (ticket, index, self) => index === self.findIndex(t => t.id === ticket.id)
+          );
+          return merged;
+        });
+        setFilteredTickets(prev => {
+          const merged = [...prev, ...newTickets].filter(
+            (ticket, index, self) => index === self.findIndex(t => t.id === ticket.id)
+          );
+          return merged;
+        });
       }
     } catch (error) {
       console.error('❌ Error loading tickets:', error);
@@ -518,6 +524,14 @@ export const AdminPage: React.FC = () => {
     } finally {
       setDownloadingDetailed(false);
     }
+  }
+
+  // Place the early return after all hooks
+  if (loading) {
+    return <div style={{textAlign: 'center', marginTop: '2rem'}}>Loading...</div>;
+  }
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
   return (

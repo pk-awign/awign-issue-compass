@@ -13,6 +13,7 @@ interface AuthContextType {
   loginWithPin: (identifier: string, pin: string, type?: 'mobile' | 'email') => Promise<boolean>;
   logout: () => void;
   switchRole: (role: 'invigilator' | 'resolver' | 'approver' | 'super_admin') => void;
+  loading: boolean; // <-- Add loading to context type
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -33,6 +34,7 @@ const fallbackDemoUsers = {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Load user from localStorage on mount
   useEffect(() => {
@@ -44,6 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('awign_user');
       }
     }
+    setLoading(false);
   }, []);
 
   // Save user to localStorage when user changes
@@ -162,6 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{ 
       user, 
+      loading, // <-- Provide loading state
       isSuperAdmin, 
       isResolver, 
       isApprover, 
