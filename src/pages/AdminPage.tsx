@@ -19,10 +19,26 @@ import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
 import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
 import { WhatsAppTestComponent } from '@/components/admin/WhatsAppTestComponent';
-import { format } from 'date-fns';
+import { addDays, format } from "date-fns";
 import { Switch } from '@/components/ui/switch';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogDescription,
+} from "@/components/ui/dialog";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { DateRange } from "react-day-picker";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -58,7 +74,14 @@ export const AdminPage: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
-  const [downloadingDetailed, setDownloadingDetailed] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [downloadType, setDownloadType] = useState<'all' | 'detailed' | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: new Date(),
+  });
+  const [downloadAll, setDownloadAll] = useState(false);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -360,7 +383,10 @@ export const AdminPage: React.FC = () => {
   }, [showDeleted]);
 
   function downloadTicketsAsCSV(ticketsToDownload: Issue[]) {
-    if (!ticketsToDownload.length) return;
+    if (!ticketsToDownload.length) {
+        toast.info("No tickets found to download for the selected date range.");
+        return;
+    };
     const headers = [
       'Ticket Number', 'Centre Code', 'City', 'Resource ID', 'Issue Category', 'Description', 'Severity', 'Status', 'Submitted By', 'Submitted At', 'Issue Date', 'Deleted', 'Evidence Uploaded', 'Comments Added'
     ];
@@ -415,27 +441,14 @@ export const AdminPage: React.FC = () => {
     URL.revokeObjectURL(url);
   }
 
-  const [downloadingAll, setDownloadingAll] = useState(false);
-
-  async function handleDownloadAllTickets() {
-    setDownloadingAll(true);
-    try {
-      const allTickets = await AdminService.getAllTicketsUnpaginated(showDeleted);
-      downloadTicketsAsCSV(allTickets);
-    } catch (e) {
-      alert('Failed to download all tickets.');
-    } finally {
-      setDownloadingAll(false);
+  const downloadDetailedTickets = async (ticketsToDownload: Issue[]) => {
+    if (!ticketsToDownload.length) {
+        toast.info("No detailed tickets found to download for the selected date range.");
+        return;
     }
-  }
-
-  const handleDownloadDetailedTickets = async () => {
-    setDownloadingDetailed(true);
     try {
-      // Fetch all tickets in batches (already implemented in getAllTicketsUnpaginated)
-      const allTickets = await AdminService.getAllTicketsUnpaginated(showDeleted);
       const rows: any[] = [];
-      allTickets.forEach(ticket => {
+      ticketsToDownload.forEach(ticket => {
         if (ticket.issueDate?.type === 'multiple' && Array.isArray(ticket.issueDate.dates)) {
           for (const d of ticket.issueDate.dates) {
             let dateObj: Date;
@@ -521,10 +534,42 @@ export const AdminPage: React.FC = () => {
       URL.revokeObjectURL(url);
     } catch (e) {
       alert('Failed to download detailed tickets.');
-    } finally {
-      setDownloadingDetailed(false);
     }
   }
+
+  const openDownloadDialog = (type: 'all' | 'detailed') => {
+    setDownloadType(type);
+    setIsDownloadModalOpen(true);
+  };
+
+  const handleDownloadWithDateRange = async () => {
+    if (!downloadType) return;
+  
+    setIsDownloading(true);
+    setIsDownloadModalOpen(false);
+  
+    try {
+      if (downloadType === 'all') {
+        const allTickets = downloadAll
+          ? await AdminService.getAllTicketsUnpaginated({ showDeleted })
+          : await AdminService.getAllTicketsUnpaginated({ showDeleted, startDate: dateRange?.from, endDate: dateRange?.to });
+        downloadTicketsAsCSV(allTickets);
+        toast.success("All tickets downloaded successfully!");
+      } else if (downloadType === 'detailed') {
+        const allTickets = downloadAll
+          ? await AdminService.getAllTicketsUnpaginated({ showDeleted })
+          : await AdminService.getAllTicketsUnpaginated({ showDeleted, startDate: dateRange?.from, endDate: dateRange?.to });
+        downloadDetailedTickets(allTickets);
+        toast.success("Detailed tickets downloaded successfully!");
+      }
+    } catch (error) {
+      console.error(`Error downloading ${downloadType} tickets:`, error);
+      toast.error(`Failed to download ${downloadType} tickets. Please try again.`);
+    } finally {
+      setIsDownloading(false);
+      setDownloadType(null);
+    }
+  };
 
   // Place the early return after all hooks
   if (loading) {
@@ -827,15 +872,22 @@ export const AdminPage: React.FC = () => {
                 <label htmlFor="show-deleted" className="text-sm font-medium">
                   {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
                 </label>
-                <Button onClick={() => downloadTicketsAsCSV(filteredTickets)} variant="outline">
-                  Download Tickets
-                </Button>
-                <Button onClick={handleDownloadAllTickets} variant="outline" disabled={downloadingAll}>
-                  {downloadingAll ? 'Downloading All...' : 'Download All Tickets'}
-                </Button>
-                <Button onClick={handleDownloadDetailedTickets} variant="outline" disabled={downloadingDetailed}>
-                  {downloadingDetailed ? 'Downloading Detailed...' : 'Download Detailed Tickets'}
-                </Button>
+                <div className="flex gap-2">
+                    <Button 
+                        variant="outline" 
+                        onClick={() => openDownloadDialog('all')}
+                        disabled={isDownloading}
+                    >
+                        {isDownloading && downloadType === 'all' ? 'Downloading...' : 'Download All Tickets'}
+                    </Button>
+                    <Button 
+                        variant="outline" 
+                        onClick={() => openDownloadDialog('detailed')}
+                        disabled={isDownloading}
+                    >
+                        {isDownloading && downloadType === 'detailed' ? 'Downloading...' : 'Download Detailed Tickets'}
+                    </Button>
+                </div>
               </div>
 
               {/* Enhanced User Assignment */}
@@ -1109,6 +1161,70 @@ export const AdminPage: React.FC = () => {
         ticket={selectedTicket}
         onTicketUpdate={loadTickets}
       />
+
+      <Dialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Date Range for Download</DialogTitle>
+            <DialogDescription>
+              Please select a start and end date to download the tickets for that period, or choose to download all tickets.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={downloadAll}
+                onChange={e => setDownloadAll(e.target.checked)}
+              />
+              Download all tickets (ignore date range)
+            </label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={"outline"}
+                  className={cn(
+                    "w-[300px] justify-start text-left font-normal",
+                    !dateRange && "text-muted-foreground"
+                  )}
+                  disabled={downloadAll}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "LLL dd, y")} -{" "}
+                        {format(dateRange.to, "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(dateRange.from, "LLL dd, y")
+                    )
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                  disabled={downloadAll}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleDownloadWithDateRange} disabled={isDownloading}>
+              {isDownloading ? 'Downloading...' : 'Download'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
         <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">

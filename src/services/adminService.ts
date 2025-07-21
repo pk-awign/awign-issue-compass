@@ -374,37 +374,73 @@ export class AdminService {
     }
   }
 
-  static async getAllTicketsUnpaginated(includeDeleted: boolean = false) {
-    try {
-      // First, get the total count
-      const { count, error: countError } = await supabase
+  static async getAllTicketsUnpaginated({ showDeleted = false, startDate, endDate }: { showDeleted?: boolean, startDate?: Date, endDate?: Date } = {}): Promise<Issue[]> {
+    const allTickets: Issue[] = [];
+    let page = 1;
+    const BATCH_SIZE = 1000;
+    
+    while (true) {
+      let query = supabase
         .from('tickets')
-        .select('id', { count: 'exact', head: true })
-        .eq('deleted', includeDeleted);
-      if (countError) throw countError;
-      const total = count || 0;
-      const batchSize = 1000;
-      let allTicketNumbers: any[] = [];
-      for (let offset = 0; offset < total; offset += batchSize) {
-        const { data, error } = await supabase
-          .from('tickets')
-          .select('ticket_number')
-          .eq('deleted', includeDeleted)
-          .order('created_at', { ascending: false })
-          .range(offset, Math.min(offset + batchSize - 1, total - 1));
-        if (error) throw error;
-        allTicketNumbers = allTicketNumbers.concat(data || []);
+        .select(`*`)
+        .order('submitted_at', { ascending: false })
+        .range((page - 1) * BATCH_SIZE, page * BATCH_SIZE - 1);
+      
+      if (!showDeleted) {
+        query = query.eq('deleted', false);
       }
-      // Fetch each ticket individually using TicketService to get full data with comments
-      const ticketPromises = (allTicketNumbers || []).map(async (ticket) => {
-        return await TicketService.getTicketByNumber(ticket.ticket_number);
-      });
-      const resolvedTickets = await Promise.all(ticketPromises);
-      return resolvedTickets.filter(ticket => ticket !== null);
-    } catch (error) {
-      console.error('Error in getAllTicketsUnpaginated:', error);
-      return [];
+
+      if (startDate) {
+        query = query.gte('submitted_at', startDate.toISOString());
+      }
+      if (endDate) {
+        const adjustedEndDate = new Date(endDate);
+        adjustedEndDate.setDate(adjustedEndDate.getDate() + 1);
+        query = query.lt('submitted_at', adjustedEndDate.toISOString());
+      }
+
+      const { data, error } = await query as { data: any[], error: any };
+
+      if (error) {
+        console.error('Error fetching tickets unpaginated:', error);
+        break; // Exit loop on error
+      }
+      if (!data || data.length === 0) {
+        break; // Exit loop if no more data
+      }
+
+      const tickets: Issue[] = data.map((t: any) => ({
+        id: t.id,
+        ticketNumber: t.ticket_number,
+        awignAppTicketId: t.awign_app_ticket_id,
+        centreCode: t.centre_code,
+        city: t.city,
+        resourceId: t.resource_id,
+        issueCategory: t.issue_category,
+        issueDescription: t.issue_description,
+        issueDate: t.issue_date,
+        severity: t.severity,
+        status: t.status,
+        submittedBy: t.submitted_by,
+        submittedAt: t.submitted_at,
+        assignedResolver: t.assigned_resolver,
+        assignedApprover: t.assigned_approver,
+        resolvedAt: t.resolved_at,
+        approvedAt: t.approved_at,
+        escalatedAt: t.escalated_at,
+        isSlaBreached: t.is_sla_breached,
+        deleted: t.deleted,
+        resolutionPin: t.resolution_pin,
+        isAnonymous: t.is_anonymous,
+        comments: [], // Comments will be fetched separately if needed
+        attachments: [], // Attachments will be fetched separately if needed
+      }));
+
+      allTickets.push(...tickets);
+      page++;
     }
+    
+    return allTickets;
   }
 
   static async getFilteredTickets(
