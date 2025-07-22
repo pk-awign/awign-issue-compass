@@ -100,11 +100,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     setTrackSearchTerm(searchTerm);
   }, [searchTerm]);
 
-  useEffect(() => {
-    if (user && user.role === 'invigilator' && formData.dateType === 'range') {
-      setFormData(prev => ({ ...prev, dateType: 'single' }));
-    }
-  }, [user]);
+  // Removed the range check since dateType is only 'single' | 'multiple'
 
   // Fetch all unique centre codes from test_center_details table
   useEffect(() => {
@@ -216,6 +212,19 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
       // Validate name for all reports (anonymous disabled)
       if (!formData.submittedBy) {
         toast.error('Name is required');
+        return;
+      }
+
+      // Validate date selection
+      let hasValidDate = false;
+      if (formData.dateType === 'single' && formData.singleDate) {
+        hasValidDate = true;
+      } else if (formData.dateType === 'multiple' && formData.multipleDates.length > 0) {
+        hasValidDate = true;
+      }
+
+      if (!hasValidDate) {
+        toast.error('Please select an issue date');
         return;
       }
 

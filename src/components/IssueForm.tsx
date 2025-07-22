@@ -90,6 +90,21 @@ export const IssueForm: React.FC<IssueFormProps> = ({ onSubmit }) => {
         return;
       }
 
+      // Validate date selection
+      let hasValidDate = false;
+      if (formData.dateType === 'single' && formData.singleDate) {
+        hasValidDate = true;
+      } else if (formData.dateType === 'multiple' && formData.multipleDates.length > 0) {
+        hasValidDate = true;
+      } else if (formData.dateType === 'ongoing' && formData.startDate && formData.endDate) {
+        hasValidDate = true;
+      }
+
+      if (!hasValidDate) {
+        toast.error('Please select an issue date');
+        return;
+      }
+
       let dates: any[] = [];
       let startDate: Date | undefined;
       let endDate: Date | undefined;
