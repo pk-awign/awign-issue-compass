@@ -508,7 +508,7 @@ export class AdminService {
     }
   }
 
-  static async getUsersByRole(role: 'resolver' | 'approver'): Promise<User[]> {
+  static async getUsersByRole(role: 'resolver' | 'approver' | 'ticket_admin'): Promise<User[]> {
     try {
       console.log(`🔄 Getting users by role: ${role}`);
       
@@ -678,6 +678,154 @@ export class AdminService {
     } catch (error) {
       console.error('❌ Error in assignToApprover:', error);
       return false;
+    }
+  }
+
+  static async assignToTicketAdmin(ticketId: string, ticketAdminId: string): Promise<boolean> {
+    try {
+      console.log(`🔄 Assigning ticket ${ticketId} to ticket admin ${ticketAdminId}`);
+      
+      // Add to ticket_admin_assignments table
+      const { data, error } = await supabase
+        .from('ticket_admin_assignments')
+        .insert([{
+          ticket_id: ticketId,
+          ticket_admin_id: ticketAdminId,
+          assigned_by: ticketAdminId // This will be validated by the trigger
+        }]);
+
+      if (error) {
+        console.error('❌ Error assigning ticket to ticket admin:', error);
+        return false;
+      }
+
+      console.log('✅ Ticket assigned to ticket admin successfully:', data);
+      return true;
+    } catch (error) {
+      console.error('❌ Error in assignToTicketAdmin:', error);
+      return false;
+    }
+  }
+
+  static async getTicketsAssignedToAdmin(adminId: string): Promise<Issue[]> {
+    try {
+      console.log(`🔄 Getting tickets assigned to admin ${adminId}`);
+      
+      // Get tickets assigned to this ticket admin
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('ticket_admin_assignments')
+        .select('ticket_id')
+        .eq('ticket_admin_id', adminId);
+
+      if (assignmentsError) {
+        console.error('❌ Error fetching ticket admin assignments:', assignmentsError);
+        return [];
+      }
+
+      if (!assignments || assignments.length === 0) {
+        console.log('ℹ️ No tickets assigned to this admin');
+        return [];
+      }
+
+      const ticketIds = assignments.map(a => a.ticket_id);
+      
+      // Fetch the actual tickets
+      const { data: tickets, error: ticketsError } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          comments (
+            id,
+            content,
+            author,
+            author_role,
+            is_internal,
+            created_at,
+            comment_attachments (
+              id,
+              file_name,
+              file_size,
+              file_type,
+              storage_path,
+              uploaded_at
+            )
+          ),
+          attachments (
+            id,
+            file_name,
+            file_size,
+            file_type,
+            storage_path,
+            uploaded_at
+          )
+        `)
+        .in('id', ticketIds)
+        .order('created_at', { ascending: false });
+
+      if (ticketsError) {
+        console.error('❌ Error fetching assigned tickets:', ticketsError);
+        return [];
+      }
+
+      // Map to Issue type
+      const mappedTickets = (tickets || []).map(ticket => ({
+        id: ticket.id,
+        ticketNumber: ticket.ticket_number,
+        centreCode: ticket.centre_code,
+        city: ticket.city,
+        resourceId: ticket.resource_id,
+        awignAppTicketId: ticket.awign_app_ticket_id,
+        issueCategory: ticket.issue_category,
+        issueDescription: ticket.issue_description,
+        issueDate: ticket.issue_date,
+        severity: ticket.severity,
+        status: ticket.status,
+        isAnonymous: ticket.is_anonymous,
+        submittedBy: ticket.submitted_by,
+        submittedByUserId: ticket.submitted_by_user_id,
+        submittedAt: new Date(ticket.submitted_at),
+        assignedResolver: ticket.assigned_resolver,
+        assignedApprover: ticket.assigned_approver,
+        resolutionNotes: ticket.resolution_notes,
+        resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
+        comments: (ticket.comments || []).map((comment: any) => ({
+          id: comment.id,
+          content: comment.content,
+          author: comment.author,
+          authorRole: comment.author_role,
+          timestamp: comment.created_at ? new Date(comment.created_at) : new Date(),
+          isInternal: comment.is_internal,
+          attachments: (comment.comment_attachments || []).map((att: any) => ({
+            id: att.id,
+            fileName: att.file_name,
+            fileSize: att.file_size,
+            fileType: att.file_type,
+            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`,
+            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+          })),
+        })),
+        attachments: (ticket.attachments || []).map((att: any) => ({
+          id: att.id,
+          fileName: att.file_name,
+          fileSize: att.file_size,
+          fileType: att.file_type,
+          uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+          downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${att.storage_path}`
+        })),
+        issueEvidence: [],
+        reopenCount: ticket.reopen_count || 0,
+        lastReopenedAt: ticket.last_reopened_at ? new Date(ticket.last_reopened_at) : undefined,
+        reopenedBy: ticket.reopened_by,
+        statusChangedAt: ticket.status_changed_at ? new Date(ticket.status_changed_at) : undefined,
+        statusChangedBy: ticket.status_changed_by,
+        deleted: ticket.deleted || false
+      }));
+
+      console.log(`✅ Returning ${mappedTickets.length} tickets assigned to admin ${adminId}`);
+      return mappedTickets;
+    } catch (error) {
+      console.error('❌ Error in getTicketsAssignedToAdmin:', error);
+      return [];
     }
   }
 
@@ -861,6 +1009,113 @@ export class AdminService {
     }
   }
 
+  static async getTicketAnalyticsForAdmin(adminId: string): Promise<TicketAnalytics> {
+    try {
+      console.log(`🔄 Getting ticket analytics for admin ${adminId}...`);
+      
+      // Get tickets assigned to this admin
+      const assignedTickets = await this.getTicketsAssignedToAdmin(adminId);
+      
+      if (!assignedTickets || assignedTickets.length === 0) {
+        console.log('ℹ️ No tickets assigned to this admin');
+        return this.getEmptyAnalytics();
+      }
+
+      // Calculate metrics for assigned tickets only
+      const totalTickets = assignedTickets.length;
+      const openTickets = assignedTickets.filter(t => t.status === 'open').length;
+      const inProgressTickets = assignedTickets.filter(t => t.status === 'in_progress').length;
+      const resolvedTickets = assignedTickets.filter(t => t.status === 'resolved').length;
+      const closedTickets = assignedTickets.filter(t => t.status === 'closed').length;
+      
+      const sev1Tickets = assignedTickets.filter(t => t.severity === 'sev1').length;
+      const sev2Tickets = assignedTickets.filter(t => t.severity === 'sev2').length;
+      const sev3Tickets = assignedTickets.filter(t => t.severity === 'sev3').length;
+      
+      // For ticket admin, all tickets are considered assigned
+      const assignedTicketsCount = totalTickets;
+      const unassignedTickets = 0;
+      const slaBreachedTickets = assignedTickets.filter(t => {
+        const submissionTime = new Date(t.submittedAt).getTime();
+        const currentTime = new Date().getTime();
+        const hoursSinceSubmission = (currentTime - submissionTime) / (1000 * 60 * 60);
+        return t.status !== 'resolved' && hoursSinceSubmission > 24;
+      }).length;
+
+      // Calculate average resolution time
+      const resolvedWithTime = assignedTickets.filter(t => t.resolvedAt);
+      const avgResolutionHours = resolvedWithTime.length > 0 
+        ? resolvedWithTime.reduce((sum, t) => {
+            const resolutionTime = t.resolvedAt ? new Date(t.resolvedAt).getTime() - new Date(t.submittedAt).getTime() : 0;
+            return sum + (resolutionTime / (1000 * 60 * 60)); // Convert to hours
+          }, 0) / resolvedWithTime.length
+        : 0;
+
+      // Calculate breakdowns for assigned tickets only
+      const cityMap = new Map<string, number>();
+      const centreMap = new Map<string, number>();
+      const resolverMap = new Map<string, number>();
+      const approverMap = new Map<string, number>();
+
+      assignedTickets.forEach(ticket => {
+        // City breakdown
+        cityMap.set(ticket.city, (cityMap.get(ticket.city) || 0) + 1);
+        
+        // Centre breakdown
+        centreMap.set(ticket.centreCode, (centreMap.get(ticket.centreCode) || 0) + 1);
+        
+        // Resolver breakdown
+        if (ticket.assignedResolver) {
+          resolverMap.set(ticket.assignedResolver, (resolverMap.get(ticket.assignedResolver) || 0) + 1);
+        }
+        
+        // Approver breakdown
+        if (ticket.assignedApprover) {
+          approverMap.set(ticket.assignedApprover, (approverMap.get(ticket.assignedApprover) || 0) + 1);
+        }
+      });
+
+      const cityBreakdown = Array.from(cityMap.entries())
+        .map(([city, count]) => ({ city, count }))
+        .sort((a, b) => b.count - a.count);
+
+      const centreBreakdown = Array.from(centreMap.entries())
+        .map(([centreCode, count]) => ({ centreCode, count }))
+        .sort((a, b) => b.count - a.count);
+
+      const resolverBreakdown = Array.from(resolverMap.entries())
+        .map(([resolver, count]) => ({ resolver, count }))
+        .sort((a, b) => b.count - a.count);
+
+      const approverBreakdown = Array.from(approverMap.entries())
+        .map(([approver, count]) => ({ approver, count }))
+        .sort((a, b) => b.count - a.count);
+
+      console.log(`✅ Calculated analytics for ${assignedTickets.length} assigned tickets`);
+      return {
+        totalTickets,
+        openTickets,
+        inProgressTickets,
+        resolvedTickets,
+        closedTickets,
+        sev1Tickets,
+        sev2Tickets,
+        sev3Tickets,
+        assignedTickets: assignedTicketsCount,
+        unassignedTickets,
+        slaBreachedTickets,
+        avgResolutionHours,
+        cityBreakdown,
+        centreBreakdown,
+        resolverBreakdown,
+        approverBreakdown
+      };
+    } catch (error) {
+      console.error('❌ Error in getTicketAnalyticsForAdmin:', error);
+      return this.getEmptyAnalytics();
+    }
+  }
+
   private static getEmptyAnalytics(): TicketAnalytics {
     return {
       totalTickets: 0,
@@ -920,6 +1175,8 @@ export class AdminService {
         return 'super_admin';
       case 'invigilator':
         return 'invigilator';
+      case 'ticket_admin':
+        return 'ticket_admin';
       default:
         return 'invigilator';
     }
@@ -936,6 +1193,8 @@ export class AdminService {
         return 'super_admin';
       case 'invigilator':
         return 'invigilator';
+      case 'ticket_admin':
+        return 'ticket_admin';
       default:
         return 'invigilator';
     }

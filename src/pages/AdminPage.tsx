@@ -43,7 +43,7 @@ import {
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
 export const AdminPage: React.FC = () => {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, isTicketAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -132,24 +132,35 @@ export const AdminPage: React.FC = () => {
   const loadTickets = useCallback(async (reset = false) => {
     setIsLoading(true);
     try {
-      // Check if any filters are applied
-      const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter !== 'all' || resourceIdFilter.length > 0;
-      
       let result;
-      if (hasFilters) {
-        // Use filtered method when filters are applied
-        result = await AdminService.getFilteredTickets(showDeleted, reset ? 1 : page, limit, {
-          searchQuery,
-          statusFilter,
-          severityFilter,
-          categoryFilter,
-          cityFilter,
-          resolverFilter,
-          resourceIdFilter
-        });
+      
+      if (isTicketAdmin && user?.id) {
+        // For ticket admin, only load assigned tickets
+        const assignedTickets = await AdminService.getTicketsAssignedToAdmin(user.id);
+        result = {
+          tickets: assignedTickets,
+          total: assignedTickets.length,
+          hasMore: false
+        };
       } else {
-        // Use regular method when no filters
-        result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit);
+        // For super admin, load all tickets with filters
+        const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter !== 'all' || resourceIdFilter.length > 0;
+        
+        if (hasFilters) {
+          // Use filtered method when filters are applied
+          result = await AdminService.getFilteredTickets(showDeleted, reset ? 1 : page, limit, {
+            searchQuery,
+            statusFilter,
+            severityFilter,
+            categoryFilter,
+            cityFilter,
+            resolverFilter,
+            resourceIdFilter
+          });
+        } else {
+          // Use regular method when no filters
+          result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit);
+        }
       }
       
       const { tickets: newTickets, total, hasMore: more } = result;
@@ -179,7 +190,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter]);
+  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter, isTicketAdmin, user?.id]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   useEffect(() => {
@@ -215,7 +226,14 @@ export const AdminPage: React.FC = () => {
 
   const loadAnalytics = async () => {
     try {
-      const data = await AdminService.getTicketAnalytics();
+      let data;
+      if (isTicketAdmin && user?.id) {
+        // For ticket admin, load filtered analytics
+        data = await AdminService.getTicketAnalyticsForAdmin(user.id);
+      } else {
+        // For super admin, load all analytics
+        data = await AdminService.getTicketAnalytics();
+      }
       setAnalytics(data);
     } catch (err) {
       console.error('Error loading analytics:', err);
@@ -550,17 +568,31 @@ export const AdminPage: React.FC = () => {
   
     try {
       if (downloadType === 'all') {
-        const allTickets = downloadAll
-          ? await AdminService.getAllTicketsUnpaginated({ showDeleted })
-          : await AdminService.getAllTicketsUnpaginated({ showDeleted, startDate: dateRange?.from, endDate: dateRange?.to });
+        let allTickets;
+        if (isTicketAdmin && user?.id) {
+          // For ticket admin, only download assigned tickets
+          allTickets = await AdminService.getTicketsAssignedToAdmin(user.id);
+        } else {
+          // For super admin, download all tickets
+          allTickets = downloadAll
+            ? await AdminService.getAllTicketsUnpaginated({ showDeleted })
+            : await AdminService.getAllTicketsUnpaginated({ showDeleted, startDate: dateRange?.from, endDate: dateRange?.to });
+        }
         downloadTicketsAsCSV(allTickets);
-        toast.success("All tickets downloaded successfully!");
+        toast.success(isTicketAdmin ? "Assigned tickets downloaded successfully!" : "All tickets downloaded successfully!");
       } else if (downloadType === 'detailed') {
-        const allTickets = downloadAll
-          ? await AdminService.getAllTicketsUnpaginated({ showDeleted })
-          : await AdminService.getAllTicketsUnpaginated({ showDeleted, startDate: dateRange?.from, endDate: dateRange?.to });
+        let allTickets;
+        if (isTicketAdmin && user?.id) {
+          // For ticket admin, only download assigned tickets
+          allTickets = await AdminService.getTicketsAssignedToAdmin(user.id);
+        } else {
+          // For super admin, download all tickets
+          allTickets = downloadAll
+            ? await AdminService.getAllTicketsUnpaginated({ showDeleted })
+            : await AdminService.getAllTicketsUnpaginated({ showDeleted, startDate: dateRange?.from, endDate: dateRange?.to });
+        }
         downloadDetailedTickets(allTickets);
-        toast.success("Detailed tickets downloaded successfully!");
+        toast.success(isTicketAdmin ? "Detailed assigned tickets downloaded successfully!" : "Detailed tickets downloaded successfully!");
       }
     } catch (error) {
       console.error(`Error downloading ${downloadType} tickets:`, error);
@@ -591,13 +623,21 @@ export const AdminPage: React.FC = () => {
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="flex flex-col items-center gap-2 w-full p-2 bg-muted rounded-xl border shadow-md my-4 md:grid md:grid-cols-6 md:gap-0 md:p-1">
+            <TabsList className={`flex flex-col items-center gap-2 w-full p-2 bg-muted rounded-xl border shadow-md my-4 md:grid md:gap-0 md:p-1 ${
+              isTicketAdmin ? 'md:grid-cols-3' : 'md:grid-cols-6'
+            }`}>
               <TabsTrigger value="overview" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Overview</TabsTrigger>
-              <TabsTrigger value="tickets" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">All Tickets</TabsTrigger>
+              <TabsTrigger value="tickets" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">
+                {isTicketAdmin ? 'Assigned Tickets' : 'All Tickets'}
+              </TabsTrigger>
               <TabsTrigger value="analytics" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Analytics</TabsTrigger>
-              <TabsTrigger value="users" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">User Management</TabsTrigger>
-              <TabsTrigger value="whatsapp" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">WhatsApp</TabsTrigger>
-              <TabsTrigger value="settings" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Settings</TabsTrigger>
+              {!isTicketAdmin && (
+                <>
+                  <TabsTrigger value="users" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">User Management</TabsTrigger>
+                  <TabsTrigger value="whatsapp" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">WhatsApp</TabsTrigger>
+                  <TabsTrigger value="settings" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Settings</TabsTrigger>
+                </>
+              )}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">

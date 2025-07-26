@@ -37,6 +37,14 @@ export const DashboardRouter: React.FC<DashboardRouterProps> = ({
       features: ['User Management', 'System Analytics', 'Global Settings', 'All Tickets', 'WhatsApp Integration']
     },
     {
+      id: 'ticket_admin',
+      title: 'Ticket Admin Dashboard',
+      description: 'Manage assigned tickets and analytics',
+      icon: Shield,
+      color: 'bg-indigo-100 text-indigo-800',
+      features: ['Assigned Tickets', 'Ticket Analytics', 'Download Reports', 'Ticket Management']
+    },
+    {
       id: 'resolver',
       title: 'Resolver Dashboard',
       description: 'Resolve assigned tickets and manage workload',
@@ -66,6 +74,9 @@ export const DashboardRouter: React.FC<DashboardRouterProps> = ({
     switch (dashboardId) {
       case 'super_admin':
         navigate('/admin');
+        break;
+      case 'ticket_admin':
+        navigate('/ticket-admin');
         break;
       case 'resolver':
         navigate('/ticket-resolver');

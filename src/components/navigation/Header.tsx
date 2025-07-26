@@ -12,16 +12,17 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = false }) => {
-  const { user, isSuperAdmin, isResolver, isApprover, isInvigilator, switchRole } = useAuth();
+  const { user, isSuperAdmin, isResolver, isApprover, isInvigilator, isTicketAdmin, switchRole } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleRoleSwitch = (newRole: 'invigilator' | 'resolver' | 'approver' | 'super_admin') => {
+  const handleRoleSwitch = (newRole: 'invigilator' | 'resolver' | 'approver' | 'super_admin' | 'ticket_admin') => {
     switchRole(newRole);
     const roleNames = {
       'invigilator': 'Invigilator',
       'resolver': 'Resolver',
       'approver': 'Approver',
-      'super_admin': 'Super Admin'
+      'super_admin': 'Super Admin',
+      'ticket_admin': 'Ticket Admin'
     };
     toast.success(`Switched to ${roleNames[newRole]} role`);
     setMobileMenuOpen(false);
@@ -32,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
     if (isResolver) return 'Resolver';
     if (isApprover) return 'Approver';
     if (isInvigilator) return 'Invigilator';
+    if (isTicketAdmin) return 'Ticket Admin';
     return 'Invigilator';
   };
 
@@ -39,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
     if (isSuperAdmin) return Shield;
     if (isResolver) return UserCog;
     if (isApprover) return UserCog;
+    if (isTicketAdmin) return Shield;
     return Users;
   };
 
@@ -81,6 +84,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
                   <SelectItem value="resolver">Resolver</SelectItem>
                   <SelectItem value="approver">Approver</SelectItem>
                   <SelectItem value="super_admin">Super Admin</SelectItem>
+                  <SelectItem value="ticket_admin">Ticket Admin</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -90,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
                 <div className="flex items-center gap-2">
                   <RoleIcon className="h-4 w-4" />
                   <span className="text-sm font-medium">{user.name}</span>
-                  <Badge variant={isSuperAdmin ? "default" : isResolver ? "secondary" : isApprover ? "destructive" : "outline"}>
+                  <Badge variant={isSuperAdmin ? "default" : isResolver ? "secondary" : isApprover ? "destructive" : isTicketAdmin ? "default" : "outline"}>
                     <Shield className="h-3 w-3 mr-1" />
                     {getRoleDisplayName()}
                   </Badge>
@@ -135,6 +139,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
                     <SelectItem value="resolver">Resolver</SelectItem>
                     <SelectItem value="approver">Approver</SelectItem>
                     <SelectItem value="super_admin">Super Admin</SelectItem>
+                    <SelectItem value="ticket_admin">Ticket Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -145,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
                 <div className="flex items-center gap-2">
                   <RoleIcon className="h-4 w-4" />
                   <span className="text-sm font-medium">{user.name}</span>
-                  <Badge variant={isSuperAdmin ? "default" : isResolver ? "secondary" : isApprover ? "destructive" : "outline"}>
+                  <Badge variant={isSuperAdmin ? "default" : isResolver ? "secondary" : isApprover ? "destructive" : isTicketAdmin ? "default" : "outline"}>
                     <Shield className="h-3 w-3 mr-1" />
                     {getRoleDisplayName()}
                   </Badge>

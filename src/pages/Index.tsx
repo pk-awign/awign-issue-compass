@@ -7,7 +7,7 @@ import { performSystemHealthCheck } from '@/utils/systemHealthCheck';
 import { initializeSampleData } from '@/utils/initializeSampleData';
 
 const Index = () => {
-  const { user, isSuperAdmin, isResolver, isApprover } = useAuth();
+  const { user, isSuperAdmin, isResolver, isApprover, isTicketAdmin } = useAuth();
   const navigate = useNavigate();
 
   console.log('Index component rendered');
@@ -42,6 +42,9 @@ const Index = () => {
       if (isSuperAdmin) {
         console.log('Redirecting to admin');
         navigate('/admin');
+      } else if (isTicketAdmin) {
+        console.log('Redirecting to ticket-admin');
+        navigate('/ticket-admin');
       } else if (isResolver) {
         console.log('Redirecting to ticket-resolver');
         navigate('/ticket-resolver');
@@ -53,7 +56,7 @@ const Index = () => {
     } else {
       console.log('No user found, staying on workforce page');
     }
-  }, [user, isSuperAdmin, isResolver, isApprover, navigate]);
+  }, [user, isSuperAdmin, isResolver, isApprover, isTicketAdmin, navigate]);
 
   console.log('Rendering WorkforcePage');
   return <WorkforcePage />;

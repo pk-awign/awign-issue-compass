@@ -8,6 +8,7 @@ import { TrendingUp, Users, AlertCircle, CheckCircle, Clock, MapPin, Building, U
 import { AdminService, type TicketAnalytics } from '@/services/adminService';
 import { UserManagementModal } from './UserManagementModal';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const AdvancedAnalytics: React.FC = () => {
   const [analytics, setAnalytics] = useState<TicketAnalytics | null>(null);
@@ -15,12 +16,20 @@ export const AdvancedAnalytics: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const navigate = useNavigate();
+  const { user, isTicketAdmin } = useAuth();
 
   const loadAnalytics = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await AdminService.getTicketAnalytics();
+      let data;
+      if (isTicketAdmin && user?.id) {
+        // For ticket admin, load filtered analytics
+        data = await AdminService.getTicketAnalyticsForAdmin(user.id);
+      } else {
+        // For super admin, load all analytics
+        data = await AdminService.getTicketAnalytics();
+      }
       setAnalytics(data);
     } catch (err) {
       console.error('Error loading analytics:', err);
@@ -31,10 +40,14 @@ export const AdvancedAnalytics: React.FC = () => {
   };
 
   const handleViewTickets = () => {
-    // Navigate to the admin page with tickets tab active
+    // Navigate to the appropriate page based on user role
     console.log('🚀 Navigating to tickets view...');
-    navigate('/admin?tab=tickets');
-    console.log('✅ Navigation triggered to /admin?tab=tickets');
+    if (isTicketAdmin) {
+      navigate('/ticket-admin?tab=tickets');
+    } else {
+      navigate('/admin?tab=tickets');
+    }
+    console.log('✅ Navigation triggered to tickets view');
   };
 
   useEffect(() => {

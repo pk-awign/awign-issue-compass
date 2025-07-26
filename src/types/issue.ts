@@ -24,8 +24,10 @@ export interface Issue {
   submittedAt: Date;
   assignedResolver?: string;
   assignedApprover?: string;
+  assignedTicketAdmin?: string;
   assignedResolverDetails?: { name: string; role: string };
   assignedApproverDetails?: { name: string; role: string };
+  assignedTicketAdminDetails?: { name: string; role: string };
   comments: Comment[];
   attachments?: Attachment[];
   resolutionNotes?: string;
@@ -65,7 +67,7 @@ export interface CommentAttachment {
 export interface User {
   id: string;
   name: string;
-  role: 'invigilator' | 'resolver' | 'approver' | 'super_admin';
+  role: 'invigilator' | 'resolver' | 'approver' | 'super_admin' | 'ticket_admin';
   city: string;
   centreCode?: string;
   mobile?: string;

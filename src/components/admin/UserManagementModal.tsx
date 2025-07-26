@@ -54,7 +54,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
     invigilator: 'Invigilator',
     resolver: 'Resolver',
     approver: 'Approver',
-    super_admin: 'Super Admin'
+    super_admin: 'Super Admin',
+    ticket_admin: 'Ticket Admin'
   };
 
   useEffect(() => {
@@ -221,6 +222,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
   const getRoleBadgeVariant = (role: User['role']) => {
     switch (role) {
       case 'super_admin': return 'default';
+      case 'ticket_admin': return 'default';
       case 'approver': return 'destructive';
       case 'resolver': return 'secondary';
       case 'invigilator': return 'outline';
@@ -512,6 +514,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
                         <SelectItem value="resolver">Resolver</SelectItem>
                         <SelectItem value="approver">Approver</SelectItem>
                         <SelectItem value="super_admin">Super Admin</SelectItem>
+                        <SelectItem value="ticket_admin">Ticket Admin</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -613,6 +616,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
                         <SelectItem value="resolver">Resolver</SelectItem>
                         <SelectItem value="approver">Approver</SelectItem>
                         <SelectItem value="super_admin">Super Admin</SelectItem>
+                        <SelectItem value="ticket_admin">Ticket Admin</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

@@ -9,10 +9,11 @@ interface AuthContextType {
   isResolver: boolean;
   isApprover: boolean;
   isInvigilator: boolean;
+  isTicketAdmin: boolean;
   login: (identifier: string, otp: string, type: 'mobile' | 'email') => boolean;
   loginWithPin: (identifier: string, pin: string, type?: 'mobile' | 'email') => Promise<boolean>;
   logout: () => void;
-  switchRole: (role: 'invigilator' | 'resolver' | 'approver' | 'super_admin') => void;
+  switchRole: (role: 'invigilator' | 'resolver' | 'approver' | 'super_admin' | 'ticket_admin') => void;
   loading: boolean; // <-- Add loading to context type
 }
 
@@ -65,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isResolver = user?.role === 'resolver';
   const isApprover = user?.role === 'approver';
   const isInvigilator = user?.role === 'invigilator';
+  const isTicketAdmin = user?.role === 'ticket_admin';
 
   // Fallback login method for admin users (OTP-based) - kept for backward compatibility
   const login = (identifier: string, otp: string, type: 'mobile' | 'email'): boolean => {
@@ -111,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const switchRole = (role: 'invigilator' | 'resolver' | 'approver' | 'super_admin') => {
+  const switchRole = (role: 'invigilator' | 'resolver' | 'approver' | 'super_admin' | 'ticket_admin') => {
     let userData: User;
     
     switch (role) {
@@ -155,6 +157,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isActive: true
         };
         break;
+      case 'ticket_admin':
+        userData = {
+          id: 'ticket_admin_1',
+          name: 'Mumbai Ticket Admin',
+          role: 'ticket_admin',
+          city: 'Mumbai',
+          centreCode: 'MUM001',
+          isActive: true
+        };
+        break;
     }
     
     setUser(userData);
@@ -170,6 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isResolver, 
       isApprover, 
       isInvigilator,
+      isTicketAdmin,
       login, 
       loginWithPin,
       logout, 
