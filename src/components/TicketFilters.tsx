@@ -4,9 +4,14 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter, X, Calendar as CalendarIcon } from 'lucide-react';
 import { Issue } from '@/types/issue';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DateRange } from 'react-day-picker';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface TicketFiltersProps {
   searchTerm: string;
@@ -21,6 +26,8 @@ interface TicketFiltersProps {
   setCityFilter: (city: string) => void;
   resourceIdFilter?: string[];
   setResourceIdFilter?: (resourceIds: string[]) => void;
+  dateRange?: DateRange | undefined;
+  setDateRange?: (range: DateRange | undefined) => void;
   onClearFilters: () => void;
   activeFiltersCount: number;
 }
@@ -38,6 +45,8 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   setCityFilter,
   resourceIdFilter = [],
   setResourceIdFilter,
+  dateRange,
+  setDateRange,
   onClearFilters,
   activeFiltersCount
 }) => {
@@ -72,7 +81,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search tickets by number, description..."
+            placeholder="Search tickets by number (comma-separated), description..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -151,6 +160,54 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
             </Select>
           </div>
         </div>
+
+        {/* Date Range Filter */}
+        {setDateRange && (
+          <div>
+            <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !dateRange && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "LLL dd, y")} -{" "}
+                        {format(dateRange.to, "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(dateRange.from, "LLL dd, y")
+                    )
+                  ) : (
+                    <span>Pick a date range</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+            {dateRange && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Filtering tickets created between {dateRange.from && format(dateRange.from, "MMM dd, yyyy")} 
+                {dateRange.to && ` and ${format(dateRange.to, "MMM dd, yyyy")}`}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Resource ID Filter */}
         {setResourceIdFilter && (

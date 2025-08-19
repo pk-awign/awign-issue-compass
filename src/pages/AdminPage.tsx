@@ -81,6 +81,7 @@ export const AdminPage: React.FC = () => {
     from: new Date(),
     to: new Date(),
   });
+  const [filterDateRange, setFilterDateRange] = useState<DateRange | undefined>();
   const [downloadAll, setDownloadAll] = useState(false);
 
   // Pagination states
@@ -144,7 +145,7 @@ export const AdminPage: React.FC = () => {
         };
       } else {
         // For super admin, load all tickets with filters
-        const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter !== 'all' || resourceIdFilter.length > 0;
+        const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter !== 'all' || resourceIdFilter.length > 0 || filterDateRange?.from;
         
         if (hasFilters) {
           // Use filtered method when filters are applied
@@ -155,7 +156,8 @@ export const AdminPage: React.FC = () => {
             categoryFilter,
             cityFilter,
             resolverFilter,
-            resourceIdFilter
+            resourceIdFilter,
+            dateRange: filterDateRange
           });
         } else {
           // Use regular method when no filters
@@ -190,7 +192,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter, isTicketAdmin, user?.id]);
+  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter, filterDateRange, isTicketAdmin, user?.id]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   useEffect(() => {
@@ -200,7 +202,7 @@ export const AdminPage: React.FC = () => {
     setFilteredTickets([]);
     loadTickets(true);
     // eslint-disable-next-line
-  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter]);
+  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter, filterDateRange]);
 
   // Fetch resolvers for filter dropdown
   useEffect(() => {
@@ -215,6 +217,28 @@ export const AdminPage: React.FC = () => {
   const handleLoadMore = useCallback(() => {
     setPage(prev => prev + 1);
   }, []);
+
+  // Clear filters function
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setSeverityFilter('all');
+    setCategoryFilter('all');
+    setCityFilter('all');
+    setResolverFilter('all');
+    setResourceIdFilter([]);
+    setFilterDateRange(undefined);
+  };
+
+  // Check if there are active filters
+  const hasActiveFilters = searchQuery || 
+    statusFilter !== 'all' || 
+    severityFilter !== 'all' || 
+    categoryFilter !== 'all' || 
+    cityFilter !== 'all' || 
+    resolverFilter !== 'all' || 
+    resourceIdFilter.length > 0 || 
+    filterDateRange?.from;
 
   // When page changes (and not reset), load next page
   useEffect(() => {
@@ -799,7 +823,7 @@ export const AdminPage: React.FC = () => {
                     <div className="relative">
                       <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search tickets..."
+                        placeholder="Search tickets by number (comma-separated), description..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10"
@@ -897,6 +921,52 @@ export const AdminPage: React.FC = () => {
                   </p>
                 )}
               </div>
+
+              {/* Date Range Filter */}
+              <div className="lg:col-span-2">
+                <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !filterDateRange && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filterDateRange?.from ? (
+                        filterDateRange.to ? (
+                          <>
+                            {format(filterDateRange.from, "LLL dd, y")} -{" "}
+                            {format(filterDateRange.to, "LLL dd, y")}
+                          </>
+                        ) : (
+                          format(filterDateRange.from, "LLL dd, y")
+                        )
+                      ) : (
+                        <span>Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={filterDateRange?.from}
+                      selected={filterDateRange}
+                      onSelect={setFilterDateRange}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {filterDateRange && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Filtering tickets created between {filterDateRange.from && format(filterDateRange.from, "MMM dd, yyyy")} 
+                    {filterDateRange.to && ` and ${format(filterDateRange.to, "MMM dd, yyyy")}`}
+                  </p>
+                )}
+              </div>
                     </div>
                   </div>
                 </CardContent>
@@ -926,6 +996,13 @@ export const AdminPage: React.FC = () => {
                         disabled={isDownloading}
                     >
                         {isDownloading && downloadType === 'detailed' ? 'Downloading...' : 'Download Detailed Tickets'}
+                    </Button>
+                    <Button 
+                        variant="outline" 
+                        onClick={clearFilters}
+                        disabled={!hasActiveFilters}
+                    >
+                        Clear Filters
                     </Button>
                 </div>
               </div>

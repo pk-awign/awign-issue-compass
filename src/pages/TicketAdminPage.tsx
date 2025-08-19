@@ -192,12 +192,29 @@ export const TicketAdminPage: React.FC = () => {
 
     // Apply search filter
     if (searchQuery) {
-      filtered = filtered.filter(ticket =>
-        ticket.ticketNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ticket.issueDescription.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ticket.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ticket.centreCode.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const searchTerms = searchQuery.split(',').map(term => term.trim()).filter(term => term.length > 0);
+      
+      filtered = filtered.filter(ticket => {
+        // Check if any search term matches
+        return searchTerms.some(term => {
+          const lowerTerm = term.toLowerCase();
+          const lowerTicketNumber = ticket.ticketNumber.toLowerCase();
+          const lowerDescription = ticket.issueDescription.toLowerCase();
+          const lowerCity = ticket.city.toLowerCase();
+          const lowerCentreCode = ticket.centreCode.toLowerCase();
+          
+          // If the search term looks like a ticket number (contains AWG), prioritize exact ticket number matching
+          if (lowerTerm.includes('awg') || lowerTerm.includes('awg-')) {
+            return lowerTicketNumber.includes(lowerTerm);
+          }
+          
+          // Otherwise, search across all fields
+          return lowerTicketNumber.includes(lowerTerm) ||
+                 lowerDescription.includes(lowerTerm) ||
+                 lowerCity.includes(lowerTerm) ||
+                 lowerCentreCode.includes(lowerTerm);
+        });
+      });
     }
 
     // Apply status filter
@@ -546,7 +563,7 @@ export const TicketAdminPage: React.FC = () => {
                   <div className="flex flex-col md:flex-row gap-4 mb-4">
                     <div className="flex-1">
                       <Input
-                        placeholder="Search tickets..."
+                        placeholder="Search tickets by number (comma-separated), description..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full"

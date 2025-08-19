@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Issue } from '@/types/issue';
 import { format } from 'date-fns';
+import { DateRange } from 'react-day-picker';
 import { 
   Eye, 
   Clock, 
@@ -44,6 +45,7 @@ export const TicketResolverPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   useEffect(() => {
     refreshIssues();
@@ -83,11 +85,27 @@ export const TicketResolverPage: React.FC = () => {
 
     // Search filter
     if (searchTerm) {
-      filtered = filtered.filter(ticket =>
-        ticket.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ticket.issueDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ticket.issueCategory.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const searchTerms = searchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
+      
+      filtered = filtered.filter(ticket => {
+        // Check if any search term matches
+        return searchTerms.some(term => {
+          const lowerTerm = term.toLowerCase();
+          const lowerTicketNumber = ticket.ticketNumber.toLowerCase();
+          const lowerDescription = ticket.issueDescription.toLowerCase();
+          const lowerCategory = ticket.issueCategory.toLowerCase();
+          
+          // If the search term looks like a ticket number (contains AWG), prioritize exact ticket number matching
+          if (lowerTerm.includes('awg') || lowerTerm.includes('awg-')) {
+            return lowerTicketNumber.includes(lowerTerm);
+          }
+          
+          // Otherwise, search across all fields
+          return lowerTicketNumber.includes(lowerTerm) ||
+                 lowerDescription.includes(lowerTerm) ||
+                 lowerCategory.includes(lowerTerm);
+        });
+      });
     }
 
     // Status filter
@@ -115,8 +133,19 @@ export const TicketResolverPage: React.FC = () => {
       filtered = filtered.filter(ticket => resourceIdFilter.includes(ticket.resourceId));
     }
 
+    // Date range filter
+    if (dateRange?.from) {
+      filtered = filtered.filter(ticket => {
+        const ticketDate = new Date(ticket.submittedAt);
+        const fromDate = dateRange.from;
+        const toDate = dateRange.to || dateRange.from;
+        
+        return ticketDate >= fromDate && ticketDate <= toDate;
+      });
+    }
+
     return filtered;
-  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter]);
+  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange]);
 
   // Categorize tickets by status
   const ticketsByStatus = useMemo(() => {
@@ -131,7 +160,7 @@ export const TicketResolverPage: React.FC = () => {
   }, [filteredTickets]);
 
   const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter]
-    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length;
+    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -140,6 +169,7 @@ export const TicketResolverPage: React.FC = () => {
     setCategoryFilter('all');
     setCityFilter('all');
     setResourceIdFilter([]);
+    setDateRange(undefined);
   };
 
   const getSeverityColor = (severity: Issue['severity']) => {
@@ -297,6 +327,8 @@ export const TicketResolverPage: React.FC = () => {
             setCityFilter={setCityFilter}
             resourceIdFilter={resourceIdFilter}
             setResourceIdFilter={setResourceIdFilter}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
           />

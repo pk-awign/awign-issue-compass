@@ -31,6 +31,10 @@ export interface TicketFilters {
   cityFilter?: string;
   resolverFilter?: string;
   resourceIdFilter?: string[]; // Array of resource IDs for multiselect
+  dateRange?: {
+    from: Date;
+    to?: Date;
+  };
 }
 
 export class AdminService {
@@ -458,7 +462,18 @@ export class AdminService {
 
       // Apply filters
       if (filters.searchQuery) {
-        query = query.or(`ticket_number.ilike.%${filters.searchQuery}%,issue_description.ilike.%${filters.searchQuery}%,city.ilike.%${filters.searchQuery}%,centre_code.ilike.%${filters.searchQuery}%`);
+        const searchTerms = filters.searchQuery.split(',').map(term => term.trim()).filter(term => term.length > 0);
+        
+        if (searchTerms.length > 0) {
+          // Build OR conditions for each search term
+          const orConditions = searchTerms.map(term => 
+            `ticket_number.ilike.%${term}%,issue_description.ilike.%${term}%,city.ilike.%${term}%,centre_code.ilike.%${term}%`
+          );
+          
+          // Combine all OR conditions
+          const combinedOrCondition = orConditions.join(',');
+          query = query.or(combinedOrCondition);
+        }
       }
       if (filters.statusFilter && filters.statusFilter !== 'all') {
         query = query.eq('status', filters.statusFilter);
@@ -477,6 +492,13 @@ export class AdminService {
       }
       if (filters.resourceIdFilter && filters.resourceIdFilter.length > 0) {
         query = query.in('resource_id', filters.resourceIdFilter);
+      }
+      
+      // Date range filter
+      if (filters.dateRange?.from) {
+        const fromDate = filters.dateRange.from.toISOString();
+        const toDate = filters.dateRange.to ? filters.dateRange.to.toISOString() : filters.dateRange.from.toISOString();
+        query = query.gte('created_at', fromDate).lte('created_at', toDate);
       }
 
       // Get total count for analytics
