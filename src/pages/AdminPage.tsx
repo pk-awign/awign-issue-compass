@@ -840,8 +840,9 @@ export const AdminPage: React.FC = () => {
                           <SelectItem value="all">All Status</SelectItem>
                           <SelectItem value="open">Open</SelectItem>
                           <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="send_for_approval">Send for Approval</SelectItem>
+                          <SelectItem value="approved">Approved</SelectItem>
                           <SelectItem value="resolved">Resolved</SelectItem>
-                          <SelectItem value="closed">Closed</SelectItem>
                         </SelectContent>
                       </Select>
 
