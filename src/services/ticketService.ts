@@ -294,13 +294,13 @@ export class TicketService {
       approved: ['resolved'],
       resolved: [],
     };
-    // Super Admin: can move forward through any step
+    // Super Admin: can move to any status (including backward for management)
     const SUPER_ADMIN_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
-      open: ['in_progress'],
-      in_progress: ['send_for_approval'],
-      send_for_approval: ['approved'],
-      approved: ['resolved'],
-      resolved: [],
+      open: ['in_progress', 'send_for_approval', 'approved', 'resolved'],
+      in_progress: ['open', 'send_for_approval', 'approved', 'resolved'],
+      send_for_approval: ['open', 'approved', 'resolved'],
+      approved: ['open', 'in_progress', 'send_for_approval', 'resolved'],
+      resolved: ['open', 'in_progress', 'send_for_approval', 'approved'],
     };
     switch (role) {
       case 'approver':
