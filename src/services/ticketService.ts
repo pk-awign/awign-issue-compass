@@ -378,7 +378,12 @@ export class TicketService {
         userRole: role,
         allowedTransitions: allowed
       });
-      if (role !== 'super_admin' && !allowed.includes(newStatus)) {
+      
+      // Super admin bypass - they can move to any status
+      if (role === 'super_admin') {
+        console.log('[DEBUG] Super admin bypass - allowing transition');
+      } else if (!allowed.includes(newStatus)) {
+        console.log('[DEBUG] Transition not allowed for role:', role, 'from', oldStatus, 'to', newStatus);
         toast.error('Status transition not allowed.');
         return false;
       }
