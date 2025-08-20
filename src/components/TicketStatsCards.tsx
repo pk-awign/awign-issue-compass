@@ -20,7 +20,7 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
     let pending = 0;
     let inProgress = 0;
     if (userRole === 'approver') {
-      pending = tickets.filter(t => ['in_progress', 'send_for_approval', 'approved'].includes(t.status)).length;
+      pending = tickets.filter(t => ['in_progress', 'ops_input_required', 'send_for_approval', 'approved'].includes(t.status)).length;
     } else {
       inProgress = tickets.filter(t => t.status === 'in_progress').length;
     }

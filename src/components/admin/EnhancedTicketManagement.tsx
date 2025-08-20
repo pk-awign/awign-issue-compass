@@ -67,7 +67,7 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
   const getAvailableTransitions = (currentStatus: Issue['status'], userRole: string) => {
     if (userRole === 'super_admin') {
       // Super admin can transition to any status except the current one
-      const allStatuses: Issue['status'][] = ['open', 'in_progress', 'send_for_approval', 'approved', 'resolved'];
+      const allStatuses: Issue['status'][] = ['open', 'in_progress', 'ops_input_required', 'send_for_approval', 'approved', 'resolved'];
       return allStatuses.filter(status => status !== currentStatus);
     }
     
@@ -127,6 +127,7 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
     switch (status) {
       case 'open': return 'bg-blue-100 text-blue-800';
       case 'in_progress': return 'bg-yellow-100 text-yellow-800';
+      case 'ops_input_required': return 'bg-purple-100 text-purple-800';
       case 'send_for_approval': return 'bg-orange-100 text-orange-800';
       case 'approved': return 'bg-green-100 text-green-800';
       case 'resolved': return 'bg-gray-100 text-gray-800';

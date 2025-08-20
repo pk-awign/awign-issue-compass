@@ -100,6 +100,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="ops_input_required">Ops Input Required</SelectItem>
                 <SelectItem value="send_for_approval">Send for Approval</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="resolved">Resolved</SelectItem>

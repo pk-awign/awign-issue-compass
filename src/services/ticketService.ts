@@ -278,10 +278,11 @@ export class TicketService {
   static getAllowedStatusTransitions(role: string, currentStatus: Issue['status']): Issue['status'][] {
     // Corrected status flow
     const empty: Issue['status'][] = [];
-    // Resolver: OPEN → IN PROGRESS, IN PROGRESS → SEND FOR APPROVAL
+    // Resolver: OPEN → IN PROGRESS, IN PROGRESS → SEND FOR APPROVAL or OPS INPUT REQUIRED
     const RESOLVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
       open: ['in_progress'],
-      in_progress: ['send_for_approval'],
+      in_progress: ['send_for_approval', 'ops_input_required'],
+      ops_input_required: ['in_progress'],
       send_for_approval: [],
       approved: [],
       resolved: [],
@@ -296,11 +297,12 @@ export class TicketService {
     };
     // Super Admin: can move to any status (including backward for management)
     const SUPER_ADMIN_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
-      open: ['in_progress', 'send_for_approval', 'approved', 'resolved'],
-      in_progress: ['open', 'send_for_approval', 'approved', 'resolved'],
-      send_for_approval: ['open', 'approved', 'resolved'],
-      approved: ['open', 'in_progress', 'send_for_approval', 'resolved'],
-      resolved: ['open', 'in_progress', 'send_for_approval', 'approved'],
+      open: ['in_progress', 'ops_input_required', 'send_for_approval', 'approved', 'resolved'],
+      in_progress: ['open', 'ops_input_required', 'send_for_approval', 'approved', 'resolved'],
+      ops_input_required: ['open', 'in_progress', 'send_for_approval', 'approved', 'resolved'],
+      send_for_approval: ['open', 'in_progress', 'ops_input_required', 'approved', 'resolved'],
+      approved: ['open', 'in_progress', 'ops_input_required', 'send_for_approval', 'resolved'],
+      resolved: ['open', 'in_progress', 'ops_input_required', 'send_for_approval', 'approved'],
     };
     switch (role) {
       case 'approver':

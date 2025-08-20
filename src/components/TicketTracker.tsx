@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download, Ticket, Calendar, MapPin, FileText, Send, X } from 'lucide-react';
+import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download, Ticket, Calendar, MapPin, FileText, Send, X, HelpCircle } from 'lucide-react';
 import { Issue, Comment } from '@/types/issue';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -109,9 +109,14 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
         return <AlertCircle className="h-4 w-4 text-red-500" />;
       case 'in_progress':
         return <Clock className="h-4 w-4 text-yellow-500" />;
-      case 'resolved':
-      case 'closed':
+      case 'ops_input_required':
+        return <HelpCircle className="h-4 w-4 text-purple-500" />;
+      case 'send_for_approval':
+        return <Clock className="h-4 w-4 text-orange-500" />;
+      case 'approved':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'resolved':
+        return <CheckCircle className="h-4 w-4 text-blue-500" />;
       default:
         return <AlertCircle className="h-4 w-4 text-gray-500" />;
     }
@@ -123,10 +128,14 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
         return 'bg-red-100 text-red-800';
       case 'in_progress':
         return 'bg-yellow-100 text-yellow-800';
+      case 'ops_input_required':
+        return 'bg-purple-100 text-purple-800';
+      case 'send_for_approval':
+        return 'bg-orange-100 text-orange-800';
+      case 'approved':
+        return 'bg-green-100 text-green-800';
       case 'resolved':
         return 'bg-blue-100 text-blue-800';
-      case 'closed':
-        return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
