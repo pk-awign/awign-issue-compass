@@ -245,7 +245,8 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         ticket.id, 
         newStatus, 
         user.id, 
-        resolutionNotes
+        resolutionNotes,
+        user.role
       );
       
       if (success) {

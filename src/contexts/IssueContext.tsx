@@ -14,7 +14,7 @@ interface IssueContextType {
   getIssuesByUser: (userId: string) => Promise<Issue[]>;
   getIssueByTicketNumber: (ticketNumber: string) => Promise<Issue | null>;
   assignResolver: (issueId: string, resolver: string) => Promise<void>;
-  updateStatus: (issueId: string, status: Issue['status'], resolutionNotes?: string) => Promise<void>;
+  updateStatus: (issueId: string, status: Issue['status'], resolutionNotes?: string, userRole?: string) => Promise<void>;
   getIssuesForApproval: (city: string) => Issue[];
   refreshIssues: () => Promise<void>;
 }
@@ -153,8 +153,10 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await updateIssue(issueId, { assignedResolver: resolver });
   };
 
-  const updateStatus = async (issueId: string, status: Issue['status'], resolutionNotes?: string): Promise<void> => {
-    await TicketService.updateTicketStatus(issueId, status, resolutionNotes);
+  const updateStatus = async (issueId: string, status: Issue['status'], resolutionNotes?: string, userRole?: string): Promise<void> => {
+    // Note: This method needs userId which we don't have in this context
+    // For now, we'll use a placeholder. Components should use TicketService directly
+    await TicketService.updateTicketStatus(issueId, status, 'system', resolutionNotes, userRole);
     await refreshIssues();
   };
 

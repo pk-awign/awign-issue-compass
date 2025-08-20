@@ -85,7 +85,8 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
         ticket.id, 
         newStatus, 
         user.id, 
-        resolutionNotes
+        resolutionNotes,
+        user.role
       );
       
       if (success) {
