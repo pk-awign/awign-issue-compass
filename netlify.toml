@@ -18,6 +18,8 @@
   to = "/index.html"
   status = 200 
 
+# Auto-Resolution Function (Currently Paused)
+# Uncomment the schedule below when you want to enable auto-resolution
 [functions."auto-resolve-user-dependency"]
-  schedule = "0 2 * * *"
-  # Daily at 2 AM UTC
+  # schedule = "0 2 * * *"  # Daily at 2 AM UTC - PAUSED
+  # To enable: uncomment the line above
