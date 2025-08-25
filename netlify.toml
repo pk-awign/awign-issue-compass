@@ -17,3 +17,7 @@
   from = "/*"
   to = "/index.html"
   status = 200 
+
+[functions."auto-resolve-user-dependency"]
+  schedule = "0 2 * * *"
+  # Daily at 2 AM UTC
