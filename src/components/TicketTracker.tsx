@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download, Ticket, Calendar, MapPin, FileText, Send, X, HelpCircle } from 'lucide-react';
+import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download, Ticket, Calendar, MapPin, FileText, Send, X, HelpCircle, UserX } from 'lucide-react';
 import { Issue, Comment } from '@/types/issue';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -111,6 +111,8 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
         return <Clock className="h-4 w-4 text-yellow-500" />;
       case 'ops_input_required':
         return <HelpCircle className="h-4 w-4 text-purple-500" />;
+      case 'user_dependency':
+        return <UserX className="h-4 w-4 text-orange-500" />;
       case 'send_for_approval':
         return <Clock className="h-4 w-4 text-orange-500" />;
       case 'approved':
@@ -130,6 +132,8 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
         return 'bg-yellow-100 text-yellow-800';
       case 'ops_input_required':
         return 'bg-purple-100 text-purple-800';
+      case 'user_dependency':
+        return 'bg-orange-100 text-orange-800';
       case 'send_for_approval':
         return 'bg-orange-100 text-orange-800';
       case 'approved':

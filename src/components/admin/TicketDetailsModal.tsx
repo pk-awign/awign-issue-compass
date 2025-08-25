@@ -211,6 +211,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
       case 'open': return 'destructive';
       case 'in_progress': return 'default';
       case 'ops_input_required': return 'secondary';
+      case 'user_dependency': return 'default';
       case 'send_for_approval': return 'default';
       case 'approved': return 'secondary';
       case 'resolved': return 'outline';
@@ -230,7 +231,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const getAvailableTransitions = (currentStatus: Issue['status'], userRole: string) => {
     if (userRole === 'super_admin') {
       // Super admin can transition to any status
-      return ['open', 'in_progress', 'ops_input_required', 'send_for_approval', 'approved', 'resolved'];
+      return ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved'];
     }
     
     return statusTransitions

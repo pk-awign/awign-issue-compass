@@ -278,11 +278,12 @@ export class TicketService {
   static getAllowedStatusTransitions(role: string, currentStatus: Issue['status']): Issue['status'][] {
     // Corrected status flow
     const empty: Issue['status'][] = [];
-    // Resolver: OPEN → IN PROGRESS, IN PROGRESS → SEND FOR APPROVAL or OPS INPUT REQUIRED
+    // Resolver: OPEN → IN PROGRESS/USER_DEPENDENCY, IN PROGRESS → SEND FOR APPROVAL/OPS INPUT REQUIRED/USER_DEPENDENCY
     const RESOLVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
-      open: ['in_progress'],
-      in_progress: ['send_for_approval', 'ops_input_required'],
-      ops_input_required: ['in_progress'],
+      open: ['in_progress', 'user_dependency'],
+      in_progress: ['send_for_approval', 'ops_input_required', 'user_dependency'],
+      ops_input_required: ['in_progress', 'user_dependency'],
+      user_dependency: ['in_progress', 'send_for_approval'],
       send_for_approval: [],
       approved: [],
       resolved: [],
@@ -291,18 +292,21 @@ export class TicketService {
     const APPROVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
       open: [],
       in_progress: [],
+      ops_input_required: [],
+      user_dependency: [],
       send_for_approval: ['approved'],
       approved: ['resolved'],
       resolved: [],
     };
     // Super Admin: can move to any status (including backward for management)
     const SUPER_ADMIN_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
-      open: ['in_progress', 'ops_input_required', 'send_for_approval', 'approved', 'resolved'],
-      in_progress: ['open', 'ops_input_required', 'send_for_approval', 'approved', 'resolved'],
-      ops_input_required: ['open', 'in_progress', 'send_for_approval', 'approved', 'resolved'],
-      send_for_approval: ['open', 'in_progress', 'ops_input_required', 'approved', 'resolved'],
-      approved: ['open', 'in_progress', 'ops_input_required', 'send_for_approval', 'resolved'],
-      resolved: ['open', 'in_progress', 'ops_input_required', 'send_for_approval', 'approved'],
+      open: ['in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved'],
+      in_progress: ['open', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved'],
+      ops_input_required: ['open', 'in_progress', 'user_dependency', 'send_for_approval', 'approved', 'resolved'],
+      user_dependency: ['open', 'in_progress', 'ops_input_required', 'send_for_approval', 'approved', 'resolved'],
+      send_for_approval: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'approved', 'resolved'],
+      approved: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'resolved'],
+      resolved: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved'],
     };
     switch (role) {
       case 'approver':

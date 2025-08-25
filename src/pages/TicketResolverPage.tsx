@@ -153,6 +153,8 @@ export const TicketResolverPage: React.FC = () => {
       all: filteredTickets,
       open: filteredTickets.filter(t => t.status === 'open'),
       in_progress: filteredTickets.filter(t => t.status === 'in_progress'),
+      ops_input_required: filteredTickets.filter(t => t.status === 'ops_input_required'),
+      user_dependency: filteredTickets.filter(t => t.status === 'user_dependency'),
       approval_pending: filteredTickets.filter(t => t.status === 'send_for_approval'),
       approved: filteredTickets.filter(t => t.status === 'approved'),
       resolved: filteredTickets.filter(t => t.status === 'resolved'),
@@ -185,6 +187,10 @@ export const TicketResolverPage: React.FC = () => {
     switch (status) {
       case 'open': return 'bg-blue-100 text-blue-800';
       case 'in_progress': return 'bg-yellow-100 text-yellow-800';
+      case 'ops_input_required': return 'bg-purple-100 text-purple-800';
+      case 'user_dependency': return 'bg-orange-100 text-orange-800';
+      case 'send_for_approval': return 'bg-indigo-100 text-indigo-800';
+      case 'approved': return 'bg-teal-100 text-teal-800';
       case 'resolved': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }

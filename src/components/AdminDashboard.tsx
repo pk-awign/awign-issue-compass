@@ -28,7 +28,9 @@ import {
   RefreshCw,
   AlertTriangle,
   FileText,
-  User as UserIcon
+  User as UserIcon,
+  HelpCircle,
+  UserX
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIssues } from '@/contexts/IssueContext';
@@ -154,15 +156,19 @@ const AdminDashboard: React.FC = () => {
     const statusConfig = {
       open: { color: 'bg-red-100 text-red-800', icon: AlertCircle },
       in_progress: { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
+      ops_input_required: { color: 'bg-purple-100 text-purple-800', icon: HelpCircle },
+      user_dependency: { color: 'bg-orange-100 text-orange-800', icon: UserX },
+      send_for_approval: { color: 'bg-indigo-100 text-indigo-800', icon: Clock },
+      approved: { color: 'bg-teal-100 text-teal-800', icon: CheckCircle },
       resolved: { color: 'bg-green-100 text-green-800', icon: CheckCircle },
       closed: { color: 'bg-gray-100 text-gray-800', icon: XCircle }
     };
 
     const config = statusConfig[status];
-    const Icon = config.icon;
+    const Icon = config?.icon || AlertCircle;
 
     return (
-      <Badge className={config.color}>
+      <Badge className={config?.color || 'bg-gray-100 text-gray-800'}>
         <Icon className="h-3 w-3 mr-1" />
         {status.replace('_', ' ').toUpperCase()}
       </Badge>
@@ -486,8 +492,9 @@ const AdminDashboard: React.FC = () => {
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="open">Open</SelectItem>
                     <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="user_dependency">User Dependency</SelectItem>
                     <SelectItem value="ops_input_required">Ops Input Required</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={filterCategory} onValueChange={setFilterCategory}>
