@@ -218,15 +218,18 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const resolverAssignment = ticketAssigns.find((a: any) => a.role === 'resolver');
         const approverAssignment = ticketAssigns.find((a: any) => a.role === 'approver');
 
-        // Map attachments with download URLs
-        const attachments = Array.isArray(ticket.attachments) ? ticket.attachments.map((att: any) => ({
-          id: att.id,
-          fileName: att.file_name,
-          fileSize: att.file_size,
-          fileType: att.file_type,
-          uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-          downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${att.storage_path}`
-        })) : [];
+        // Map attachments with download URLs via Supabase helper
+        const attachments = Array.isArray(ticket.attachments) ? ticket.attachments.map((att: any) => {
+          const { data: pub } = supabase.storage.from('ticket-attachments').getPublicUrl(att.storage_path);
+          return {
+            id: att.id,
+            fileName: att.file_name,
+            fileSize: att.file_size,
+            fileType: att.file_type,
+            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            downloadUrl: pub.publicUrl,
+          };
+        }) : [];
 
         return {
           id: ticket.id,
@@ -256,14 +259,17 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             authorRole: comment.author_role,
             timestamp: new Date(comment.created_at),
             isInternal: comment.is_internal,
-            attachments: comment.comment_attachments?.map((att: any) => ({
-              id: att.id,
-              fileName: att.file_name,
-              fileSize: att.file_size,
-              fileType: att.file_type,
-              downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`,
-              uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-            })) || [],
+            attachments: comment.comment_attachments?.map((att: any) => {
+              const { data: pub } = supabase.storage.from('comment-attachments').getPublicUrl(att.storage_path);
+              return {
+                id: att.id,
+                fileName: att.file_name,
+                fileSize: att.file_size,
+                fileType: att.file_type,
+                downloadUrl: pub.publicUrl,
+                uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+              };
+            }) || [],
           })) || [],
           attachments,
           issueEvidence: [],
