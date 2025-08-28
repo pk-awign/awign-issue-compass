@@ -59,6 +59,7 @@ const AdminDashboard: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterCity, setFilterCity] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [accurateTotals, setAccurateTotals] = useState<{ total: number; open: number; inProgress: number; resolved: number } | null>(null);
 
   // New user form state
   const [newUser, setNewUser] = useState({
@@ -75,6 +76,7 @@ const AdminDashboard: React.FC = () => {
     loadUsers();
     refreshIssues();
     initializeSampleData();
+    loadAccurateTotals();
   }, []);
 
   const initializeSampleData = async () => {
@@ -83,6 +85,20 @@ const AdminDashboard: React.FC = () => {
       console.log('Sample users initialized');
     } catch (error) {
       console.error('Error initializing sample data:', error);
+    }
+  };
+
+  const loadAccurateTotals = async () => {
+    try {
+      const all = await AdminService.getAllTicketsUnpaginated({ showDeleted: false });
+      setAccurateTotals({
+        total: all.length,
+        open: all.filter(t => t.status === 'open').length,
+        inProgress: all.filter(t => t.status === 'in_progress').length,
+        resolved: all.filter(t => t.status === 'resolved').length,
+      });
+    } catch (e) {
+      console.error('Failed to load accurate totals:', e);
     }
   };
 
@@ -202,10 +218,10 @@ const AdminDashboard: React.FC = () => {
   });
 
   const stats = {
-    totalTickets: issues.length,
-    openTickets: issues.filter(i => i.status === 'open').length,
-    inProgressTickets: issues.filter(i => i.status === 'in_progress').length,
-    resolvedTickets: issues.filter(i => i.status === 'resolved').length,
+    totalTickets: accurateTotals?.total ?? issues.length,
+    openTickets: accurateTotals?.open ?? issues.filter(i => i.status === 'open').length,
+    inProgressTickets: accurateTotals?.inProgress ?? issues.filter(i => i.status === 'in_progress').length,
+    resolvedTickets: accurateTotals?.resolved ?? issues.filter(i => i.status === 'resolved').length,
     totalUsers: users.length,
     activeResolvers: users.filter(u => u.role === 'resolver' && u.isActive).length,
     activeApprovers: users.filter(u => u.role === 'approver' && u.isActive).length

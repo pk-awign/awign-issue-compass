@@ -881,18 +881,9 @@ export class AdminService {
 
   static async getTicketAnalytics(): Promise<TicketAnalytics> {
     try {
-      const { data: tickets, error } = await supabase
-        .from('tickets')
-        .select('*');
-
-      if (error) {
-        console.error('Error fetching tickets for analytics:', error);
-        throw error;
-      }
-
-      if (!tickets) {
-        return this.getEmptyAnalytics();
-      }
+      // Fetch all non-deleted tickets in batches to avoid 1000-row caps
+      const tickets = await this.getAllTicketsUnpaginated({ showDeleted: false });
+      if (!tickets || tickets.length === 0) return this.getEmptyAnalytics();
 
       // Get all users to map IDs to names
       const { data: users, error: usersError } = await supabase
@@ -933,29 +924,33 @@ export class AdminService {
         });
       }
 
-      // Calculate metrics
+      // Calculate metrics over full ticket set
       const totalTickets = tickets.length;
       const openTickets = tickets.filter(t => t.status === 'open').length;
       const inProgressTickets = tickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = tickets.filter(t => t.status === 'resolved').length;
-      const closedTickets = tickets.filter(t => t.status === 'closed').length;
-      
+      const closedTickets = tickets.filter(t => (t as any).status === 'closed').length;
+
       const sev1Tickets = tickets.filter(t => t.severity === 'sev1').length;
       const sev2Tickets = tickets.filter(t => t.severity === 'sev2').length;
       const sev3Tickets = tickets.filter(t => t.severity === 'sev3').length;
-      
+
       // Calculate assignments using new ticket_assignees table
       const assignedTickets = tickets.filter(t => {
         const ticketAssigns = ticketAssignments.get(t.id);
         return ticketAssigns && ticketAssigns.some(a => a.role === 'resolver');
       }).length;
-      const unassignedTickets = totalTickets - assignedTickets;
-      const slaBreachedTickets = tickets.filter(t => t.is_sla_breached).length;
+      const unassignedTickets = Math.max(totalTickets - assignedTickets, 0);
+      const slaBreachedTickets = tickets.filter(t => (t as any).isSlaBreached).length;
 
-      // Calculate average resolution time
-      const resolvedWithTime = tickets.filter(t => t.resolution_time_hours);
-      const avgResolutionHours = resolvedWithTime.length > 0 
-        ? resolvedWithTime.reduce((sum, t) => sum + (t.resolution_time_hours || 0), 0) / resolvedWithTime.length
+      // Calculate average resolution time (hours)
+      const resolvedWithTime = tickets.filter(t => t.resolvedAt && t.submittedAt);
+      const avgResolutionHours = resolvedWithTime.length > 0
+        ? resolvedWithTime.reduce((sum, t) => {
+            const resolvedAt = new Date(t.resolvedAt as any).getTime();
+            const submittedAt = new Date(t.submittedAt as any).getTime();
+            return sum + (resolvedAt - submittedAt) / (1000 * 60 * 60);
+          }, 0) / resolvedWithTime.length
         : 0;
 
       // Calculate breakdowns
@@ -969,7 +964,7 @@ export class AdminService {
         cityMap.set(ticket.city, (cityMap.get(ticket.city) || 0) + 1);
         
         // Centre breakdown
-        centreMap.set(ticket.centre_code, (centreMap.get(ticket.centre_code) || 0) + 1);
+        centreMap.set((ticket as any).centreCode, (centreMap.get((ticket as any).centreCode) || 0) + 1);
         
         // Resolver breakdown - use new ticket_assignees data
         const ticketAssigns = ticketAssignments.get(ticket.id);
