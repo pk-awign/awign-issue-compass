@@ -28,3 +28,7 @@ dist-ssr
 
 # Large backup files
 *.zip
+
+# Local environment files
+.env
+.env.*
