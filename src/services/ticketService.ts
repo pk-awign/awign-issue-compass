@@ -608,23 +608,29 @@ export class TicketService {
           authorRole: comment.author_role,
           timestamp: comment.created_at ? new Date(comment.created_at) : null,
           isInternal: comment.is_internal,
-          attachments: (comment.comment_attachments || []).map((att: any) => ({
+          attachments: (comment.comment_attachments || []).map((att: any) => {
+            const { data: pub } = supabase.storage.from('comment-attachments').getPublicUrl(att.storage_path);
+            return {
+              id: att.id,
+              fileName: att.file_name,
+              fileSize: att.file_size,
+              fileType: att.file_type,
+              uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+              downloadUrl: pub.publicUrl,
+            };
+          })
+        })),
+        attachments: (ticket.attachments || []).map((att: any) => {
+          const { data: pub } = supabase.storage.from('ticket-attachments').getPublicUrl(att.storage_path);
+          return {
             id: att.id,
             fileName: att.file_name,
             fileSize: att.file_size,
             fileType: att.file_type,
             uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`
-          }))
-        })),
-        attachments: (ticket.attachments || []).map((att: any) => ({
-          id: att.id,
-          fileName: att.file_name,
-          fileSize: att.file_size,
-          fileType: att.file_type,
-          uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-          downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${att.storage_path}`
-        }))
+            downloadUrl: pub.publicUrl,
+          };
+        })
       }));
     } catch (error) {
       console.error('Error fetching city tickets:', error);
@@ -923,14 +929,17 @@ export class TicketService {
     };
 
     // Map attachments with safe fallback
-    const attachments = Array.isArray(data.attachments) ? data.attachments.map((att: any) => ({
-      id: att.id,
-      fileName: att.file_name,
-      fileSize: att.file_size,
-      fileType: att.file_type,
-      uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-      downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/ticket-attachments/${att.storage_path}`
-    })) : [];
+    const attachments = Array.isArray(data.attachments) ? data.attachments.map((att: any) => {
+      const { data: pub } = supabase.storage.from('ticket-attachments').getPublicUrl(att.storage_path);
+      return {
+        id: att.id,
+        fileName: att.file_name,
+        fileSize: att.file_size,
+        fileType: att.file_type,
+        uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+        downloadUrl: pub.publicUrl,
+      };
+    }) : [];
 
     return {
       id: data.id,
@@ -989,14 +998,17 @@ export class TicketService {
           authorRole: comment.author_role,
           timestamp: comment.created_at ? new Date(comment.created_at) : new Date(),
           isInternal: comment.is_internal,
-          attachments: (comment.comment_attachments || []).map((att: any) => ({
-            id: att.id,
-            fileName: att.file_name,
-            fileSize: att.file_size,
-            fileType: att.file_type,
-            downloadUrl: `${import.meta.env.VITE_SUPABASE_URL || 'https://mvwxlfvvxwhzobyjpxsg.supabase.co'}/storage/v1/object/public/comment-attachments/${att.storage_path}`,
-            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-          })),
+          attachments: (comment.comment_attachments || []).map((att: any) => {
+            const { data: pub } = supabase.storage.from('comment-attachments').getPublicUrl(att.storage_path);
+            return {
+              id: att.id,
+              fileName: att.file_name,
+              fileSize: att.file_size,
+              fileType: att.file_type,
+              downloadUrl: pub.publicUrl,
+              uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            };
+          }),
         };
       }) || [],
       attachments,
