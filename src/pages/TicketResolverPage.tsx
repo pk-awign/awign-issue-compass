@@ -75,7 +75,10 @@ export const TicketResolverPage: React.FC = () => {
       // Super admin can see all tickets
       if (user.role === 'super_admin') return true;
       // Only show tickets assigned to this resolver
-      return (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'resolver');
+      // Check both the assignees array (if it exists) and the assigned_resolver field
+      const hasAssigneeMatch = (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'resolver');
+      const hasResolverMatch = issue.assignedResolver === user.id;
+      return hasAssigneeMatch || hasResolverMatch;
     });
   }, [issues, user]);
 
