@@ -80,7 +80,10 @@ export const ResolutionApproverPage: React.FC = () => {
       // Super admin can see all tickets
       if (user.role === 'super_admin') return true;
       // Only show tickets assigned to this approver
-      return (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'approver');
+      // Check both the assignees array (if it exists) and the assigned_approver field
+      const hasAssigneeMatch = (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'approver');
+      const hasApproverMatch = issue.assignedApprover === user.id;
+      return hasAssigneeMatch || hasApproverMatch;
     });
   }, [issues, user]);
 

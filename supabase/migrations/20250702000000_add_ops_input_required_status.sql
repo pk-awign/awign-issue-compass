@@ -4,6 +4,9 @@
 -- 1. Update the ticket_status_new enum to include the new status
 ALTER TYPE ticket_status_new ADD VALUE 'ops_input_required';
 
+-- Commit the enum change first
+COMMIT;
+
 -- 2. Clear existing status transitions and insert new ones with Ops Input Required
 DELETE FROM public.status_transitions;
 

@@ -1334,4 +1334,80 @@ export class AdminService {
       return [];
     }
   }
+
+  static async getTicketsByResolverName(resolverName: string): Promise<Issue[]> {
+    try {
+      console.log(`🔍 Getting tickets assigned to resolver: ${resolverName}`);
+      
+      const { data: tickets, error } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          comments (
+            id,
+            content,
+            author,
+            author_role,
+            is_internal,
+            created_at,
+            comment_attachments (
+              id,
+              file_name,
+              file_size,
+              file_type,
+              storage_path,
+              uploaded_at
+            )
+          ),
+          attachments (
+            id,
+            file_name,
+            file_size,
+            file_type,
+            storage_path,
+            uploaded_at
+          )
+        `)
+        .ilike('assigned_resolver', `%${resolverName}%`)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching tickets by resolver name:', error);
+        return [];
+      }
+
+      // Map to Issue type
+      const mappedTickets = (tickets || []).map(ticket => ({
+        id: ticket.id,
+        ticketNumber: ticket.ticket_number,
+        centreCode: ticket.centre_code,
+        city: ticket.city,
+        resourceId: ticket.resource_id,
+        awignAppTicketId: ticket.awign_app_ticket_id,
+        issueCategory: ticket.issue_category,
+        issueDescription: ticket.issue_description,
+        issueDate: ticket.issue_date,
+        severity: ticket.severity,
+        status: ticket.status,
+        isAnonymous: ticket.is_anonymous,
+        submittedBy: ticket.submitted_by,
+        submittedByUserId: ticket.submitted_by_user_id,
+        submittedAt: ticket.submitted_at,
+        assignedResolver: ticket.assigned_resolver,
+        assignedApprover: ticket.assigned_approver,
+        resolutionNotes: ticket.resolution_notes,
+        resolvedAt: ticket.resolved_at,
+        createdAt: ticket.created_at,
+        updatedAt: ticket.updated_at,
+        comments: ticket.comments || [],
+        attachments: ticket.attachments || []
+      }));
+
+      console.log(`✅ Found ${mappedTickets.length} tickets assigned to resolver: ${resolverName}`);
+      return mappedTickets;
+    } catch (error) {
+      console.error('❌ Error in getTicketsByResolverName:', error);
+      return [];
+    }
+  }
 }
