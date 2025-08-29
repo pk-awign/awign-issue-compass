@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIssues } from '@/contexts/IssueContext';
 import { TicketDetailsModal } from '@/components/TicketDetailsModal';
@@ -31,6 +33,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { TicketService } from '@/services/ticketService';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -42,6 +45,16 @@ export const ResolutionApproverPage: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  
+  // Status change states
+  const [selectedStatus, setSelectedStatus] = useState<Issue['status']>('open');
+  const [resolutionNotes, setResolutionNotes] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [availableTransitions, setAvailableTransitions] = useState<Issue['status'][]>([]);
+  
+  // Per-ticket status change states
+  const [ticketStatuses, setTicketStatuses] = useState<Record<string, Issue['status']>>({});
+  const [ticketNotes, setTicketNotes] = useState<Record<string, string>>({});
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,15 +75,71 @@ export const ResolutionApproverPage: React.FC = () => {
     navigate('/');
   };
 
-  const handleViewTicket = (ticket: Issue) => {
-    setSelectedTicket(ticket);
-    setIsModalOpen(true);
-  };
-
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedTicket(null);
     refreshIssues(); // Refresh to get latest data
+  };
+
+  const handleStatusChange = async (ticketId: string, newStatus: Issue['status'], notes?: string) => {
+    if (!user) return;
+    
+    setIsUpdating(true);
+    try {
+      const success = await TicketService.updateTicketStatus(
+        ticketId,
+        newStatus,
+        user.id,
+        notes,
+        user.role
+      );
+      
+      if (success) {
+        toast.success(`Ticket status updated to ${newStatus}`);
+        refreshIssues(); // Refresh to get latest data
+        // Reset form for this specific ticket
+        setTicketStatuses(prev => ({ ...prev, [ticketId]: 'open' }));
+        setTicketNotes(prev => ({ ...prev, [ticketId]: '' }));
+      } else {
+        toast.error('Failed to update ticket status');
+      }
+    } catch (error) {
+      console.error('Error updating ticket status:', error);
+      toast.error('Failed to update ticket status');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const updateTicketStatus = (ticketId: string, status: Issue['status']) => {
+    setTicketStatuses(prev => ({ ...prev, [ticketId]: status }));
+  };
+
+  const updateTicketNotes = (ticketId: string, notes: string) => {
+    setTicketNotes(prev => ({ ...prev, [ticketId]: notes }));
+  };
+
+  const getTicketStatus = (ticketId: string) => {
+    return ticketStatuses[ticketId] || 'open';
+  };
+
+  const getTicketNotes = (ticketId: string) => {
+    return ticketNotes[ticketId] || '';
+  };
+
+  const handleViewTicket = (ticket: Issue) => {
+    setSelectedTicket(ticket);
+    setIsModalOpen(true);
+    // Set available transitions for this ticket
+    if (user) {
+      TicketService.getStatusTransitions(user.role, ticket.status).then(transitions => {
+        setAvailableTransitions(transitions);
+        // Initialize ticket status to current status if not already set
+        if (!ticketStatuses[ticket.id]) {
+          updateTicketStatus(ticket.id, ticket.status);
+        }
+      });
+    }
   };
 
   // Get tickets for approval based on user's city
@@ -302,6 +371,81 @@ export const ResolutionApproverPage: React.FC = () => {
                       </Badge>
                     )}
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Status Change Actions for Approvers */}
+            {user?.role === 'approver' && (
+              <div className="space-y-3 border-t pt-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">Change Status:</span>
+                  <Select 
+                    value={getTicketStatus(ticket.id)} 
+                    onValueChange={(value: Issue['status']) => updateTicketStatus(ticket.id, value)}
+                  >
+                    <SelectTrigger className="w-32 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTransitions.map(status => (
+                        <SelectItem key={status} value={status} className="text-xs">
+                          {status.replace('_', ' ').toUpperCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Resolution Notes for resolved status */}
+                {(getTicketStatus(ticket.id) === 'resolved' || ticket.status === 'resolved') && (
+                  <div className="space-y-2">
+                    <Textarea
+                      placeholder="Enter resolution details..."
+                      value={getTicketNotes(ticket.id)}
+                      onChange={(e) => updateTicketNotes(ticket.id, e.target.value)}
+                      className="min-h-[60px] text-xs"
+                    />
+                  </div>
+                )}
+                
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => handleStatusChange(ticket.id, getTicketStatus(ticket.id), getTicketNotes(ticket.id))}
+                    disabled={isUpdating || getTicketStatus(ticket.id) === ticket.status}
+                    className="flex-1 text-xs"
+                  >
+                    {isUpdating ? 'Updating...' : 'Update Status'}
+                  </Button>
+                  
+                  {/* Quick Action Buttons */}
+                  {ticket.status === 'send_for_approval' && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => handleStatusChange(ticket.id, 'approved')}
+                      disabled={isUpdating}
+                      className="text-xs"
+                    >
+                      <ThumbsUp className="h-3 w-3 mr-1" />
+                      Approve
+                    </Button>
+                  )}
+                  
+                  {ticket.status === 'approved' && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => handleStatusChange(ticket.id, 'resolved', getTicketNotes(ticket.id))}
+                      disabled={isUpdating || !getTicketNotes(ticket.id).trim()}
+                      className="text-xs"
+                    >
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Resolve
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
