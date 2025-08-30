@@ -339,7 +339,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         author: user.name,
         authorRole: user.role,
         isInternal: isInternalComment,
-        attachments: commentAttachments
+        attachments: commentAttachments as any
       });
       setCommentText('');
       setIsInternalComment(false);
@@ -561,9 +561,9 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                             <div className="flex items-center space-x-3">
                               <Paperclip className="h-4 w-4 text-gray-500" />
                               <div>
-                                <p className="text-sm font-medium">{attachment.fileName || attachment.name || `Attachment ${index + 1}`}</p>
+                                <p className="text-sm font-medium">{attachment.fileName || `Attachment ${index + 1}`}</p>
                                 <p className="text-xs text-gray-500">
-                                  {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : attachment.size || 'Unknown size'}
+                                  {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Unknown size'}
                                 </p>
                               </div>
                             </div>

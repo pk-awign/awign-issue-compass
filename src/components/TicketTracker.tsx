@@ -209,7 +209,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
         author: authorName,
         authorRole: authorRole,
         isInternal: false,
-        attachments: commentAttachments
+        attachments: commentAttachments as any
       });
       
       // Refresh the ticket to get updated comments

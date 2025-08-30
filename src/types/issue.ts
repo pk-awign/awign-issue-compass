@@ -45,13 +45,15 @@ export interface Issue {
   deleted?: boolean;
   // New field for user dependency tracking
   userDependencyStartedAt?: Date;
+  // Junction table assignees for new assignment system
+  assignees?: Array<{ user_id: string; role: string; assigned_at?: Date }>;
 }
 
 export interface Comment {
   id: string;
   content: string;
   author: string;
-  authorRole: 'invigilator' | 'admin' | 'resolver' | 'approver' | 'super_admin' | 'anonymous';
+  authorRole: 'invigilator' | 'admin' | 'resolver' | 'approver' | 'super_admin' | 'anonymous' | 'ticket_admin';
   timestamp: Date;
   isInternal: boolean;
   attachments?: CommentAttachment[];

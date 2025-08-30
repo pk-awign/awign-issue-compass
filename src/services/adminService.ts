@@ -707,21 +707,10 @@ export class AdminService {
     try {
       console.log(`🔄 Assigning ticket ${ticketId} to ticket admin ${ticketAdminId}`);
       
-      // Add to ticket_admin_assignments table
-      const { data, error } = await supabase
-        .from('ticket_admin_assignments')
-        .insert([{
-          ticket_id: ticketId,
-          ticket_admin_id: ticketAdminId,
-          assigned_by: ticketAdminId // This will be validated by the trigger
-        }]);
-
-      if (error) {
-        console.error('❌ Error assigning ticket to ticket admin:', error);
-        return false;
-      }
-
-      console.log('✅ Ticket assigned to ticket admin successfully:', data);
+      // Since ticket_admin_assignments table doesn't exist, use the ticket_assignees table
+      await TicketService.addAssignee(ticketId, ticketAdminId, 'ticket_admin', ticketAdminId, 'System', 'super_admin');
+      
+      console.log('✅ Ticket assigned to ticket admin successfully');
       return true;
     } catch (error) {
       console.error('❌ Error in assignToTicketAdmin:', error);
@@ -733,11 +722,12 @@ export class AdminService {
     try {
       console.log(`🔄 Getting tickets assigned to admin ${adminId}`);
       
-      // Get tickets assigned to this ticket admin
+      // Get tickets assigned to this ticket admin via ticket_assignees
       const { data: assignments, error: assignmentsError } = await supabase
-        .from('ticket_admin_assignments')
+        .from('ticket_assignees')
         .select('ticket_id')
-        .eq('ticket_admin_id', adminId);
+        .eq('user_id', adminId)
+        .eq('role', 'ticket_admin');
 
       if (assignmentsError) {
         console.error('❌ Error fetching ticket admin assignments:', assignmentsError);
@@ -796,7 +786,7 @@ export class AdminService {
         centreCode: ticket.centre_code,
         city: ticket.city,
         resourceId: ticket.resource_id,
-        awignAppTicketId: ticket.awign_app_ticket_id,
+        awignAppTicketId: ticket.awign_app_ticket_id || undefined,
         issueCategory: ticket.issue_category,
         issueDescription: ticket.issue_description,
         issueDate: ticket.issue_date,
@@ -843,9 +833,9 @@ export class AdminService {
         issueEvidence: [],
         reopenCount: ticket.reopen_count || 0,
         lastReopenedAt: ticket.last_reopened_at ? new Date(ticket.last_reopened_at) : undefined,
-        reopenedBy: ticket.reopened_by,
+        reopenedBy: ticket.reopened_by || undefined,
         statusChangedAt: ticket.status_changed_at ? new Date(ticket.status_changed_at) : undefined,
-        statusChangedBy: ticket.status_changed_by,
+        statusChangedBy: ticket.status_changed_by || undefined,
         deleted: ticket.deleted || false
       }));
 

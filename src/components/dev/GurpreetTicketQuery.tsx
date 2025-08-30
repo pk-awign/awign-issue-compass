@@ -92,7 +92,7 @@ export const GurpreetTicketQuery: React.FC = () => {
                       <div><strong>Severity:</strong> {ticket.severity}</div>
                       <div><strong>City:</strong> {ticket.city}</div>
                       <div><strong>Centre:</strong> {ticket.centreCode}</div>
-                      <div><strong>Created:</strong> {new Date(ticket.createdAt).toLocaleDateString()}</div>
+                      <div><strong>Created:</strong> {new Date(ticket.submittedAt).toLocaleDateString()}</div>
                     </div>
                     <div className="mt-2 text-sm">
                       <strong>Description:</strong> {ticket.issueDescription.substring(0, 150)}
