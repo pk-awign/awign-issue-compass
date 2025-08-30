@@ -71,48 +71,61 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setLoading(true);
     try {
       // Convert Issue updates to database format
+      // Convert Issue updates to database format
       const dbUpdates: any = {};
       if (updates.status) dbUpdates.status = updates.status;
       if (updates.resolutionNotes) dbUpdates.resolution_notes = updates.resolutionNotes;
       
-      // Handle assignment updates using the new ticket_assignees table
-      if (updates.assignedResolver) {
-        // Remove existing resolver assignment
+      // Keep legacy assignment fields in sync with ticket_assignees
+      // Resolver assignment
+      if (typeof updates.assignedResolver !== 'undefined') {
+        // Remove existing resolver assignment in junction table
         await supabase
           .from('ticket_assignees')
           .delete()
           .eq('ticket_id', issueId)
           .eq('role', 'resolver');
         
-        // Add new resolver assignment
+        // Add new resolver assignment if provided
         if (updates.assignedResolver) {
           await supabase
             .from('ticket_assignees')
-            .insert([{
-              ticket_id: issueId,
-              user_id: updates.assignedResolver,
-              role: 'resolver'
+            .insert([{ 
+              ticket_id: issueId, 
+              user_id: updates.assignedResolver, 
+              role: 'resolver' 
             }]);
+          // Update legacy column for backward compatibility
+          dbUpdates.assigned_resolver = updates.assignedResolver;
+        } else {
+          // Explicitly clear legacy column if unassigning
+          dbUpdates.assigned_resolver = null;
         }
       }
       
-      if (updates.assignedApprover) {
-        // Remove existing approver assignment
+      // Approver assignment
+      if (typeof updates.assignedApprover !== 'undefined') {
+        // Remove existing approver assignment in junction table
         await supabase
           .from('ticket_assignees')
           .delete()
           .eq('ticket_id', issueId)
           .eq('role', 'approver');
         
-        // Add new approver assignment
+        // Add new approver assignment if provided
         if (updates.assignedApprover) {
           await supabase
             .from('ticket_assignees')
-            .insert([{
-              ticket_id: issueId,
-              user_id: updates.assignedApprover,
-              role: 'approver'
+            .insert([{ 
+              ticket_id: issueId, 
+              user_id: updates.assignedApprover, 
+              role: 'approver' 
             }]);
+          // Update legacy column for backward compatibility
+          dbUpdates.assigned_approver = updates.assignedApprover;
+        } else {
+          // Explicitly clear legacy column if unassigning
+          dbUpdates.assigned_approver = null;
         }
       }
       
@@ -120,6 +133,7 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .from('tickets')
         .update(dbUpdates)
         .eq('id', issueId);
+
 
       if (error) throw error;
       await refreshIssues();
