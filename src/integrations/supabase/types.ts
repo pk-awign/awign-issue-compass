@@ -901,6 +901,26 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      register_user_with_mobile_pin: {
+        Args: {
+          p_centre_code?: string
+          p_city?: string
+          p_mobile_number: string
+          p_name: string
+          p_pin: string
+        }
+        Returns: {
+          centre_code: string
+          city: string
+          error_message: string
+          id: string
+          is_active: boolean
+          mobile_number: string
+          name: string
+          role: string
+          success: boolean
+        }[]
+      }
       validate_assignment_permission: {
         Args: { p_assignment_role: string; p_user_role: string }
         Returns: boolean
