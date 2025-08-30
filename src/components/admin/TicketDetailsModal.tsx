@@ -56,7 +56,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const [approvers, setApprovers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(false);
   const [resolutionNotes, setResolutionNotes] = useState('');
-  const [statusTransitions, setStatusTransitions] = useState<Issue['status'][]>([]);
+  const [statusTransitions, setStatusTransitions] = useState<StatusTransition[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
@@ -121,7 +121,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const loadStatusTransitions = async () => {
     try {
       const transitions = await TicketService.getStatusTransitions();
-      setStatusTransitions(transitions || []);
+      setStatusTransitions(transitions);
     } catch (error) {
       console.error('Error loading status transitions:', error);
     }
@@ -234,9 +234,9 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
       return ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved'];
     }
     
-    // For now, return hardcoded transitions since statusTransitions is Issue['status'][]
-    return ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved']
-      .filter(status => status !== currentStatus);
+    return statusTransitions
+      .filter(t => t.fromStatus === currentStatus && t.allowedRoles.includes(userRole))
+      .map(t => t.toStatus);
   };
 
   const handleStatusChange = async (newStatus: Issue['status']) => {
@@ -339,7 +339,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         author: user.name,
         authorRole: user.role,
         isInternal: isInternalComment,
-        attachments: commentAttachments as any
+        attachments: commentAttachments
       });
       setCommentText('');
       setIsInternalComment(false);
@@ -535,11 +535,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         ) : (
                           <span className="text-sm">{
                             ticket.issueDate.type === 'single' && ticket.issueDate.dates && ticket.issueDate.dates[0]
-                                    ? (ticket.issueDate.dates[0] instanceof Date 
-                                       ? ticket.issueDate.dates[0].toLocaleDateString() 
-                                       : typeof ticket.issueDate.dates[0] === 'object' && 'date' in ticket.issueDate.dates[0]
-                                         ? ticket.issueDate.dates[0].date.toLocaleDateString()
-                                         : new Date(ticket.issueDate.dates[0] as Date).toLocaleDateString())
+                              ? (ticket.issueDate.dates[0] instanceof Date ? ticket.issueDate.dates[0].toLocaleDateString() : new Date(ticket.issueDate.dates[0]).toLocaleDateString())
                               : ticket.issueDate.type === 'range' && ticket.issueDate.startDate && ticket.issueDate.endDate
                                 ? `${ticket.issueDate.startDate instanceof Date ? ticket.issueDate.startDate.toLocaleDateString() : new Date(ticket.issueDate.startDate).toLocaleDateString()} - ${ticket.issueDate.endDate instanceof Date ? ticket.issueDate.endDate.toLocaleDateString() : new Date(ticket.issueDate.endDate).toLocaleDateString()}`
                                 : ticket.issueDate.type === 'ongoing'
@@ -565,9 +561,9 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                             <div className="flex items-center space-x-3">
                               <Paperclip className="h-4 w-4 text-gray-500" />
                               <div>
-                                <p className="text-sm font-medium">{attachment.fileName || `Attachment ${index + 1}`}</p>
+                                <p className="text-sm font-medium">{attachment.fileName || attachment.name || `Attachment ${index + 1}`}</p>
                                 <p className="text-xs text-gray-500">
-                                  {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Unknown size'}
+                                  {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : attachment.size || 'Unknown size'}
                                 </p>
                               </div>
                             </div>

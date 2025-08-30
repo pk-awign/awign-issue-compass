@@ -71,7 +71,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         author: currentUser || 'Unknown',
         authorRole: userRole,
         isInternal: isInternalComment,
-        attachments: commentAttachments as any
+        attachments: commentAttachments
       });
       setNewComment('');
       setIsInternalComment(false);
@@ -235,7 +235,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       ) : (
                         <span className="text-sm">{
                           ticket.issueDate.type === 'single' && ticket.issueDate.dates && ticket.issueDate.dates[0]
-                            ? (ticket.issueDate.dates[0] instanceof Date ? ticket.issueDate.dates[0].toLocaleDateString() : new Date((ticket.issueDate.dates[0] as any).date || ticket.issueDate.dates[0]).toLocaleDateString())
+                            ? (ticket.issueDate.dates[0] instanceof Date ? ticket.issueDate.dates[0].toLocaleDateString() : new Date(ticket.issueDate.dates[0]).toLocaleDateString())
                             : ticket.issueDate.type === 'range' && ticket.issueDate.startDate && ticket.issueDate.endDate
                               ? `${ticket.issueDate.startDate instanceof Date ? ticket.issueDate.startDate.toLocaleDateString() : new Date(ticket.issueDate.startDate).toLocaleDateString()} - ${ticket.issueDate.endDate instanceof Date ? ticket.issueDate.endDate.toLocaleDateString() : new Date(ticket.issueDate.endDate).toLocaleDateString()}`
                               : ticket.issueDate.type === 'ongoing'
@@ -279,9 +279,9 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         <div className="flex items-center space-x-3">
                           <Paperclip className="h-4 w-4 text-gray-500" />
                           <div>
-                            <p className="text-sm font-medium">{attachment.fileName || `Attachment ${index + 1}`}</p>
+                            <p className="text-sm font-medium">{attachment.fileName || attachment.name || `Attachment ${index + 1}`}</p>
                             <p className="text-xs text-gray-500">
-                              {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Unknown size'}
+                              {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : attachment.size || 'Unknown size'}
                             </p>
                           </div>
                         </div>
