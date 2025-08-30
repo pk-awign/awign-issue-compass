@@ -52,7 +52,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
     if (!ticket) return;
     setIsUpdating(true);
     try {
-      await updateStatus(ticket.id, selectedStatus, resolutionNotes);
+      await updateStatus(ticket.id, selectedStatus, resolutionNotes, userRole);
       toast.success('Ticket status updated successfully');
       onClose();
     } catch (error) {

@@ -288,13 +288,13 @@ export class TicketService {
       approved: [],
       resolved: [],
     };
-    // Approver: SEND FOR APPROVAL → APPROVED, APPROVED → RESOLVED
+    // Approver: SEND FOR APPROVAL → APPROVED/OPS INPUT REQUIRED, APPROVED → RESOLVED
     const APPROVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
       open: [],
       in_progress: [],
       ops_input_required: [],
       user_dependency: [],
-      send_for_approval: ['approved'],
+      send_for_approval: ['approved', 'ops_input_required'],
       approved: ['resolved'],
       resolved: [],
     };

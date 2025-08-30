@@ -391,7 +391,7 @@ export const ResolutionApproverPage: React.FC = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableTransitions.map(status => (
+                      {TicketService.getAllowedStatusTransitions(user!.role, ticket.status).map(status => (
                         <SelectItem key={status} value={status} className="text-xs">
                           {status.replace('_', ' ').toUpperCase()}
                         </SelectItem>
@@ -434,6 +434,18 @@ export const ResolutionApproverPage: React.FC = () => {
                     >
                       <ThumbsUp className="h-3 w-3 mr-1" />
                       Approve
+                    </Button>
+                  )}
+                  {ticket.status === 'send_for_approval' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleStatusChange(ticket.id, 'ops_input_required')}
+                      disabled={isUpdating}
+                      className="text-xs"
+                    >
+                      <ThumbsDown className="h-3 w-3 mr-1" />
+                      Send back to Ops
                     </Button>
                   )}
                   
@@ -749,7 +761,7 @@ export const ResolutionApproverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {approverTickets.filter(t => t.status === 'send_for_approval').map(renderTicketCard)}
+                  {approverTickets.filter(t => t.status === 'send_for_approval').map(renderApprovalCard)}
                 </div>
               )}
             </TabsContent>
