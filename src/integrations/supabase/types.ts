@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
-  }
   public: {
     Tables: {
       assignment_log: {
@@ -57,13 +52,6 @@ export type Database = {
             foreignKeyName: "assignment_log_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
-            referencedRelation: "ticket_details_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "assignment_log_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
             referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
@@ -102,52 +90,7 @@ export type Database = {
             foreignKeyName: "attachments_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
-            referencedRelation: "ticket_details_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "attachments_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
             referencedRelation: "tickets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      comment_attachments: {
-        Row: {
-          comment_id: string
-          file_name: string
-          file_size: number
-          file_type: string
-          id: string
-          storage_path: string
-          uploaded_at: string
-        }
-        Insert: {
-          comment_id: string
-          file_name: string
-          file_size: number
-          file_type: string
-          id?: string
-          storage_path: string
-          uploaded_at?: string
-        }
-        Update: {
-          comment_id?: string
-          file_name?: string
-          file_size?: number
-          file_type?: string
-          id?: string
-          storage_path?: string
-          uploaded_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "comment_attachments_comment_id_fkey"
-            columns: ["comment_id"]
-            isOneToOne: false
-            referencedRelation: "comments"
             referencedColumns: ["id"]
           },
         ]
@@ -185,14 +128,45 @@ export type Database = {
             foreignKeyName: "comments_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
-            referencedRelation: "ticket_details_view"
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      comment_attachments: {
+        Row: {
+          id: string
+          comment_id: string
+          file_name: string
+          file_size: number
+          file_type: string
+          storage_path: string
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          comment_id: string
+          file_name: string
+          file_size: number
+          file_type: string
+          storage_path: string
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          comment_id?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          storage_path?: string
+          uploaded_at?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "comments_ticket_id_fkey"
-            columns: ["ticket_id"]
+            foreignKeyName: "comment_attachments_comment_id_fkey"
+            columns: ["comment_id"]
             isOneToOne: false
-            referencedRelation: "tickets"
+            referencedRelation: "comments"
             referencedColumns: ["id"]
           },
         ]
@@ -243,13 +217,6 @@ export type Database = {
             foreignKeyName: "escalation_log_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
-            referencedRelation: "ticket_details_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "escalation_log_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
             referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
@@ -286,168 +253,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "performance_metrics_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      status_transitions: {
-        Row: {
-          allowed_roles: string[]
-          created_at: string | null
-          from_status: Database["public"]["Enums"]["ticket_status_new"]
-          id: string
-          requires_comment: boolean | null
-          to_status: Database["public"]["Enums"]["ticket_status_new"]
-        }
-        Insert: {
-          allowed_roles: string[]
-          created_at?: string | null
-          from_status: Database["public"]["Enums"]["ticket_status_new"]
-          id?: string
-          requires_comment?: boolean | null
-          to_status: Database["public"]["Enums"]["ticket_status_new"]
-        }
-        Update: {
-          allowed_roles?: string[]
-          created_at?: string | null
-          from_status?: Database["public"]["Enums"]["ticket_status_new"]
-          id?: string
-          requires_comment?: boolean | null
-          to_status?: Database["public"]["Enums"]["ticket_status_new"]
-        }
-        Relationships: []
-      }
-      test_center_details: {
-        Row: {
-          address: string | null
-          created_at: string
-          id: number
-          test_center_city: string | null
-          test_center_code: number | null
-          test_center_name: string | null
-          test_center_poc: string | null
-          test_center_state: string | null
-          test_center_zone: string | null
-        }
-        Insert: {
-          address?: string | null
-          created_at?: string
-          id?: number
-          test_center_city?: string | null
-          test_center_code?: number | null
-          test_center_name?: string | null
-          test_center_poc?: string | null
-          test_center_state?: string | null
-          test_center_zone?: string | null
-        }
-        Update: {
-          address?: string | null
-          created_at?: string
-          id?: number
-          test_center_city?: string | null
-          test_center_code?: number | null
-          test_center_name?: string | null
-          test_center_poc?: string | null
-          test_center_state?: string | null
-          test_center_zone?: string | null
-        }
-        Relationships: []
-      }
-      ticket_admin_assignments: {
-        Row: {
-          assigned_at: string
-          assigned_by: string | null
-          id: string
-          ticket_admin_id: string
-          ticket_id: string
-        }
-        Insert: {
-          assigned_at?: string
-          assigned_by?: string | null
-          id?: string
-          ticket_admin_id: string
-          ticket_id: string
-        }
-        Update: {
-          assigned_at?: string
-          assigned_by?: string | null
-          id?: string
-          ticket_admin_id?: string
-          ticket_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ticket_admin_assignments_assigned_by_fkey"
-            columns: ["assigned_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_admin_assignments_ticket_admin_id_fkey"
-            columns: ["ticket_admin_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_admin_assignments_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
-            referencedRelation: "ticket_details_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_admin_assignments_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
-            referencedRelation: "tickets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ticket_assignees: {
-        Row: {
-          assigned_at: string | null
-          id: string
-          role: string
-          ticket_id: string
-          user_id: string
-        }
-        Insert: {
-          assigned_at?: string | null
-          id?: string
-          role: string
-          ticket_id: string
-          user_id: string
-        }
-        Update: {
-          assigned_at?: string | null
-          id?: string
-          role?: string
-          ticket_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ticket_assignees_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
-            referencedRelation: "ticket_details_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_assignees_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
-            referencedRelation: "tickets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_assignees_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -494,74 +299,6 @@ export type Database = {
             foreignKeyName: "ticket_history_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
-            referencedRelation: "ticket_details_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_history_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
-            referencedRelation: "tickets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ticket_timeline: {
-        Row: {
-          created_at: string | null
-          details: Json | null
-          event_type: string
-          id: string
-          new_value: string | null
-          old_value: string | null
-          performed_by: string | null
-          performed_by_name: string | null
-          performed_by_role: string | null
-          ticket_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          details?: Json | null
-          event_type: string
-          id?: string
-          new_value?: string | null
-          old_value?: string | null
-          performed_by?: string | null
-          performed_by_name?: string | null
-          performed_by_role?: string | null
-          ticket_id: string
-        }
-        Update: {
-          created_at?: string | null
-          details?: Json | null
-          event_type?: string
-          id?: string
-          new_value?: string | null
-          old_value?: string | null
-          performed_by?: string | null
-          performed_by_name?: string | null
-          performed_by_role?: string | null
-          ticket_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ticket_timeline_performed_by_fkey"
-            columns: ["performed_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_timeline_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
-            referencedRelation: "ticket_details_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_timeline_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
             referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
@@ -571,126 +308,85 @@ export type Database = {
         Row: {
           assigned_approver: string | null
           assigned_resolver: string | null
-          awign_app_ticket_id: string | null
           centre_code: string
           city: string
           created_at: string
-          deleted: boolean
           escalated_at: string | null
           id: string
           is_anonymous: boolean
           is_sla_breached: boolean | null
-          is_testing: boolean | null
           issue_category: string
           issue_date: Json
           issue_description: string
           last_activity_at: string | null
-          last_reopened_at: string | null
-          reopen_count: number | null
-          reopened_by: string | null
           resolution_notes: string | null
           resolution_time_hours: number | null
           resolved_at: string | null
-          resource_id: string
+          resource_id: string | null
           severity: string
           sla_target_hours: number | null
-          status: Database["public"]["Enums"]["ticket_status_new"]
-          status_changed_at: string | null
-          status_changed_by: string | null
+          status: string
           submitted_at: string
           submitted_by: string | null
           submitted_by_user_id: string | null
           ticket_number: string
           updated_at: string
-          user_dependency_started_at: string | null
         }
         Insert: {
           assigned_approver?: string | null
           assigned_resolver?: string | null
-          awign_app_ticket_id?: string | null
           centre_code: string
           city: string
           created_at?: string
-          deleted?: boolean
           escalated_at?: string | null
           id?: string
           is_anonymous?: boolean
           is_sla_breached?: boolean | null
-          is_testing?: boolean | null
           issue_category: string
           issue_date: Json
           issue_description: string
           last_activity_at?: string | null
-          last_reopened_at?: string | null
-          reopen_count?: number | null
-          reopened_by?: string | null
           resolution_notes?: string | null
           resolution_time_hours?: number | null
           resolved_at?: string | null
-          resource_id: string
+          resource_id?: string | null
           severity: string
           sla_target_hours?: number | null
-          status: Database["public"]["Enums"]["ticket_status_new"]
-          status_changed_at?: string | null
-          status_changed_by?: string | null
+          status?: string
           submitted_at?: string
           submitted_by?: string | null
           submitted_by_user_id?: string | null
           ticket_number: string
           updated_at?: string
-          user_dependency_started_at?: string | null
         }
         Update: {
           assigned_approver?: string | null
           assigned_resolver?: string | null
-          awign_app_ticket_id?: string | null
           centre_code?: string
           city?: string
           created_at?: string
-          deleted?: boolean
           escalated_at?: string | null
           id?: string
           is_anonymous?: boolean
           is_sla_breached?: boolean | null
-          is_testing?: boolean | null
           issue_category?: string
           issue_date?: Json
           issue_description?: string
           last_activity_at?: string | null
-          last_reopened_at?: string | null
-          reopen_count?: number | null
-          reopened_by?: string | null
           resolution_notes?: string | null
           resolution_time_hours?: number | null
           resolved_at?: string | null
-          resource_id?: string
+          resource_id?: string | null
           severity?: string
           sla_target_hours?: number | null
-          status?: Database["public"]["Enums"]["ticket_status_new"]
-          status_changed_at?: string | null
-          status_changed_by?: string | null
+          status?: string
           submitted_at?: string
           submitted_by?: string | null
           submitted_by_user_id?: string | null
           ticket_number?: string
           updated_at?: string
-          user_dependency_started_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "tickets_reopened_by_fkey"
-            columns: ["reopened_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tickets_status_changed_by_fkey"
-            columns: ["status_changed_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "tickets_submitted_by_user_id_fkey"
             columns: ["submitted_by_user_id"]
@@ -786,23 +482,126 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
+      },
+      test_center_details: {
+        Row: {
+          id: string;
+          test_center_code: string;
+          // Add other columns as needed
+        };
+        Insert: {
+          id?: string;
+          test_center_code: string;
+          // Add other columns as needed
+        };
+        Update: {
+          id?: string;
+          test_center_code?: string;
+          // Add other columns as needed
+        };
+        Relationships: [];
+      },
+      ticket_timeline: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          event_type: string;
+          old_value: string | null;
+          new_value: string | null;
+          performed_by: string | null;
+          performed_by_name: string | null;
+          performed_by_role: string | null;
+          details: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          event_type: string;
+          old_value?: string | null;
+          new_value?: string | null;
+          performed_by?: string | null;
+          performed_by_name?: string | null;
+          performed_by_role?: string | null;
+          details?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          ticket_id?: string;
+          event_type?: string;
+          old_value?: string | null;
+          new_value?: string | null;
+          performed_by?: string | null;
+          performed_by_name?: string | null;
+          performed_by_role?: string | null;
+          details?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ticket_timeline_ticket_id_fkey";
+            columns: ["ticket_id"];
+            isOneToOne: false;
+            referencedRelation: "tickets";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      ticket_assignees: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          user_id: string;
+          role: string;
+          assigned_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          user_id: string;
+          role: string;
+          assigned_at?: string;
+        };
+        Update: {
+          id?: string;
+          ticket_id?: string;
+          user_id?: string;
+          role?: string;
+          assigned_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ticket_assignees_ticket_id_fkey";
+            columns: ["ticket_id"];
+            isOneToOne: false;
+            referencedRelation: "tickets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ticket_assignees_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     }
     Views: {
       ticket_analytics: {
         Row: {
-          approved_tickets: number | null
           assigned_approver: string | null
           assigned_resolver: string | null
           assigned_tickets: number | null
           avg_resolution_hours: number | null
           centre_code: string | null
           city: string | null
+          closed_tickets: number | null
           date_created: string | null
           in_progress_tickets: number | null
           open_tickets: number | null
           resolved_tickets: number | null
-          send_for_approval_tickets: number | null
           sev1_tickets: number | null
           sev2_tickets: number | null
           sev3_tickets: number | null
@@ -812,138 +611,15 @@ export type Database = {
         }
         Relationships: []
       }
-      ticket_details_view: {
-        Row: {
-          assigned_approver: string | null
-          assigned_approver_name: string | null
-          assigned_approver_role: string | null
-          assigned_resolver: string | null
-          assigned_resolver_name: string | null
-          assigned_resolver_role: string | null
-          centre_code: string | null
-          city: string | null
-          created_at: string | null
-          escalated_at: string | null
-          id: string | null
-          is_anonymous: boolean | null
-          is_sla_breached: boolean | null
-          issue_category: string | null
-          issue_date: Json | null
-          issue_description: string | null
-          last_activity_at: string | null
-          last_reopened_at: string | null
-          reopen_count: number | null
-          reopened_by: string | null
-          reopened_by_name: string | null
-          reopened_by_role: string | null
-          resolution_notes: string | null
-          resolution_time_hours: number | null
-          resolved_at: string | null
-          resource_id: string | null
-          severity: string | null
-          sla_target_hours: number | null
-          status: Database["public"]["Enums"]["ticket_status_new"] | null
-          status_changed_at: string | null
-          status_changed_by: string | null
-          status_changed_by_name: string | null
-          status_changed_by_role: string | null
-          submitted_at: string | null
-          submitted_by: string | null
-          submitted_by_name: string | null
-          submitted_by_role: string | null
-          submitted_by_user_id: string | null
-          ticket_number: string | null
-          updated_at: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tickets_reopened_by_fkey"
-            columns: ["reopened_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tickets_status_changed_by_fkey"
-            columns: ["status_changed_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tickets_submitted_by_user_id_fkey"
-            columns: ["submitted_by_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Functions: {
-      auto_resolve_user_dependency_tickets: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      login_with_mobile_pin: {
-        Args: { p_mobile_number: string; p_pin: string }
-        Returns: {
-          centre_code: string
-          city: string
-          id: string
-          is_active: boolean
-          mobile_number: string
-          name: string
-          role: string
-        }[]
-      }
       refresh_ticket_analytics: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      register_user_with_mobile_pin: {
-        Args: {
-          p_centre_code?: string
-          p_city?: string
-          p_mobile_number: string
-          p_name: string
-          p_pin: string
-        }
-        Returns: {
-          centre_code: string
-          city: string
-          error_message: string
-          id: string
-          is_active: boolean
-          mobile_number: string
-          name: string
-          role: string
-          success: boolean
-        }[]
-      }
-      validate_assignment_permission: {
-        Args: { p_assignment_role: string; p_user_role: string }
-        Returns: boolean
-      }
-      validate_status_transition: {
-        Args: {
-          p_from_status: Database["public"]["Enums"]["ticket_status_new"]
-          p_ticket_id: string
-          p_to_status: Database["public"]["Enums"]["ticket_status_new"]
-          p_user_role: string
-        }
-        Returns: boolean
-      }
     }
     Enums: {
-      ticket_status_new:
-        | "open"
-        | "in_progress"
-        | "send_for_approval"
-        | "approved"
-        | "resolved"
-        | "ops_input_required"
-        | "user_dependency"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -951,25 +627,21 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -987,16 +659,14 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1012,16 +682,14 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -1037,16 +705,14 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -1054,32 +720,20 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
 export const Constants = {
   public: {
-    Enums: {
-      ticket_status_new: [
-        "open",
-        "in_progress",
-        "send_for_approval",
-        "approved",
-        "resolved",
-        "ops_input_required",
-        "user_dependency",
-      ],
-    },
+    Enums: {},
   },
 } as const
