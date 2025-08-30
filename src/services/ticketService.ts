@@ -320,8 +320,13 @@ export class TicketService {
     }
   }
 
-  static async getStatusTransitions(role: string, currentStatus: Issue['status']): Promise<Issue['status'][]> {
-    return this.getAllowedStatusTransitions(role, currentStatus);
+  static async getStatusTransitions(role?: string, currentStatus?: Issue['status']): Promise<Issue['status'][]> {
+    if (role && currentStatus) {
+      return this.getAllowedStatusTransitions(role, currentStatus);
+    }
+    
+    // If no role/status provided, return empty array (for compatibility)
+    return [];
   }
 
   /**

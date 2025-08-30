@@ -420,7 +420,11 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                           ) : (
                             <span className="text-sm">{
                               selectedTicket.issueDate.type === 'single' && selectedTicket.issueDate.dates && selectedTicket.issueDate.dates[0]
-                                ? (selectedTicket.issueDate.dates[0] instanceof Date ? selectedTicket.issueDate.dates[0].toLocaleDateString() : new Date(selectedTicket.issueDate.dates[0]).toLocaleDateString())
+                                ? (selectedTicket.issueDate.dates[0] instanceof Date 
+                                   ? selectedTicket.issueDate.dates[0].toLocaleDateString() 
+                                   : typeof selectedTicket.issueDate.dates[0] === 'object' && 'date' in selectedTicket.issueDate.dates[0]
+                                     ? selectedTicket.issueDate.dates[0].date.toLocaleDateString()
+                                     : new Date(selectedTicket.issueDate.dates[0] as Date).toLocaleDateString())
                                 : selectedTicket.issueDate.type === 'range' && selectedTicket.issueDate.startDate && selectedTicket.issueDate.endDate
                                   ? `${selectedTicket.issueDate.startDate instanceof Date ? selectedTicket.issueDate.startDate.toLocaleDateString() : new Date(selectedTicket.issueDate.startDate).toLocaleDateString()} - ${selectedTicket.issueDate.endDate instanceof Date ? selectedTicket.issueDate.endDate.toLocaleDateString() : new Date(selectedTicket.issueDate.endDate).toLocaleDateString()}`
                                   : selectedTicket.issueDate.type === 'ongoing'
@@ -798,7 +802,11 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                         ) : (
                           <span className="text-sm">{
                             selectedTicket.issueDate.type === 'single' && selectedTicket.issueDate.dates && selectedTicket.issueDate.dates[0]
-                              ? (selectedTicket.issueDate.dates[0] instanceof Date ? selectedTicket.issueDate.dates[0].toLocaleDateString() : new Date(selectedTicket.issueDate.dates[0]).toLocaleDateString())
+                              ? (selectedTicket.issueDate.dates[0] instanceof Date 
+                                 ? selectedTicket.issueDate.dates[0].toLocaleDateString() 
+                                 : typeof selectedTicket.issueDate.dates[0] === 'object' && 'date' in selectedTicket.issueDate.dates[0]
+                                   ? selectedTicket.issueDate.dates[0].date.toLocaleDateString()
+                                   : new Date(selectedTicket.issueDate.dates[0] as Date).toLocaleDateString())
                               : selectedTicket.issueDate.type === 'range' && selectedTicket.issueDate.startDate && selectedTicket.issueDate.endDate
                                 ? `${selectedTicket.issueDate.startDate instanceof Date ? selectedTicket.issueDate.startDate.toLocaleDateString() : new Date(selectedTicket.issueDate.startDate).toLocaleDateString()} - ${selectedTicket.issueDate.endDate instanceof Date ? selectedTicket.issueDate.endDate.toLocaleDateString() : new Date(selectedTicket.issueDate.endDate).toLocaleDateString()}`
                                 : selectedTicket.issueDate.type === 'ongoing'

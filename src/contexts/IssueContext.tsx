@@ -143,7 +143,7 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const addComment = async (issueId: string, commentData: Omit<Comment, 'id' | 'timestamp'>): Promise<void> => {
-    await TicketService.addComment(issueId, commentData);
+    await TicketService.addComment(issueId, commentData as any);
     await refreshIssues();
   };
 

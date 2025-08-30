@@ -786,12 +786,12 @@ export class AdminService {
         centreCode: ticket.centre_code,
         city: ticket.city,
         resourceId: ticket.resource_id,
-        awignAppTicketId: ticket.awign_app_ticket_id || undefined,
-        issueCategory: ticket.issue_category,
+        awignAppTicketId: (ticket as any).awign_app_ticket_id || undefined,
+        issueCategory: ticket.issue_category as Issue['issueCategory'],
         issueDescription: ticket.issue_description,
-        issueDate: ticket.issue_date,
-        severity: ticket.severity,
-        status: ticket.status,
+        issueDate: this.parseIssueDate(ticket.issue_date),
+        severity: ticket.severity as Issue['severity'],
+        status: ticket.status as Issue['status'],
         isAnonymous: ticket.is_anonymous,
         submittedBy: ticket.submitted_by,
         submittedByUserId: ticket.submitted_by_user_id,
@@ -831,12 +831,12 @@ export class AdminService {
           };
         }),
         issueEvidence: [],
-        reopenCount: ticket.reopen_count || 0,
-        lastReopenedAt: ticket.last_reopened_at ? new Date(ticket.last_reopened_at) : undefined,
-        reopenedBy: ticket.reopened_by || undefined,
-        statusChangedAt: ticket.status_changed_at ? new Date(ticket.status_changed_at) : undefined,
-        statusChangedBy: ticket.status_changed_by || undefined,
-        deleted: ticket.deleted || false
+        reopenCount: (ticket as any).reopen_count || 0,
+        lastReopenedAt: (ticket as any).last_reopened_at ? new Date((ticket as any).last_reopened_at) : undefined,
+        reopenedBy: (ticket as any).reopened_by || undefined,
+        statusChangedAt: (ticket as any).status_changed_at ? new Date((ticket as any).status_changed_at) : undefined,
+        statusChangedBy: (ticket as any).status_changed_by || undefined,
+        deleted: (ticket as any).deleted || false
       }));
 
       console.log(`✅ Returning ${mappedTickets.length} tickets assigned to admin ${adminId}`);
@@ -925,7 +925,7 @@ export class AdminService {
       const openTickets = tickets.filter(t => t.status === 'open').length;
       const inProgressTickets = tickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = tickets.filter(t => t.status === 'resolved').length;
-      const closedTickets = tickets.filter(t => (t as any).status === 'closed').length;
+      const closedTickets = 0; // No closed status in current system
 
       const sev1Tickets = tickets.filter(t => t.severity === 'sev1').length;
       const sev2Tickets = tickets.filter(t => t.severity === 'sev2').length;
@@ -1039,7 +1039,7 @@ export class AdminService {
       const openTickets = assignedTickets.filter(t => t.status === 'open').length;
       const inProgressTickets = assignedTickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = assignedTickets.filter(t => t.status === 'resolved').length;
-      const closedTickets = assignedTickets.filter(t => t.status === 'closed').length;
+      const closedTickets = 0; // No closed status in current system
       
       const sev1Tickets = assignedTickets.filter(t => t.severity === 'sev1').length;
       const sev2Tickets = assignedTickets.filter(t => t.severity === 'sev2').length;
@@ -1373,24 +1373,53 @@ export class AdminService {
         centreCode: ticket.centre_code,
         city: ticket.city,
         resourceId: ticket.resource_id,
-        awignAppTicketId: ticket.awign_app_ticket_id,
-        issueCategory: ticket.issue_category,
+        awignAppTicketId: (ticket as any).awign_app_ticket_id || undefined,
+        issueCategory: ticket.issue_category as Issue['issueCategory'],
         issueDescription: ticket.issue_description,
-        issueDate: ticket.issue_date,
-        severity: ticket.severity,
-        status: ticket.status,
+        issueDate: this.parseIssueDate(ticket.issue_date),
+        severity: ticket.severity as Issue['severity'],
+        status: ticket.status as Issue['status'],
         isAnonymous: ticket.is_anonymous,
         submittedBy: ticket.submitted_by,
         submittedByUserId: ticket.submitted_by_user_id,
-        submittedAt: ticket.submitted_at,
+        submittedAt: new Date(ticket.submitted_at),
         assignedResolver: ticket.assigned_resolver,
         assignedApprover: ticket.assigned_approver,
         resolutionNotes: ticket.resolution_notes,
-        resolvedAt: ticket.resolved_at,
+        resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
         createdAt: ticket.created_at,
         updatedAt: ticket.updated_at,
-        comments: ticket.comments || [],
-        attachments: ticket.attachments || []
+        comments: (ticket.comments || []).map((comment: any) => ({
+          id: comment.id,
+          content: comment.content,
+          author: comment.author,
+          authorRole: comment.author_role,
+          timestamp: comment.created_at ? new Date(comment.created_at) : new Date(),
+          isInternal: comment.is_internal,
+          attachments: (comment.comment_attachments || []).map((att: any) => {
+            const { data: pub } = supabase.storage.from('comment-attachments').getPublicUrl(att.storage_path);
+            return {
+              id: att.id,
+              fileName: att.file_name,
+              fileSize: att.file_size,
+              fileType: att.file_type,
+              downloadUrl: pub.publicUrl,
+              uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            };
+          }),
+        })),
+        attachments: (ticket.attachments || []).map((att: any) => {
+          const { data: pub } = supabase.storage.from('ticket-attachments').getPublicUrl(att.storage_path);
+          return {
+            id: att.id,
+            fileName: att.file_name,
+            fileSize: att.file_size,
+            fileType: att.file_type,
+            uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            downloadUrl: pub.publicUrl,
+          };
+        }),
+        issueEvidence: []
       }));
 
       console.log(`✅ Found ${mappedTickets.length} tickets assigned to resolver: ${resolverName}`);

@@ -256,7 +256,7 @@ This is an automated notification from the AWIGN Escalation Management System.
       submittedAt: lastTicket.submittedAt,
       severity: lastTicket.severity,
       attachments: lastTicket.attachments || [],
-      ticketLink: lastTicket.ticketLink
+      ticketLink: `${window.location.origin}/track?q=${lastTicket.ticketNumber}`
     });
   }
 

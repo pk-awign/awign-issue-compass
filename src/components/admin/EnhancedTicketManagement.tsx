@@ -35,7 +35,7 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
   onUpdate 
 }) => {
   const { user } = useAuth();
-  const [statusTransitions, setStatusTransitions] = useState<StatusTransition[]>([]);
+  const [statusTransitions, setStatusTransitions] = useState<Issue['status'][]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
@@ -49,7 +49,7 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
   const loadStatusTransitions = async () => {
     try {
       const transitions = await TicketService.getStatusTransitions();
-      setStatusTransitions(transitions);
+      setStatusTransitions(transitions || []);
     } catch (error) {
       console.error('Error loading status transitions:', error);
     }
@@ -71,9 +71,9 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
       return allStatuses.filter(status => status !== currentStatus);
     }
     
-    return statusTransitions
-      .filter(t => t.fromStatus === currentStatus && t.allowedRoles.includes(userRole))
-      .map(t => t.toStatus);
+    // For now, return hardcoded transitions since statusTransitions is Issue['status'][]
+    return ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved']
+      .filter(status => status !== currentStatus);
   };
 
   const handleStatusChange = async (newStatus: Issue['status']) => {

@@ -4,7 +4,7 @@ import { Issue } from '@/types/issue';
 const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad'];
 const issueCategories: Issue['issueCategory'][] = ['payment_delay', 'partial_payment', 'behavioral_complaint', 'improvement_request', 'facility_issue', 'penalty_issue', 'malpractice', 'app_issue', 'other'];
 const severities: Issue['severity'][] = ['sev1', 'sev2', 'sev3'];
-const statuses: Issue['status'][] = ['open', 'in_progress', 'resolved', 'closed'];
+const statuses: Issue['status'][] = ['open', 'in_progress', 'resolved'];
 
 const sampleDescriptions = [
   'Payment for invigilation services has been delayed beyond the agreed timeline.',
@@ -93,8 +93,8 @@ export async function createRandomTickets(count: number = 10) {
       submitted_by: submittedBy,
       submitted_at: submittedAt.toISOString(),
       assigned_resolver: assignedResolver,
-      resolved_at: status === 'resolved' || status === 'closed' ? new Date().toISOString() : null,
-      resolution_notes: status === 'resolved' || status === 'closed' ? 'Issue resolved successfully' : null,
+      resolved_at: status === 'resolved' ? new Date().toISOString() : null,
+      resolution_notes: status === 'resolved' ? 'Issue resolved successfully' : null,
     };
 
     tickets.push(ticket);
