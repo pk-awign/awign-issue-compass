@@ -76,6 +76,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
   const [centreCodes, setCentreCodes] = useState<string[]>([]);
   const [centreCodeInput, setCentreCodeInput] = useState('');
   const [centreCodeDropdownOpen, setCentreCodeDropdownOpen] = useState(false);
+  const [centreCodeError, setCentreCodeError] = useState('');
   const centreCodeInputRef = useRef<HTMLInputElement>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,6 +90,13 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
         city: user.city || '',
         submittedBy: user.name || ''
       }));
+      // Also set the input fields for display
+      if (user.centreCode) {
+        setCentreCodeInput(user.centreCode);
+      }
+      if (user.city) {
+        setCityInput(user.city);
+      }
     }
   }, [user]);
 
@@ -111,6 +119,38 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     }
     fetchCentreCodes();
   }, []);
+
+  // Validate centre code when input changes
+  useEffect(() => {
+    if (centreCodeInput && centreCodes.length > 0) {
+      const exactMatch = centreCodes.find(code => 
+        code.toLowerCase() === centreCodeInput.toLowerCase()
+      );
+      
+      if (exactMatch) {
+        // Auto-select the exact match
+        setFormData(prev => ({ ...prev, centreCode: exactMatch }));
+        setCentreCodeError('');
+      } else {
+        // Check if there's a partial match
+        const hasPartialMatch = centreCodes.some(code => 
+          code.toLowerCase().includes(centreCodeInput.toLowerCase())
+        );
+        
+        if (!hasPartialMatch) {
+          setCentreCodeError('Please select a valid centre code from the list');
+        } else {
+          setCentreCodeError('');
+        }
+        
+        // Clear the form data if no exact match
+        setFormData(prev => ({ ...prev, centreCode: '' }));
+      }
+    } else {
+      setCentreCodeError('');
+      setFormData(prev => ({ ...prev, centreCode: '' }));
+    }
+  }, [centreCodeInput, centreCodes]);
 
   const issueCategories = [
     { value: 'payment_delay', label: 'Payment Delay' },
@@ -194,6 +234,12 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      // Validate centre code
+      if (!formData.centreCode || !centreCodes.includes(formData.centreCode)) {
+        toast.error('Please select a valid centre code from the list');
+        return;
+      }
+
       // Updated validation logic - always require all fields since anonymous is disabled
       const requiredFields = [
         formData.centreCode,
@@ -275,9 +321,9 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
         }
       }, 500);
       
-      // Reset form
+      // Reset form completely
       setFormData({
-        centreCode: user?.centreCode || '',
+        centreCode: '',
         city: '',
         resourceId: '',
         awignAppTicketId: '',
@@ -289,11 +335,13 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
         endDate: undefined,
         multipleDates: [],
         isAnonymous: false,
-        submittedBy: user?.name || '',
+        submittedBy: '',
         citySearch: ''
       });
       setFiles([]);
       setCityInput('');
+      setCentreCodeInput('');
+      setCentreCodeError('');
     } catch (error) {
       toast.error('Failed to submit issue. Please try again.');
       console.error('Issue submission error:', error);
@@ -433,19 +481,24 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                         <input
                           ref={centreCodeInputRef}
                           type="text"
-                          className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${centreCodeError ? 'border-red-500' : ''}`}
                           placeholder="Search centre code..."
-                          value={formData.centreCode || centreCodeInput}
+                          value={centreCodeInput}
                           onFocus={() => setCentreCodeDropdownOpen(true)}
                           onChange={e => {
-                            setCentreCodeInput(e.target.value);
-                            setFormData(prev => ({ ...prev, centreCode: '', }));
+                            const value = e.target.value;
+                            setCentreCodeInput(value);
+                            setFormData(prev => ({ ...prev, centreCode: '' }));
                             setCentreCodeDropdownOpen(true);
+                            setCentreCodeError('');
                           }}
                           onBlur={() => setTimeout(() => setCentreCodeDropdownOpen(false), 150)}
                           autoComplete="off"
                           required
                         />
+                        {centreCodeError && (
+                          <p className="text-xs text-red-500 mt-1">{centreCodeError}</p>
+                        )}
                         {centreCodeDropdownOpen && centreCodes.length > 0 && (
                           <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto mt-1">
                             {centreCodes.filter(code => (centreCodeInput ? code.toLowerCase().includes(centreCodeInput.toLowerCase()) : true)).length === 0 ? (
@@ -459,6 +512,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                                     setFormData(prev => ({ ...prev, centreCode: code }));
                                     setCentreCodeInput(code);
                                     setCentreCodeDropdownOpen(false);
+                                    setCentreCodeError('');
                                   }}
                                 >
                                   {code}
