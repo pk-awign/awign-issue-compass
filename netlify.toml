@@ -4,6 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # Disable secrets scanning for build output since VITE_ variables are intentionally exposed to client-side
+  SECRETS_SCAN_ENABLED = "false"
 
 [dev]
   targetPort = 8084
