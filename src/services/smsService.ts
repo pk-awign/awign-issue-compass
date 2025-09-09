@@ -153,24 +153,8 @@ export class SMSService {
         ticketNumber: ticketData.ticketNumber,
         ticketLink: ticketData.ticketLink
       };
-
-      const messageData: SMSMessageData = {
-        sms: {
-          mobile_number: formattedPhone,
-          template_id: SMS_CONFIG.TICKET_CREATION_TEMPLATE_ID,
-          message: `Hi ${contact.name},
-Your ticket has been raised.
-
-- Ticket Number: ${ticketData.ticketNumber}
-- Tracking Link: ${ticketData.ticketLink}
-
-Escalation Portal -Awign`,
-          sender_id: SMS_CONFIG.SENDER_ID,
-          channel: SMS_CONFIG.CHANNEL
-        }
-      };
       
-      return await this.sendSMSMessageViaProxy('sendTicketCreationNotification', messageData);
+      return await this.sendSMSMessageViaProxy('sendTicketCreationNotification', smsData);
       
     } catch (error) {
       console.error('❌ [SMS SERVICE] Error sending SMS by Resource ID:', error);
@@ -211,7 +195,7 @@ Escalation Portal -Awign`,
         }
       };
 
-      const success = await this.sendSMSMessageViaProxy('sendTicketCreationNotification', messageData);
+      const success = await this.sendSMSMessage(messageData);
       
       if (success) {
         console.log('✅ [SMS SERVICE] Ticket creation SMS sent to:', smsData.name);
@@ -263,7 +247,7 @@ Escalation Portal -Awign`,
         }
       };
 
-      const success = await this.sendSMSMessageViaProxy('sendTicketUpdateNotification', messageData);
+      const success = await this.sendSMSMessageViaProxy('sendTicketUpdateNotification', smsData);
       
       if (success) {
         console.log('✅ [SMS SERVICE] Ticket update SMS sent to:', smsData.name);
