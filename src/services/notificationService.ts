@@ -1,5 +1,6 @@
-// NotificationService: Centralized notification logic for email and WhatsApp
+// NotificationService: Centralized notification logic for email, WhatsApp, and SMS
 import { EmailService } from './emailService';
+import { SMSService } from './smsService';
 // import { WhatsAppAdapter } from './whatsappAdapter'; // Placeholder for WhatsApp integration
 
 interface NotificationLog {
@@ -33,12 +34,30 @@ export class NotificationService {
       whatsappStatus = 'sent'; // Simulate success
     }
 
+    // Send SMS (if user has phone number)
+    let smsStatus = 'not_sent';
+    if (user.phone) {
+      try {
+        const smsData = {
+          mobileNumber: user.phone,
+          name: user.name || ticket.submittedBy,
+          ticketNumber: ticket.ticketNumber,
+          ticketLink: ticket.ticketLink || `https://awign-invigilation-escalation.netlify.app/track?id=${ticket.ticketNumber}`
+        };
+        const sent = await SMSService.sendTicketCreationNotification(smsData);
+        smsStatus = sent ? 'sent' : 'failed';
+      } catch (error) {
+        console.error('SMS notification error:', error);
+        smsStatus = 'failed';
+      }
+    }
+
     // Log the notification (replace with DB logging if needed)
     console.log('NotificationLog', {
       userId: user.id,
       type: 'ticket_created',
-      channels: ['email', 'whatsapp'],
-      status: `${emailStatus},${whatsappStatus}`,
+      channels: ['email', 'whatsapp', 'sms'],
+      status: `${emailStatus},${whatsappStatus},${smsStatus}`,
       timestamp: new Date()
     });
   }
@@ -63,12 +82,30 @@ export class NotificationService {
       whatsappStatus = 'sent'; // Simulate success
     }
 
+    // Send SMS (if user has phone number)
+    let smsStatus = 'not_sent';
+    if (user.phone) {
+      try {
+        const smsData = {
+          mobileNumber: user.phone,
+          name: user.name || ticket.submittedBy,
+          ticketNumber: ticket.ticketNumber,
+          ticketLink: ticket.ticketLink || `https://awign-invigilation-escalation.netlify.app/track?id=${ticket.ticketNumber}`
+        };
+        const sent = await SMSService.sendTicketUpdateNotification(smsData);
+        smsStatus = sent ? 'sent' : 'failed';
+      } catch (error) {
+        console.error('SMS notification error:', error);
+        smsStatus = 'failed';
+      }
+    }
+
     // Log the notification
     console.log('NotificationLog', {
       userId: user.id,
       type: 'status_changed',
-      channels: ['email', 'whatsapp'],
-      status: `${emailStatus},${whatsappStatus}`,
+      channels: ['email', 'whatsapp', 'sms'],
+      status: `${emailStatus},${whatsappStatus},${smsStatus}`,
       timestamp: new Date()
     });
   }

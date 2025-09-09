@@ -3,6 +3,7 @@ import { Issue, Comment, Attachment, TimelineEvent, StatusTransition, TicketDeta
 import { toast } from 'sonner';
 import { EmailService } from './emailService';
 import { WhatsAppService } from './whatsappService';
+import { SMSService } from './smsService';
 
 export class TicketService {
   static async createTicket(issueData: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'> & { issueEvidence?: File[] }, userId?: string): Promise<string> {
@@ -85,7 +86,7 @@ export class TicketService {
           submittedAt: new Date(),
           severity: 'sev3',
           attachments: uploadedAttachments,
-          ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`
+          ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
         });
         console.log('📧 Email notification sent successfully for ticket:', ticketNumber);
       } catch (emailError) {
@@ -105,7 +106,7 @@ export class TicketService {
           submittedBy: issueData.submittedBy || 'Anonymous',
           submittedAt: new Date(),
           severity: 'sev3',
-          ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`
+          ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
         };
 
         const result = await WhatsAppService.sendCitySpecificNotifications(issueData.city, ticketData);
@@ -136,11 +137,30 @@ export class TicketService {
           submittedBy: issueData.submittedBy || 'Anonymous',
           submittedAt: new Date(),
           severity: 'sev3',
-          ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`
+          ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
         };
 
         console.log('📱 [WHATSAPP DEBUG] Preparing to send WhatsApp notification with data:', ticketData);
-        const result = await WhatsAppService.sendTicketCreationNotification(ticketData);
+        // Fallback: try to use ticket raiser's mobile number from users table if available
+        let ticketRaiserPhone: string | undefined = undefined;
+        if (userId) {
+          try {
+            const { data: userData, error: userFetchError } = await supabase
+              .from('users')
+              .select('mobile_number')
+              .eq('id', userId)
+              .single();
+            if (!userFetchError && userData?.mobile_number) {
+              ticketRaiserPhone = userData.mobile_number;
+              console.log('📱 [WHATSAPP DEBUG] Found ticket raiser phone from users table:', ticketRaiserPhone);
+            } else {
+              console.log('📱 [WHATSAPP DEBUG] No mobile_number found for ticket raiser or fetch error:', userFetchError);
+            }
+          } catch (fetchErr) {
+            console.log('📱 [WHATSAPP DEBUG] Error fetching user phone:', fetchErr);
+          }
+        }
+        const result = await WhatsAppService.sendTicketCreationNotification(ticketData, ticketRaiserPhone);
         console.log('📱 [WHATSAPP DEBUG] Ticket creation notification result:', result);
         console.log('✅ [WHATSAPP DEBUG] WhatsApp notification process completed successfully');
       } catch (whatsappError) {
@@ -151,6 +171,54 @@ export class TicketService {
           name: whatsappError.name
         });
         // Don't fail the ticket creation if WhatsApp fails
+      }
+
+      // Send SMS notification to ticket raiser
+      try {
+        console.log('📱 [SMS DEBUG] Starting SMS notification process...');
+        
+        let ticketRaiserPhone: string | undefined = undefined;
+        let ticketRaiserName: string = issueData.submittedBy || 'Anonymous';
+        
+        if (userId) {
+          try {
+            const { data: userData, error: userFetchError } = await supabase
+              .from('users')
+              .select('mobile_number, name')
+              .eq('id', userId)
+              .single();
+            if (!userFetchError && userData) {
+              ticketRaiserPhone = userData.mobile_number;
+              ticketRaiserName = userData.name || ticketRaiserName;
+              console.log('📱 [SMS DEBUG] Found ticket raiser details from users table:', {
+                phone: ticketRaiserPhone,
+                name: ticketRaiserName
+              });
+            } else {
+              console.log('📱 [SMS DEBUG] No user data found for ticket raiser or fetch error:', userFetchError);
+            }
+          } catch (fetchErr) {
+            console.log('📱 [SMS DEBUG] Error fetching user data:', fetchErr);
+          }
+        }
+
+        if (ticketRaiserPhone) {
+          const smsData = {
+            mobileNumber: ticketRaiserPhone,
+            name: ticketRaiserName,
+            ticketNumber: ticketNumber,
+            ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
+          };
+
+          console.log('📱 [SMS DEBUG] Sending SMS notification with data:', smsData);
+          const smsResult = await SMSService.sendTicketCreationNotification(smsData);
+          console.log('📱 [SMS DEBUG] SMS notification result:', smsResult);
+        } else {
+          console.log('📱 [SMS DEBUG] No phone number available for SMS notification');
+        }
+      } catch (smsError) {
+        console.error('❌ [SMS DEBUG] Failed to send SMS notification:', smsError);
+        // Don't fail the ticket creation if SMS fails
       }
 
       toast.success(`Ticket ${ticketNumber} created successfully`);
@@ -819,7 +887,7 @@ export class TicketService {
               ticketNumber: ticketData.ticket_number,
               resourceId: ticketData.resource_id || 'NOT_SPECIFIED',
               submittedBy: ticketData.submitted_by || 'Anonymous',
-              ticketLink: `https://awign-invigilation-escalation.netlify.app/track/${ticketData.ticket_number}`
+              ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
             };
 
             console.log('📱 [WHATSAPP DEBUG] Sending comment notification with data:', commentNotificationData);
@@ -829,6 +897,57 @@ export class TicketService {
         } catch (whatsappError) {
           console.error('❌ [WHATSAPP DEBUG] Failed to send comment notification:', whatsappError);
           // Don't fail the comment addition if WhatsApp notification fails
+        }
+
+        // Send SMS notification for non-internal comments
+        try {
+          // Get ticket details for SMS notification
+          const { data: ticketData, error: ticketError } = await supabase
+            .from('tickets')
+            .select('ticket_number, resource_id, submitted_by, submitted_by_user_id')
+            .eq('id', ticketId)
+            .single();
+
+          if (!ticketError && ticketData) {
+            // Try to get user phone number for SMS
+            let userPhone: string | undefined = undefined;
+            let userName: string = ticketData.submitted_by || 'Anonymous';
+            
+            if (ticketData.submitted_by_user_id) {
+              try {
+                const { data: userData, error: userFetchError } = await supabase
+                  .from('users')
+                  .select('mobile_number, name')
+                  .eq('id', ticketData.submitted_by_user_id)
+                  .single();
+                
+                if (!userFetchError && userData) {
+                  userPhone = userData.mobile_number;
+                  userName = userData.name || userName;
+                }
+              } catch (fetchErr) {
+                console.log('📱 [SMS DEBUG] Error fetching user data for SMS:', fetchErr);
+              }
+            }
+
+            if (userPhone) {
+              const smsData = {
+                mobileNumber: userPhone,
+                name: userName,
+                ticketNumber: ticketData.ticket_number,
+                ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
+              };
+
+              console.log('📱 [SMS DEBUG] Sending comment SMS notification with data:', smsData);
+              const smsResult = await SMSService.sendTicketUpdateNotification(smsData);
+              console.log('📱 [SMS DEBUG] Comment SMS notification result:', smsResult);
+            } else {
+              console.log('📱 [SMS DEBUG] No phone number available for comment SMS notification');
+            }
+          }
+        } catch (smsError) {
+          console.error('❌ [SMS DEBUG] Failed to send comment SMS notification:', smsError);
+          // Don't fail the comment addition if SMS notification fails
         }
       }
     } catch (error) {
