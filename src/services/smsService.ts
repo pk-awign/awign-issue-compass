@@ -104,7 +104,7 @@ export class SMSService {
       const data = await response.text();
       console.log('📊 [SMS GOOGLE SHEETS] Raw data received, length:', data.length);
       
-      // Parse CSV data
+      // Parse CSV data (same approach as WhatsApp service)
       const lines = data.split('\n').filter(line => line.trim());
       console.log('📊 [SMS GOOGLE SHEETS] Total lines:', lines.length);
       
@@ -119,8 +119,8 @@ export class SMSService {
         const line = lines[i];
         if (!line.trim()) continue;
         
-        // Parse CSV line (handle commas within quoted fields)
-        const fields = this.parseCSVLine(line);
+        // Simple CSV parsing (same as WhatsApp service)
+        const fields = line.replace(/"/g, '').split(',').map(cell => cell.trim());
         
         if (fields.length >= 6) {
           const contact: SMSContact = {
@@ -150,30 +150,6 @@ export class SMSService {
     }
   }
 
-  /**
-   * Parse CSV line handling quoted fields
-   */
-  private static parseCSVLine(line: string): string[] {
-    const fields: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        fields.push(current);
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    
-    fields.push(current);
-    return fields;
-  }
   /**
    * Validate SMS configuration
    */
