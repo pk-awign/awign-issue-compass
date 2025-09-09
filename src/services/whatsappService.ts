@@ -1,5 +1,5 @@
 import { supabase } from '../integrations/supabase/client';
-import { toast } from 'sonner';
+import { SharedContactService, SharedContact } from './sharedContactService';
 
 // WhatsApp API Configuration
 const WHATSAPP_CONFIG = {
@@ -377,14 +377,17 @@ export class WhatsAppService {
         console.log('🔍 [WHATSAPP SERVICE] No phone provided, searching Google Sheets for contact...');
         
         try {
-          const contacts = await this.fetchContactsFromSheet();
-          console.log('🔍 [WHATSAPP SERVICE] Fetched contacts count:', contacts.length);
-          console.log('🔍 [WHATSAPP SERVICE] Sample contacts:', contacts.slice(0, 3));
-          
-          // PRIORITY: Match by Resource ID only (as requested)
-          matchingContact = contacts.find(contact => 
-            contact.resourceId === ticketData.resourceId
-          );
+          const contact = await SharedContactService.findContactByResourceId(ticketData.resourceId);
+          if (contact) {
+            matchingContact = {
+              resourceId: contact.resourceId,
+              name: contact.name,
+              contactNumber: contact.contactNumber,
+              emailId: contact.emailId,
+              zone: contact.zone,
+              city: contact.city
+            };
+          }
           
           console.log('🔍 [WHATSAPP SERVICE] Searching for Resource ID:', ticketData.resourceId);
           console.log('🔍 [WHATSAPP SERVICE] Matching contact found:', matchingContact);

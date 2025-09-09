@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { EmailService } from './emailService';
 import { WhatsAppService } from './whatsappService';
 import { SMSService } from './smsService';
+import { SharedContactService } from './sharedContactService';
 
 export class TicketService {
   static async createTicket(issueData: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'> & { issueEvidence?: File[] }, userId?: string): Promise<string> {
@@ -850,7 +851,7 @@ export class TicketService {
           // Don't fail the comment addition if WhatsApp notification fails
         }
 
-        // Send SMS notification for non-internal comments
+        // Send SMS notification for non-internal comments (only if NOT from ticket raiser)
         try {
           // Get ticket details for SMS notification
           const { data: ticketData, error: ticketError } = await supabase
@@ -860,38 +861,41 @@ export class TicketService {
             .single();
 
           if (!ticketError && ticketData) {
-            console.log('📱 [SMS DEBUG] Starting comment SMS notification process by Resource ID...');
-            console.log('📱 [SMS DEBUG] Resource ID for comment SMS lookup:', ticketData.resource_id);
+            // Check if the comment author is the same as the ticket submitter
+            const isCommentFromTicketRaiser = commentData.author === ticketData.submitted_by;
             
-            if (ticketData.resource_id && ticketData.resource_id !== 'NOT_SPECIFIED') {
-              // For comment updates, we need to use the update template
-              // First get the contact details from Google Sheets
-              const contacts = await SMSService.fetchContactsFromSheet();
-              const matchingContact = contacts.find(contact => 
-                contact.resourceId === ticketData.resource_id
-              );
+            if (isCommentFromTicketRaiser) {
+              console.log('📱 [SMS DEBUG] Comment is from ticket raiser, skipping SMS notification');
+            } else {
+              console.log('📱 [SMS DEBUG] Comment is from someone else, proceeding with SMS notification');
+              console.log('📱 [SMS DEBUG] Resource ID for comment SMS lookup:', ticketData.resource_id);
               
-              if (matchingContact) {
-                const formattedPhone = SMSService.formatPhoneNumber(matchingContact.contactNumber);
-                if (formattedPhone) {
-                  const smsData = {
-                    mobileNumber: formattedPhone,
-                    name: matchingContact.name,
-                    ticketNumber: ticketData.ticket_number,
-                    ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
-                  };
-                  
-                  console.log('📱 [SMS DEBUG] Sending comment update SMS notification with data:', smsData);
-                  const smsResult = await SMSService.sendTicketUpdateNotification(smsData);
-                  console.log('📱 [SMS DEBUG] Comment SMS notification result:', smsResult);
+              if (ticketData.resource_id && ticketData.resource_id !== 'NOT_SPECIFIED') {
+                // Use shared contact service to avoid duplicate parsing
+                const contact = await SharedContactService.findContactByResourceId(ticketData.resource_id);
+                
+                if (contact) {
+                  const formattedPhone = SharedContactService.formatPhoneNumber(contact.contactNumber);
+                  if (formattedPhone) {
+                    const smsData = {
+                      mobileNumber: formattedPhone,
+                      name: contact.name,
+                      ticketNumber: ticketData.ticket_number,
+                      ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
+                    };
+                    
+                    console.log('📱 [SMS DEBUG] Sending comment update SMS notification with data:', smsData);
+                    const smsResult = await SMSService.sendTicketUpdateNotification(smsData);
+                    console.log('📱 [SMS DEBUG] Comment SMS notification result:', smsResult);
+                  } else {
+                    console.log('📱 [SMS DEBUG] Invalid phone number for contact:', contact.contactNumber);
+                  }
                 } else {
-                  console.log('📱 [SMS DEBUG] Invalid phone number for contact:', matchingContact.contactNumber);
+                  console.log('📱 [SMS DEBUG] No contact found with Resource ID:', ticketData.resource_id);
                 }
               } else {
-                console.log('📱 [SMS DEBUG] No contact found with Resource ID:', ticketData.resource_id);
+                console.log('📱 [SMS DEBUG] No Resource ID provided, skipping comment SMS notification');
               }
-            } else {
-              console.log('📱 [SMS DEBUG] No Resource ID provided, skipping comment SMS notification');
             }
           }
         } catch (smsError) {

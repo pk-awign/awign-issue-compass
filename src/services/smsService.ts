@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { SharedContactService, SharedContact } from './sharedContactService';
 
 // SMS API Configuration
 const SMS_CONFIG = {
@@ -13,14 +14,7 @@ const SMS_CONFIG = {
   TICKET_UPDATE_TEMPLATE_ID: import.meta.env.VITE_SMS_TICKET_UPDATE_TEMPLATE_ID
 };
 
-// Google Sheets Configuration (same as WhatsApp service)
-const GOOGLE_SHEETS_CONFIG = {
-  SHEET_ID: '1-FJJ3fLMhMQbZWQ2DRswuC2MPrNP0AhUes1NoWQD-l8',
-  TAB_NAME: 'Sheet1', // Default sheet name
-  RESOURCE_ID_COLUMN: 'A', // Resource_ID column
-  NAME_COLUMN: 'B', // Name column
-  CONTACT_COLUMN: 'C' // Contact_Number column
-};
+// Remove unused Google Sheets configuration and methods since we use SharedContactService
 
 export interface SMSContact {
   contactNumber: string;
@@ -50,107 +44,6 @@ export interface SMSMessageData {
 
 export class SMSService {
   /**
-   * Fetch contacts from Google Sheets (same logic as WhatsApp service)
-   */
-  static async fetchContactsFromSheet(): Promise<SMSContact[]> {
-    try {
-      console.log('🔍 [SMS GOOGLE SHEETS] Starting to fetch contacts...');
-      console.log('🔍 [SMS GOOGLE SHEETS] Sheet ID:', GOOGLE_SHEETS_CONFIG.SHEET_ID);
-      console.log('🔍 [SMS GOOGLE SHEETS] Tab Name:', GOOGLE_SHEETS_CONFIG.TAB_NAME);
-      
-      // Try multiple approaches to access the Google Sheet
-      let response: Response;
-      let url: string;
-      
-      // Approach 1: Try with API key (if available)
-      const apiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY;
-      if (apiKey) {
-        console.log('🔍 [SMS GOOGLE SHEETS] Trying with API key...');
-        url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z?key=${apiKey}`;
-        response = await fetch(url);
-        
-        if (response.ok) {
-          console.log('✅ [SMS GOOGLE SHEETS] Successfully fetched with API key');
-        } else {
-          console.log('❌ [SMS GOOGLE SHEETS] API key approach failed, trying public access...');
-        }
-      }
-      
-      // Approach 2: Try public access (requires sheet to be publicly accessible)
-      if (!apiKey || !response?.ok) {
-        console.log('🔍 [SMS GOOGLE SHEETS] Trying public access...');
-        url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z`;
-        response = await fetch(url);
-      }
-      
-      // Approach 3: Try CSV export (fallback)
-      if (!response?.ok) {
-        console.log('🔍 [SMS GOOGLE SHEETS] Trying CSV export approach...');
-        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${GOOGLE_SHEETS_CONFIG.TAB_NAME}`;
-        response = await fetch(url);
-      }
-      
-      // Approach 4: Try direct CSV download (another fallback)
-      if (!response?.ok) {
-        console.log('🔍 [SMS GOOGLE SHEETS] Trying direct CSV download...');
-        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/export?format=csv&gid=0`;
-        response = await fetch(url);
-      }
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Google Sheet: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.text();
-      console.log('📊 [SMS GOOGLE SHEETS] Raw data received, length:', data.length);
-      
-      // Parse CSV data (same approach as WhatsApp service)
-      const lines = data.split('\n').filter(line => line.trim());
-      console.log('📊 [SMS GOOGLE SHEETS] Total lines:', lines.length);
-      
-      if (lines.length < 2) {
-        console.warn('⚠️ [SMS GOOGLE SHEETS] No data rows found');
-        return [];
-      }
-      
-      // Skip header row and parse data
-      const contacts: SMSContact[] = [];
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.trim()) continue;
-        
-        // Simple CSV parsing (same as WhatsApp service)
-        const fields = line.replace(/"/g, '').split(',').map(cell => cell.trim());
-        
-        if (fields.length >= 6) {
-          const contact: SMSContact = {
-            resourceId: fields[0]?.trim() || '',
-            name: fields[1]?.trim() || '',
-            contactNumber: fields[2]?.trim() || '',
-            emailId: fields[3]?.trim() || '',
-            zone: fields[4]?.trim() || '',
-            city: fields[5]?.trim() || ''
-          };
-          
-          // Only add contacts with valid Resource ID and Contact Number
-          if (contact.resourceId && contact.contactNumber) {
-            contacts.push(contact);
-          }
-        }
-      }
-      
-      console.log('✅ [SMS GOOGLE SHEETS] Successfully parsed contacts:', contacts.length);
-      console.log('📋 [SMS GOOGLE SHEETS] Sample contacts:', contacts.slice(0, 3));
-      
-      return contacts;
-      
-    } catch (error) {
-      console.error('❌ [SMS GOOGLE SHEETS] Error fetching contacts:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Validate SMS configuration
    */
   private static validateConfig(): boolean {
@@ -173,35 +66,7 @@ export class SMSService {
   }
 
   /**
-   * Format phone number for SMS (ensure it's 10 digits without country code)
-   */
-  static formatPhoneNumber(phoneNumber: string): string | null {
-    if (!phoneNumber) return null;
-    
-    // Remove all non-digit characters
-    const digits = phoneNumber.replace(/\D/g, '');
-    
-    // If it starts with 91 (India country code), remove it
-    if (digits.startsWith('91') && digits.length === 12) {
-      return digits.substring(2);
-    }
-    
-    // If it's 10 digits, use as is
-    if (digits.length === 10) {
-      return digits;
-    }
-    
-    // If it's 11 digits and starts with 0, remove the 0
-    if (digits.length === 11 && digits.startsWith('0')) {
-      return digits.substring(1);
-    }
-    
-    console.warn('Invalid phone number format:', phoneNumber);
-    return null;
-  }
-
-  /**
-   * Send SMS message
+   * Send SMS message via proxy
    */
   static async sendSMSMessageViaProxy(action: string, data: any): Promise<boolean> {
     try {
@@ -262,35 +127,29 @@ export class SMSService {
     try {
       console.log('🔍 [SMS SERVICE] Looking up contact by Resource ID:', resourceId);
       
-      // Fetch contacts from Google Sheets
-      const contacts = await this.fetchContactsFromSheet();
-      console.log('🔍 [SMS SERVICE] Fetched contacts count:', contacts.length);
+      // Use shared contact service to avoid duplicate parsing
+      const contact = await SharedContactService.findContactByResourceId(resourceId);
       
-      // Find contact by Resource ID
-      const matchingContact = contacts.find(contact => 
-        contact.resourceId === resourceId
-      );
-      
-      if (!matchingContact) {
+      if (!contact) {
         console.warn('⚠️ [SMS SERVICE] No contact found with Resource ID:', resourceId);
         return false;
       }
       
-      console.log('✅ [SMS SERVICE] Found matching contact:', matchingContact);
+      console.log('✅ [SMS SERVICE] Found matching contact:', contact);
       
-      // Format phone number
-      const formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
+      // Format phone number using shared service
+      const formattedPhone = SharedContactService.formatPhoneNumber(contact.contactNumber);
       console.log('📱 [SMS SERVICE] Formatted phone:', formattedPhone);
       
       if (!formattedPhone) {
-        console.error('❌ [SMS SERVICE] Invalid phone number for contact:', matchingContact.contactNumber);
+        console.error('❌ [SMS SERVICE] Invalid phone number for contact:', contact.contactNumber);
         return false;
       }
       
       // Send SMS
       const smsData: SMSNotificationData = {
         mobileNumber: formattedPhone,
-        name: matchingContact.name,
+        name: contact.name,
         ticketNumber: ticketData.ticketNumber,
         ticketLink: ticketData.ticketLink
       };
@@ -313,7 +172,7 @@ export class SMSService {
       console.log('📱 [SMS SERVICE] Starting ticket creation SMS notification...');
       console.log('📱 [SMS SERVICE] SMS data:', smsData);
 
-      const formattedPhone = this.formatPhoneNumber(smsData.mobileNumber);
+      const formattedPhone = SharedContactService.formatPhoneNumber(smsData.mobileNumber);
       
       if (!formattedPhone) {
         console.error('❌ [SMS SERVICE] Invalid phone number:', smsData.mobileNumber);
@@ -365,7 +224,7 @@ Escalation Portal -Awign`,
       console.log('📱 [SMS SERVICE] Starting ticket update SMS notification...');
       console.log('📱 [SMS SERVICE] SMS data:', smsData);
 
-      const formattedPhone = this.formatPhoneNumber(smsData.mobileNumber);
+      const formattedPhone = SharedContactService.formatPhoneNumber(smsData.mobileNumber);
       
       if (!formattedPhone) {
         console.error('❌ [SMS SERVICE] Invalid phone number:', smsData.mobileNumber);
