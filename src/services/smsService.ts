@@ -13,6 +13,24 @@ const SMS_CONFIG = {
   TICKET_UPDATE_TEMPLATE_ID: import.meta.env.VITE_SMS_TICKET_UPDATE_TEMPLATE_ID
 };
 
+// Google Sheets Configuration (same as WhatsApp service)
+const GOOGLE_SHEETS_CONFIG = {
+  SHEET_ID: '1-FJJ3fLMhMQbZWQ2DRswuC2MPrNP0AhUes1NoWQD-l8',
+  TAB_NAME: 'Sheet1', // Default sheet name
+  RESOURCE_ID_COLUMN: 'A', // Resource_ID column
+  NAME_COLUMN: 'B', // Name column
+  CONTACT_COLUMN: 'C' // Contact_Number column
+};
+
+export interface SMSContact {
+  contactNumber: string;
+  resourceId: string;
+  name: string;
+  emailId: string;
+  zone: string;
+  city: string;
+}
+
 export interface SMSNotificationData {
   mobileNumber: string;
   name: string;
@@ -31,6 +49,131 @@ export interface SMSMessageData {
 }
 
 export class SMSService {
+  /**
+   * Fetch contacts from Google Sheets (same logic as WhatsApp service)
+   */
+  static async fetchContactsFromSheet(): Promise<SMSContact[]> {
+    try {
+      console.log('🔍 [SMS GOOGLE SHEETS] Starting to fetch contacts...');
+      console.log('🔍 [SMS GOOGLE SHEETS] Sheet ID:', GOOGLE_SHEETS_CONFIG.SHEET_ID);
+      console.log('🔍 [SMS GOOGLE SHEETS] Tab Name:', GOOGLE_SHEETS_CONFIG.TAB_NAME);
+      
+      // Try multiple approaches to access the Google Sheet
+      let response: Response;
+      let url: string;
+      
+      // Approach 1: Try with API key (if available)
+      const apiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY;
+      if (apiKey) {
+        console.log('🔍 [SMS GOOGLE SHEETS] Trying with API key...');
+        url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z?key=${apiKey}`;
+        response = await fetch(url);
+        
+        if (response.ok) {
+          console.log('✅ [SMS GOOGLE SHEETS] Successfully fetched with API key');
+        } else {
+          console.log('❌ [SMS GOOGLE SHEETS] API key approach failed, trying public access...');
+        }
+      }
+      
+      // Approach 2: Try public access (requires sheet to be publicly accessible)
+      if (!apiKey || !response?.ok) {
+        console.log('🔍 [SMS GOOGLE SHEETS] Trying public access...');
+        url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.TAB_NAME}!A2:Z`;
+        response = await fetch(url);
+      }
+      
+      // Approach 3: Try CSV export (fallback)
+      if (!response?.ok) {
+        console.log('🔍 [SMS GOOGLE SHEETS] Trying CSV export approach...');
+        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${GOOGLE_SHEETS_CONFIG.TAB_NAME}`;
+        response = await fetch(url);
+      }
+      
+      // Approach 4: Try direct CSV download (another fallback)
+      if (!response?.ok) {
+        console.log('🔍 [SMS GOOGLE SHEETS] Trying direct CSV download...');
+        url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/export?format=csv&gid=0`;
+        response = await fetch(url);
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Google Sheet: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.text();
+      console.log('📊 [SMS GOOGLE SHEETS] Raw data received, length:', data.length);
+      
+      // Parse CSV data
+      const lines = data.split('\n').filter(line => line.trim());
+      console.log('📊 [SMS GOOGLE SHEETS] Total lines:', lines.length);
+      
+      if (lines.length < 2) {
+        console.warn('⚠️ [SMS GOOGLE SHEETS] No data rows found');
+        return [];
+      }
+      
+      // Skip header row and parse data
+      const contacts: SMSContact[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+        
+        // Parse CSV line (handle commas within quoted fields)
+        const fields = this.parseCSVLine(line);
+        
+        if (fields.length >= 6) {
+          const contact: SMSContact = {
+            resourceId: fields[0]?.trim() || '',
+            name: fields[1]?.trim() || '',
+            contactNumber: fields[2]?.trim() || '',
+            emailId: fields[3]?.trim() || '',
+            zone: fields[4]?.trim() || '',
+            city: fields[5]?.trim() || ''
+          };
+          
+          // Only add contacts with valid Resource ID and Contact Number
+          if (contact.resourceId && contact.contactNumber) {
+            contacts.push(contact);
+          }
+        }
+      }
+      
+      console.log('✅ [SMS GOOGLE SHEETS] Successfully parsed contacts:', contacts.length);
+      console.log('📋 [SMS GOOGLE SHEETS] Sample contacts:', contacts.slice(0, 3));
+      
+      return contacts;
+      
+    } catch (error) {
+      console.error('❌ [SMS GOOGLE SHEETS] Error fetching contacts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse CSV line handling quoted fields
+   */
+  private static parseCSVLine(line: string): string[] {
+    const fields: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        fields.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    fields.push(current);
+    return fields;
+  }
   /**
    * Validate SMS configuration
    */
@@ -133,6 +276,66 @@ export class SMSService {
   }
 
   /**
+   * Send ticket creation notification via SMS by Resource ID (like WhatsApp)
+   */
+  static async sendTicketCreationNotificationByResourceId(
+    resourceId: string,
+    ticketData: {
+      ticketNumber: string;
+      submittedBy: string;
+      ticketLink: string;
+    }
+  ): Promise<boolean> {
+    if (!this.validateConfig()) {
+      console.error('❌ [SMS SERVICE] Configuration validation failed');
+      return false;
+    }
+
+    try {
+      console.log('🔍 [SMS SERVICE] Looking up contact by Resource ID:', resourceId);
+      
+      // Fetch contacts from Google Sheets
+      const contacts = await this.fetchContactsFromSheet();
+      console.log('🔍 [SMS SERVICE] Fetched contacts count:', contacts.length);
+      
+      // Find contact by Resource ID
+      const matchingContact = contacts.find(contact => 
+        contact.resourceId === resourceId
+      );
+      
+      if (!matchingContact) {
+        console.warn('⚠️ [SMS SERVICE] No contact found with Resource ID:', resourceId);
+        return false;
+      }
+      
+      console.log('✅ [SMS SERVICE] Found matching contact:', matchingContact);
+      
+      // Format phone number
+      const formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
+      console.log('📱 [SMS SERVICE] Formatted phone:', formattedPhone);
+      
+      if (!formattedPhone) {
+        console.error('❌ [SMS SERVICE] Invalid phone number for contact:', matchingContact.contactNumber);
+        return false;
+      }
+      
+      // Send SMS
+      const smsData: SMSNotificationData = {
+        mobileNumber: formattedPhone,
+        name: matchingContact.name,
+        ticketNumber: ticketData.ticketNumber,
+        ticketLink: ticketData.ticketLink
+      };
+      
+      return await this.sendTicketCreationNotification(smsData);
+      
+    } catch (error) {
+      console.error('❌ [SMS SERVICE] Error sending SMS by Resource ID:', error);
+      return false;
+    }
+  }
+
+  /**
    * Send ticket creation notification via SMS
    */
   static async sendTicketCreationNotification(
@@ -153,7 +356,13 @@ export class SMSService {
         sms: {
           mobile_number: formattedPhone,
           template_id: SMS_CONFIG.TICKET_CREATION_TEMPLATE_ID,
-          message: `Hi ${smsData.name},\nYour ticket has been raised.\n\n- Ticket Number: ${smsData.ticketNumber}\n- Tracking Link: ${smsData.ticketLink}\n\nEscalation Portal -Awign`,
+          message: `Hi ${smsData.name},
+Your ticket has been raised.
+
+- Ticket Number: ${smsData.ticketNumber}
+- Tracking Link: https://awign-invigilation-escalation.netlify.app/track?id=${smsData.ticketNumber}
+
+Escalation Portal -Awign`,
           sender_id: SMS_CONFIG.SENDER_ID,
           channel: SMS_CONFIG.CHANNEL
         }
@@ -199,7 +408,13 @@ export class SMSService {
         sms: {
           mobile_number: formattedPhone,
           template_id: SMS_CONFIG.TICKET_UPDATE_TEMPLATE_ID,
-          message: `Hi ${smsData.name},\nThere has been an update on your ticket.\n\n- Ticket Number: ${smsData.ticketNumber}\n- Track the update here - ${smsData.ticketLink}\n\nEscalation Portal -Awign`,
+          message: `Hi ${smsData.name},
+There has been an update on your ticket.
+
+- Ticket Number: ${smsData.ticketNumber}
+- Track the update here - https://awign-invigilation-escalation.netlify.app/track?id=${smsData.ticketNumber}
+
+Escalation Portal -Awign`,
           sender_id: SMS_CONFIG.SENDER_ID,
           channel: SMS_CONFIG.CHANNEL
         }

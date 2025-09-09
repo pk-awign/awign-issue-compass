@@ -116,16 +116,10 @@ export class TicketService {
         // Don't fail the ticket creation if WhatsApp fails
       }
 
-      // Send WhatsApp notification to ticket raiser
+      // Send WhatsApp notification to ticket raiser by Resource ID (like SMS)
       try {
-        console.log('🔍 [WHATSAPP DEBUG] Starting WhatsApp notification process...');
-        console.log('🔍 [WHATSAPP DEBUG] User data for WhatsApp lookup:', {
-          submittedBy: issueData.submittedBy,
-          resourceId: issueData.resourceId,
-          userId: userId,
-          centreCode: issueData.centreCode,
-          city: issueData.city
-        });
+        console.log('🔍 [WHATSAPP DEBUG] Starting WhatsApp notification process by Resource ID...');
+        console.log('🔍 [WHATSAPP DEBUG] Resource ID for WhatsApp lookup:', issueData.resourceId);
 
         const ticketData = {
           ticketNumber,
@@ -141,26 +135,9 @@ export class TicketService {
         };
 
         console.log('📱 [WHATSAPP DEBUG] Preparing to send WhatsApp notification with data:', ticketData);
-        // Fallback: try to use ticket raiser's mobile number from users table if available
-        let ticketRaiserPhone: string | undefined = undefined;
-        if (userId) {
-          try {
-            const { data: userData, error: userFetchError } = await supabase
-              .from('users')
-              .select('mobile_number')
-              .eq('id', userId)
-              .single();
-            if (!userFetchError && userData?.mobile_number) {
-              ticketRaiserPhone = userData.mobile_number;
-              console.log('📱 [WHATSAPP DEBUG] Found ticket raiser phone from users table:', ticketRaiserPhone);
-            } else {
-              console.log('📱 [WHATSAPP DEBUG] No mobile_number found for ticket raiser or fetch error:', userFetchError);
-            }
-          } catch (fetchErr) {
-            console.log('📱 [WHATSAPP DEBUG] Error fetching user phone:', fetchErr);
-          }
-        }
-        const result = await WhatsAppService.sendTicketCreationNotification(ticketData, ticketRaiserPhone);
+        
+        // Let WhatsApp service do the Resource ID lookup (don't pass phone number)
+        const result = await WhatsAppService.sendTicketCreationNotification(ticketData);
         console.log('📱 [WHATSAPP DEBUG] Ticket creation notification result:', result);
         console.log('✅ [WHATSAPP DEBUG] WhatsApp notification process completed successfully');
       } catch (whatsappError) {
@@ -173,48 +150,22 @@ export class TicketService {
         // Don't fail the ticket creation if WhatsApp fails
       }
 
-      // Send SMS notification to ticket raiser
+      // Send SMS notification to ticket raiser by Resource ID (like WhatsApp)
       try {
-        console.log('📱 [SMS DEBUG] Starting SMS notification process...');
+        console.log('📱 [SMS DEBUG] Starting SMS notification process by Resource ID...');
         
-        let ticketRaiserPhone: string | undefined = undefined;
-        let ticketRaiserName: string = issueData.submittedBy || 'Anonymous';
-        
-        if (userId) {
-          try {
-            const { data: userData, error: userFetchError } = await supabase
-              .from('users')
-              .select('mobile_number, name')
-              .eq('id', userId)
-              .single();
-            if (!userFetchError && userData) {
-              ticketRaiserPhone = userData.mobile_number;
-              ticketRaiserName = userData.name || ticketRaiserName;
-              console.log('📱 [SMS DEBUG] Found ticket raiser details from users table:', {
-                phone: ticketRaiserPhone,
-                name: ticketRaiserName
-              });
-            } else {
-              console.log('📱 [SMS DEBUG] No user data found for ticket raiser or fetch error:', userFetchError);
+        if (issueData.resourceId && issueData.resourceId !== 'NOT_SPECIFIED') {
+          const smsResult = await SMSService.sendTicketCreationNotificationByResourceId(
+            issueData.resourceId,
+            {
+              ticketNumber: ticketNumber,
+              submittedBy: issueData.submittedBy || 'Anonymous',
+              ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
             }
-          } catch (fetchErr) {
-            console.log('📱 [SMS DEBUG] Error fetching user data:', fetchErr);
-          }
-        }
-
-        if (ticketRaiserPhone) {
-          const smsData = {
-            mobileNumber: ticketRaiserPhone,
-            name: ticketRaiserName,
-            ticketNumber: ticketNumber,
-            ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
-          };
-
-          console.log('📱 [SMS DEBUG] Sending SMS notification with data:', smsData);
-          const smsResult = await SMSService.sendTicketCreationNotification(smsData);
+          );
           console.log('📱 [SMS DEBUG] SMS notification result:', smsResult);
         } else {
-          console.log('📱 [SMS DEBUG] No phone number available for SMS notification');
+          console.log('📱 [SMS DEBUG] No Resource ID provided, skipping SMS notification');
         }
       } catch (smsError) {
         console.error('❌ [SMS DEBUG] Failed to send SMS notification:', smsError);
@@ -904,45 +855,43 @@ export class TicketService {
           // Get ticket details for SMS notification
           const { data: ticketData, error: ticketError } = await supabase
             .from('tickets')
-            .select('ticket_number, resource_id, submitted_by, submitted_by_user_id')
+            .select('ticket_number, resource_id, submitted_by')
             .eq('id', ticketId)
             .single();
 
           if (!ticketError && ticketData) {
-            // Try to get user phone number for SMS
-            let userPhone: string | undefined = undefined;
-            let userName: string = ticketData.submitted_by || 'Anonymous';
+            console.log('📱 [SMS DEBUG] Starting comment SMS notification process by Resource ID...');
+            console.log('📱 [SMS DEBUG] Resource ID for comment SMS lookup:', ticketData.resource_id);
             
-            if (ticketData.submitted_by_user_id) {
-              try {
-                const { data: userData, error: userFetchError } = await supabase
-                  .from('users')
-                  .select('mobile_number, name')
-                  .eq('id', ticketData.submitted_by_user_id)
-                  .single();
-                
-                if (!userFetchError && userData) {
-                  userPhone = userData.mobile_number;
-                  userName = userData.name || userName;
+            if (ticketData.resource_id && ticketData.resource_id !== 'NOT_SPECIFIED') {
+              // For comment updates, we need to use the update template
+              // First get the contact details from Google Sheets
+              const contacts = await SMSService.fetchContactsFromSheet();
+              const matchingContact = contacts.find(contact => 
+                contact.resourceId === ticketData.resource_id
+              );
+              
+              if (matchingContact) {
+                const formattedPhone = SMSService.formatPhoneNumber(matchingContact.contactNumber);
+                if (formattedPhone) {
+                  const smsData = {
+                    mobileNumber: formattedPhone,
+                    name: matchingContact.name,
+                    ticketNumber: ticketData.ticket_number,
+                    ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
+                  };
+                  
+                  console.log('📱 [SMS DEBUG] Sending comment update SMS notification with data:', smsData);
+                  const smsResult = await SMSService.sendTicketUpdateNotification(smsData);
+                  console.log('📱 [SMS DEBUG] Comment SMS notification result:', smsResult);
+                } else {
+                  console.log('📱 [SMS DEBUG] Invalid phone number for contact:', matchingContact.contactNumber);
                 }
-              } catch (fetchErr) {
-                console.log('📱 [SMS DEBUG] Error fetching user data for SMS:', fetchErr);
+              } else {
+                console.log('📱 [SMS DEBUG] No contact found with Resource ID:', ticketData.resource_id);
               }
-            }
-
-            if (userPhone) {
-              const smsData = {
-                mobileNumber: userPhone,
-                name: userName,
-                ticketNumber: ticketData.ticket_number,
-                ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
-              };
-
-              console.log('📱 [SMS DEBUG] Sending comment SMS notification with data:', smsData);
-              const smsResult = await SMSService.sendTicketUpdateNotification(smsData);
-              console.log('📱 [SMS DEBUG] Comment SMS notification result:', smsResult);
             } else {
-              console.log('📱 [SMS DEBUG] No phone number available for comment SMS notification');
+              console.log('📱 [SMS DEBUG] No Resource ID provided, skipping comment SMS notification');
             }
           }
         } catch (smsError) {

@@ -5,15 +5,18 @@ import { PublicIssueForm } from '@/components/PublicIssueForm';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { useIssues } from '@/contexts/IssueContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 const TrackTicketContent = () => {
   const [searchParams] = useSearchParams();
   const ticketNumber = searchParams.get('id');
   const navigate = useNavigate();
   const { addIssue } = useIssues();
+  const { user } = useAuth();
 
   const handleSubmitIssue = (issueData: any) => {
-    return addIssue(issueData);
+    // Pass user ID if logged in, otherwise undefined for anonymous
+    return addIssue(issueData, user?.id);
   };
 
   const handleAdminLogin = () => {
