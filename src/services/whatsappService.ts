@@ -1,5 +1,6 @@
 import { supabase } from '../integrations/supabase/client';
 import { SharedContactService, SharedContact } from './sharedContactService';
+import { toast } from 'sonner';
 
 // WhatsApp API Configuration
 const WHATSAPP_CONFIG = {
@@ -304,7 +305,7 @@ export class WhatsAppService {
   ): Promise<boolean> {
     try {
       // Format phone number (remove any non-digit characters and ensure it starts with country code)
-      const formattedPhone = this.formatPhoneNumber(contact.contactNumber);
+      const formattedPhone = SharedContactService.formatPhoneNumberForWhatsApp(contact.contactNumber);
       
       if (!formattedPhone) {
         console.error('Invalid phone number:', contact.contactNumber);
@@ -370,7 +371,7 @@ export class WhatsAppService {
       
       if (ticketRaiserPhone) {
         console.log('📱 [WHATSAPP SERVICE] Using provided phone number:', ticketRaiserPhone);
-        formattedPhone = this.formatPhoneNumber(ticketRaiserPhone);
+        formattedPhone = SharedContactService.formatPhoneNumberForWhatsApp(ticketRaiserPhone);
         console.log('📱 [WHATSAPP SERVICE] Formatted phone:', formattedPhone);
       } else {
         // Try to find the contact in Google Sheets by Resource_ID (primary) only
@@ -393,7 +394,7 @@ export class WhatsAppService {
           console.log('🔍 [WHATSAPP SERVICE] Matching contact found:', matchingContact);
           
           if (matchingContact) {
-            formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
+            formattedPhone = SharedContactService.formatPhoneNumberForWhatsApp(matchingContact.contactNumber);
             console.log('📱 [WHATSAPP SERVICE] Formatted phone from contact:', formattedPhone);
           } else {
             console.warn('⚠️ [WHATSAPP SERVICE] No contact found with Resource ID:', ticketData.resourceId);
@@ -745,33 +746,6 @@ export class WhatsAppService {
     } catch (error) {
       console.error('Error sending comment notification:', error);
       return false;
-    }
-  }
-
-  /**
-   * Format phone number for WhatsApp API
-   */
-  private static formatPhoneNumber(phoneNumber: string): string | null {
-    try {
-      // Remove all non-digit characters
-      const digits = phoneNumber.replace(/\D/g, '');
-      
-      // If it's a 10-digit Indian number, add +91
-      if (digits.length === 10) {
-        return `91${digits}`;
-      }
-      
-      // If it already has country code (11+ digits), return as is
-      if (digits.length >= 11) {
-        return digits;
-      }
-      
-      // If it's less than 10 digits, it's invalid
-      return null;
-      
-    } catch (error) {
-      console.error('Error formatting phone number:', error);
-      return null;
     }
   }
 

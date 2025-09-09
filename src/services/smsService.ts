@@ -137,8 +137,8 @@ export class SMSService {
       
       console.log('✅ [SMS SERVICE] Found matching contact:', contact);
       
-      // Format phone number using shared service
-      const formattedPhone = SharedContactService.formatPhoneNumber(contact.contactNumber);
+      // Format phone number using shared service (SMS format - no 91 prefix)
+      const formattedPhone = SharedContactService.formatPhoneNumberForSMS(contact.contactNumber);
       console.log('📱 [SMS SERVICE] Formatted phone:', formattedPhone);
       
       if (!formattedPhone) {
@@ -172,7 +172,7 @@ export class SMSService {
       console.log('📱 [SMS SERVICE] Starting ticket creation SMS notification...');
       console.log('📱 [SMS SERVICE] SMS data:', smsData);
 
-      const formattedPhone = SharedContactService.formatPhoneNumber(smsData.mobileNumber);
+      const formattedPhone = SharedContactService.formatPhoneNumberForSMS(smsData.mobileNumber);
       
       if (!formattedPhone) {
         console.error('❌ [SMS SERVICE] Invalid phone number:', smsData.mobileNumber);
@@ -224,7 +224,7 @@ Escalation Portal -Awign`,
       console.log('📱 [SMS SERVICE] Starting ticket update SMS notification...');
       console.log('📱 [SMS SERVICE] SMS data:', smsData);
 
-      const formattedPhone = SharedContactService.formatPhoneNumber(smsData.mobileNumber);
+      const formattedPhone = SharedContactService.formatPhoneNumberForSMS(smsData.mobileNumber);
       
       if (!formattedPhone) {
         console.error('❌ [SMS SERVICE] Invalid phone number:', smsData.mobileNumber);

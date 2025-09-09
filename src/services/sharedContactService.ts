@@ -102,7 +102,7 @@ export class SharedContactService {
         // Simple CSV parsing (same as WhatsApp service)
         const fields = line.replace(/"/g, '').split(',').map(cell => cell.trim());
         
-        if (fields.length >= 6) {
+        if (fields.length >= 3) {
           const contact: SharedContact = {
             resourceId: fields[0]?.trim() || '',
             name: fields[1]?.trim() || '',
@@ -158,9 +158,9 @@ export class SharedContactService {
   }
 
   /**
-   * Format phone number (same logic as both services)
+   * Format phone number for WhatsApp (with 91 prefix)
    */
-  static formatPhoneNumber(phoneNumber: string): string | null {
+  static formatPhoneNumberForWhatsApp(phoneNumber: string): string | null {
     if (!phoneNumber) return null;
     
     // Remove all non-digit characters
@@ -178,7 +178,32 @@ export class SharedContactService {
       return `91${digits.substring(1)}`;
     }
     
-    console.warn('⚠️ [SHARED CONTACTS] Invalid phone number format:', phoneNumber);
+    console.warn('⚠️ [SHARED CONTACTS] Invalid phone number format for WhatsApp:', phoneNumber);
+    return null;
+  }
+
+  /**
+   * Format phone number for SMS (without 91 prefix)
+   */
+  static formatPhoneNumberForSMS(phoneNumber: string): string | null {
+    if (!phoneNumber) return null;
+    
+    // Remove all non-digit characters
+    const digits = phoneNumber.replace(/\D/g, '');
+    
+    // Handle different formats
+    if (digits.length === 10) {
+      // Use as is for 10-digit numbers
+      return digits;
+    } else if (digits.length === 12 && digits.startsWith('91')) {
+      // Remove country code
+      return digits.substring(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      // Remove leading 0
+      return digits.substring(1);
+    }
+    
+    console.warn('⚠️ [SHARED CONTACTS] Invalid phone number format for SMS:', phoneNumber);
     return null;
   }
 

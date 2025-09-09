@@ -875,7 +875,7 @@ export class TicketService {
                 const contact = await SharedContactService.findContactByResourceId(ticketData.resource_id);
                 
                 if (contact) {
-                  const formattedPhone = SharedContactService.formatPhoneNumber(contact.contactNumber);
+                  const formattedPhone = SharedContactService.formatPhoneNumberForSMS(contact.contactNumber);
                   if (formattedPhone) {
                     const smsData = {
                       mobileNumber: formattedPhone,
