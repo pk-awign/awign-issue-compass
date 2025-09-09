@@ -468,6 +468,73 @@ export class TicketService {
         // Don't fail the status update if email fails
       }
 
+      // Send SMS and WhatsApp notifications ONLY when status is changed to "RESOLVED"
+      if (newStatus === 'resolved') {
+        try {
+          // Get ticket details for notifications
+          const { data: ticketData, error: ticketError } = await supabase
+            .from('tickets')
+            .select('ticket_number, resource_id, submitted_by')
+            .eq('id', ticketId)
+            .single();
+
+          if (!ticketError && ticketData) {
+            console.log('🎉 [RESOLUTION NOTIFICATION] Ticket resolved, sending notifications to ticket raiser');
+
+            // Send WhatsApp notification for resolution
+            try {
+              const resolutionNotificationData = {
+                ticketNumber: ticketData.ticket_number,
+                resourceId: ticketData.resource_id || 'NOT_SPECIFIED',
+                submittedBy: ticketData.submitted_by || 'Anonymous',
+                ticketLink: `https://awign-invigilator-escalation.netlify.app/track?id=${ticketData.ticket_number}`
+              };
+
+              console.log('📱 [RESOLUTION WHATSAPP] Sending resolution notification with data:', resolutionNotificationData);
+              const whatsappResult = await WhatsAppService.sendCommentNotification(resolutionNotificationData);
+              console.log('📱 [RESOLUTION WHATSAPP] Resolution notification result:', whatsappResult);
+            } catch (whatsappError) {
+              console.error('❌ [RESOLUTION WHATSAPP] Failed to send resolution notification:', whatsappError);
+            }
+
+            // Send SMS notification for resolution
+            try {
+              if (ticketData.resource_id && ticketData.resource_id !== 'NOT_SPECIFIED') {
+                // Use shared contact service to find contact
+                const contact = await SharedContactService.findContactByResourceId(ticketData.resource_id);
+
+                if (contact) {
+                  const formattedPhone = SharedContactService.formatPhoneNumberForSMS(contact.contactNumber);
+                  if (formattedPhone) {
+                    const smsData = {
+                      mobileNumber: formattedPhone,
+                      name: contact.name,
+                      ticketNumber: ticketData.ticket_number,
+                      ticketLink: `https://awign-invigilator-escalation.netlify.app/track?id=${ticketData.ticket_number}`
+                    };
+
+                    console.log('📱 [RESOLUTION SMS] Sending resolution SMS notification with data:', smsData);
+                    const smsResult = await SMSService.sendTicketUpdateNotification(smsData);
+                    console.log('📱 [RESOLUTION SMS] Resolution SMS notification result:', smsResult);
+                  } else {
+                    console.log('📱 [RESOLUTION SMS] Invalid phone number for contact:', contact.contactNumber);
+                  }
+                } else {
+                  console.log('📱 [RESOLUTION SMS] No contact found with Resource ID:', ticketData.resource_id);
+                }
+              } else {
+                console.log('📱 [RESOLUTION SMS] No Resource ID provided, skipping resolution SMS notification');
+              }
+            } catch (smsError) {
+              console.error('❌ [RESOLUTION SMS] Failed to send resolution SMS notification:', smsError);
+            }
+          }
+        } catch (resolutionNotificationError) {
+          console.error('❌ [RESOLUTION NOTIFICATION] Failed to send resolution notifications:', resolutionNotificationError);
+          // Don't fail the status update if notifications fail
+        }
+      }
+
       toast.success(`Ticket status updated to ${newStatus}`);
       return true;
     } catch (error) {
