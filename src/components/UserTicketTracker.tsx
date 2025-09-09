@@ -163,7 +163,7 @@ export const UserTicketTracker: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open(`/track/${ticket.ticket_number}`, '_blank')}
+                    onClick={() => window.open(`/track?id=${ticket.ticket_number}`, '_blank')}
                   >
                     <ExternalLink className="h-4 w-4 mr-1" />
                     View

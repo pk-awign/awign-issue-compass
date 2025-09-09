@@ -1,13 +1,14 @@
 
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PublicIssueForm } from '@/components/PublicIssueForm';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { useIssues } from '@/contexts/IssueContext';
 
 const TrackTicketContent = () => {
-  const { ticketNumber } = useParams();
+  const [searchParams] = useSearchParams();
+  const ticketNumber = searchParams.get('id');
   const navigate = useNavigate();
   const { addIssue } = useIssues();
 

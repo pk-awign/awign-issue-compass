@@ -303,7 +303,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
       };
 
       const ticketNumber = await onSubmit(issueData);
-      const trackingLink = `https://awign-invigilation-escalation.netlify.app/track/${ticketNumber}`;
+      const trackingLink = `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`;
       
       // Store submitted data for download
       setSubmittedIssueData(issueData);
