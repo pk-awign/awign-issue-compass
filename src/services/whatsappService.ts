@@ -633,24 +633,28 @@ export class WhatsAppService {
       console.log('🔍 [WHATSAPP SERVICE] Starting comment notification...');
       console.log('🔍 [WHATSAPP SERVICE] Comment data:', commentData);
 
-      // Find the contact in Google Sheets by Resource_ID
+      // Find the contact in Google Sheets by Resource_ID using shared service
       let formattedPhone: string | null = null;
       let matchingContact: WhatsAppContact | undefined = undefined;
       
       try {
-        const contacts = await this.fetchContactsFromSheet();
-        console.log('🔍 [WHATSAPP SERVICE] Fetched contacts count:', contacts.length);
-        
-        // Match by Resource ID
-        matchingContact = contacts.find(contact => 
-          contact.resourceId === commentData.resourceId
-        );
+        const contact = await SharedContactService.findContactByResourceId(commentData.resourceId);
+        if (contact) {
+          matchingContact = {
+            resourceId: contact.resourceId,
+            name: contact.name,
+            contactNumber: contact.contactNumber,
+            emailId: contact.emailId,
+            zone: contact.zone,
+            city: contact.city
+          };
+        }
         
         console.log('🔍 [WHATSAPP SERVICE] Searching for Resource ID:', commentData.resourceId);
         console.log('🔍 [WHATSAPP SERVICE] Matching contact found:', matchingContact);
         
         if (matchingContact) {
-          formattedPhone = this.formatPhoneNumber(matchingContact.contactNumber);
+          formattedPhone = SharedContactService.formatPhoneNumberForWhatsApp(matchingContact.contactNumber);
           console.log('📱 [WHATSAPP SERVICE] Formatted phone from contact:', formattedPhone);
         } else {
           console.warn('⚠️ [WHATSAPP SERVICE] No contact found with Resource ID:', commentData.resourceId);

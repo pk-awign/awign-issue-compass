@@ -824,7 +824,7 @@ export class TicketService {
         },
       });
 
-      // Send WhatsApp notification for non-internal comments
+      // Send WhatsApp notification for non-internal comments (only if NOT from ticket raiser)
       if (!commentData.isInternal) {
         try {
           // Get ticket details for notification
@@ -835,16 +835,24 @@ export class TicketService {
             .single();
 
           if (!ticketError && ticketData) {
-            const commentNotificationData = {
-              ticketNumber: ticketData.ticket_number,
-              resourceId: ticketData.resource_id || 'NOT_SPECIFIED',
-              submittedBy: ticketData.submitted_by || 'Anonymous',
-              ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
-            };
+            // Check if the comment author is the same as the ticket submitter
+            const isCommentFromTicketRaiser = commentData.author === ticketData.submitted_by;
+            
+            if (isCommentFromTicketRaiser) {
+              console.log('📱 [WHATSAPP DEBUG] Comment is from ticket raiser, skipping WhatsApp notification');
+            } else {
+              console.log('📱 [WHATSAPP DEBUG] Comment is from someone else, proceeding with WhatsApp notification');
+              const commentNotificationData = {
+                ticketNumber: ticketData.ticket_number,
+                resourceId: ticketData.resource_id || 'NOT_SPECIFIED',
+                submittedBy: ticketData.submitted_by || 'Anonymous',
+                ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
+              };
 
-            console.log('📱 [WHATSAPP DEBUG] Sending comment notification with data:', commentNotificationData);
-            const result = await WhatsAppService.sendCommentNotification(commentNotificationData);
-            console.log('📱 [WHATSAPP DEBUG] Comment notification result:', result);
+              console.log('📱 [WHATSAPP DEBUG] Sending comment notification with data:', commentNotificationData);
+              const result = await WhatsAppService.sendCommentNotification(commentNotificationData);
+              console.log('📱 [WHATSAPP DEBUG] Comment notification result:', result);
+            }
           }
         } catch (whatsappError) {
           console.error('❌ [WHATSAPP DEBUG] Failed to send comment notification:', whatsappError);
