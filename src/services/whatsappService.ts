@@ -4,11 +4,11 @@ import { toast } from 'sonner';
 // WhatsApp API Configuration
 const WHATSAPP_CONFIG = {
   API_URL: 'https://waba-v2.360dialog.io/messages',
-  API_KEY: 'mOxReSysI12sL3CQIBQRVJyuAK', // Production API key
-  NAMESPACE: '74a67158_77ff_47a7_a86e_3b004a21d236', // Production namespace
-  TEMPLATE_NAME: 'ticke_raised_test', // Production template name
-  TICKET_CREATION_TEMPLATE: 'ticke_raised_test', // Use same template for ticket creation notifications
-  COMMENT_UPDATE_TEMPLATE: 'awign_escalation_management_ticket_update_2' // Template for comment notifications
+  API_KEY: import.meta.env.WHATSAPP_API_KEY,
+  NAMESPACE: import.meta.env.WHATSAPP_NAMESPACE,
+  TEMPLATE_NAME: import.meta.env.WHATSAPP_TEMPLATE_NAME,
+  TICKET_CREATION_TEMPLATE: import.meta.env.WHATSAPP_TEMPLATE_NAME,
+  COMMENT_UPDATE_TEMPLATE: 'awign_escalation_management_ticket_update_2'
 };
 
 // Google Sheets Configuration

@@ -3,14 +3,14 @@ import { toast } from 'sonner';
 // SMS API Configuration
 const SMS_CONFIG = {
   API_URL: 'https://core-api.awign.com/api/v1/sms/to_number',
-  ACCESS_TOKEN: import.meta.env.VITE_SMS_ACCESS_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyNTAxMzgyIiwiaWF0IjoxNzU2NzkzMTk2LCJleHAiOjE3NTkzODUxOTYsIm9hdXRoX3R5cGUiOiJDQVMiLCJST0xFUyI6W119.Yfnd1HZvhKqlIYVtpjE50-FChhc5m1ahqiuxGtQFUy8',
-  CLIENT: import.meta.env.VITE_SMS_CLIENT || '6Ok5D1iEP4zcV8S25HJmNA',
-  UID: import.meta.env.VITE_SMS_UID || '110986717252553637625',
+  ACCESS_TOKEN: import.meta.env.VITE_SMS_ACCESS_TOKEN,
+  CLIENT: import.meta.env.VITE_SMS_CLIENT,
+  UID: import.meta.env.VITE_SMS_UID,
   CLIENT_ID: import.meta.env.VITE_SMS_CLIENT_ID || 'core',
   SENDER_ID: import.meta.env.VITE_SMS_SENDER_ID || 'IAWIGN',
   CHANNEL: import.meta.env.VITE_SMS_CHANNEL || 'telspiel',
-  TICKET_CREATION_TEMPLATE_ID: import.meta.env.VITE_SMS_TICKET_CREATION_TEMPLATE_ID || '1107175742280378486',
-  TICKET_UPDATE_TEMPLATE_ID: import.meta.env.VITE_SMS_TICKET_UPDATE_TEMPLATE_ID || '1107175742272376773'
+  TICKET_CREATION_TEMPLATE_ID: import.meta.env.VITE_SMS_TICKET_CREATION_TEMPLATE_ID,
+  TICKET_UPDATE_TEMPLATE_ID: import.meta.env.VITE_SMS_TICKET_UPDATE_TEMPLATE_ID
 };
 
 export interface SMSNotificationData {
@@ -31,6 +31,28 @@ export interface SMSMessageData {
 }
 
 export class SMSService {
+  /**
+   * Validate SMS configuration
+   */
+  private static validateConfig(): boolean {
+    const requiredVars = [
+      'ACCESS_TOKEN',
+      'CLIENT', 
+      'UID',
+      'TICKET_CREATION_TEMPLATE_ID',
+      'TICKET_UPDATE_TEMPLATE_ID'
+    ];
+    
+    const missing = requiredVars.filter(key => !SMS_CONFIG[key as keyof typeof SMS_CONFIG]);
+    
+    if (missing.length > 0) {
+      console.error('❌ [SMS SERVICE] Missing required environment variables:', missing);
+      return false;
+    }
+    
+    return true;
+  }
+
   /**
    * Format phone number for SMS (ensure it's 10 digits without country code)
    */
@@ -64,6 +86,12 @@ export class SMSService {
    */
   static async sendSMSMessage(messageData: SMSMessageData): Promise<boolean> {
     try {
+      // Validate configuration first
+      if (!this.validateConfig()) {
+        console.error('❌ [SMS SERVICE] SMS configuration validation failed');
+        return false;
+      }
+
       console.log('📱 [SMS SERVICE] Sending SMS message:', {
         mobile_number: messageData.sms.mobile_number,
         template_id: messageData.sms.template_id,
