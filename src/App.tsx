@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { IssueProvider } from "@/contexts/IssueContext";
 import { UserProvider } from "@/contexts/UserContext";
@@ -18,6 +18,12 @@ import TrackTicket from "./pages/TrackTicket";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+// Component to redirect old format /track/TICKET_NUMBER to new format /track?id=TICKET_NUMBER
+const TrackRedirect = () => {
+  const { ticketNumber } = useParams<{ ticketNumber: string }>();
+  return <Navigate to={`/track?id=${ticketNumber}`} replace />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -36,7 +42,9 @@ const App = () => (
                 <Route path="/ticket-resolver" element={<TicketResolverPage />} />
                 <Route path="/resolution-approver" element={<ResolutionApproverPage />} />
                 <Route path="/invigilator" element={<WorkforcePage />} />
-                <Route path="/track/:ticketNumber" element={<TrackTicket />} />
+                <Route path="/track" element={<TrackTicket />} />
+                {/* Redirect old format /track/TICKET_NUMBER to new format /track?id=TICKET_NUMBER */}
+                <Route path="/track/:ticketNumber" element={<TrackRedirect />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
