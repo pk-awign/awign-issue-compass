@@ -487,7 +487,7 @@ export class TicketService {
                 ticketNumber: ticketData.ticket_number,
                 resourceId: ticketData.resource_id || 'NOT_SPECIFIED',
                 submittedBy: ticketData.submitted_by || 'Anonymous',
-                ticketLink: `https://awign-invigilator-escalation.netlify.app/track?id=${ticketData.ticket_number}`
+                ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
               };
 
               console.log('📱 [RESOLUTION WHATSAPP] Sending resolution notification with data:', resolutionNotificationData);
@@ -510,7 +510,7 @@ export class TicketService {
                       mobileNumber: formattedPhone,
                       name: contact.name,
                       ticketNumber: ticketData.ticket_number,
-                      ticketLink: `https://awign-invigilator-escalation.netlify.app/track?id=${ticketData.ticket_number}`
+                      ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
                     };
 
                     console.log('📱 [RESOLUTION SMS] Sending resolution SMS notification with data:', smsData);
