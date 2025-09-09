@@ -38,6 +38,30 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
     setSearchTerm(initialSearchTerm);
   }, [initialSearchTerm]);
 
+  // Auto-search when initialSearchTerm changes and user is not logged in
+  useEffect(() => {
+    const autoSearch = async () => {
+      if (initialSearchTerm && !user) {
+        setSearchLoading(true);
+        try {
+          const ticket = await getIssueByTicketNumber(initialSearchTerm.trim());
+          setAnonymousTicket(ticket);
+          if (ticket) {
+            setSelectedTicket(ticket);
+            setShowDetails(true);
+          }
+        } catch (error) {
+          console.error('Error searching ticket:', error);
+          setAnonymousTicket(null);
+        } finally {
+          setSearchLoading(false);
+        }
+      }
+    };
+    
+    autoSearch();
+  }, [initialSearchTerm, user]);
+
   // Load user's tickets if logged in
   useEffect(() => {
     if (user) {
