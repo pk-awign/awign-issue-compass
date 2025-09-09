@@ -902,11 +902,12 @@ export class TicketService {
             .single();
 
           if (!ticketError && ticketData) {
-            // Check if the comment author is the same as the ticket submitter
+            // Check if the comment author is the same as the ticket submitter or anonymous
             const isCommentFromTicketRaiser = commentData.author === ticketData.submitted_by;
+            const isCommentFromAnonymous = commentData.author === 'anonymous' || commentData.author === 'Anonymous';
             
-            if (isCommentFromTicketRaiser) {
-              console.log('📱 [WHATSAPP DEBUG] Comment is from ticket raiser, skipping WhatsApp notification');
+            if (isCommentFromTicketRaiser || isCommentFromAnonymous) {
+              console.log('📱 [WHATSAPP DEBUG] Comment is from ticket raiser or anonymous, skipping WhatsApp notification');
             } else {
               console.log('📱 [WHATSAPP DEBUG] Comment is from someone else, proceeding with WhatsApp notification');
               const commentNotificationData = {
@@ -936,11 +937,12 @@ export class TicketService {
             .single();
 
           if (!ticketError && ticketData) {
-            // Check if the comment author is the same as the ticket submitter
+            // Check if the comment author is the same as the ticket submitter or anonymous
             const isCommentFromTicketRaiser = commentData.author === ticketData.submitted_by;
-            
-            if (isCommentFromTicketRaiser) {
-              console.log('📱 [SMS DEBUG] Comment is from ticket raiser, skipping SMS notification');
+            const isCommentFromAnonymous = commentData.author === 'anonymous' || commentData.author === 'Anonymous';
+
+            if (isCommentFromTicketRaiser || isCommentFromAnonymous) {
+              console.log('📱 [SMS DEBUG] Comment is from ticket raiser or anonymous, skipping SMS notification');
             } else {
               console.log('📱 [SMS DEBUG] Comment is from someone else, proceeding with SMS notification');
               console.log('📱 [SMS DEBUG] Resource ID for comment SMS lookup:', ticketData.resource_id);
