@@ -29,7 +29,7 @@ export const WhatsAppTestComponent: React.FC = () => {
     submittedBy: 'Test User',
     submittedAt: new Date(),
     severity: 'sev3',
-    ticketLink: 'https://awign-invigilation-escalation.netlify.app/track/AWG-2025-TEST123'
+    ticketLink: 'https://awign-invigilation-escalation.netlify.app/track?id=AWG-2025-TEST123'
   });
 
   const [testMobileNumber, setTestMobileNumber] = useState<string>('');

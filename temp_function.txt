@@ -1,0 +1,43 @@
+  // Get tickets for approval based on user's city
+  const approverTickets = useMemo(() => {
+    if (!user) return [];
+    
+    const filtered = issues.filter(issue => {
+      // Super admin can see all tickets
+      if (user.role === 'super_admin') return true;
+      
+      // Only show tickets assigned to this approver
+      // Check both the assignees array (if it exists) and the assigned_approver field
+      const hasAssigneeMatch = (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'approver');
+      const hasApproverMatch = issue.assignedApprover === user.id;
+      
+      // Debug logging for approver visibility
+      if (user.role === 'approver' && (hasAssigneeMatch || hasApproverMatch)) {
+        console.log('�� [APPROVER DEBUG] Ticket visible:', {
+          ticketNumber: issue.ticketNumber,
+          status: issue.status,
+          assignedApprover: issue.assignedApprover,
+          assignees: (issue as IssueWithAssignees).assignees,
+          hasAssigneeMatch,
+          hasApproverMatch,
+          userId: user.id
+        });
+      }
+      
+      return hasAssigneeMatch || hasApproverMatch;
+    });
+    
+    // Debug logging for approver
+    if (user?.role === 'approver') {
+      console.log('🔍 [APPROVER DEBUG] Total issues:', issues.length);
+      console.log('🔍 [APPROVER DEBUG] Filtered approver tickets:', filtered.length);
+      console.log('🔍 [APPROVER DEBUG] User ID:', user.id);
+      console.log('🔍 [APPROVER DEBUG] Sample ticket assignees:', issues.slice(0, 3).map(t => ({
+        ticketNumber: t.ticketNumber,
+        assignedApprover: t.assignedApprover,
+        assignees: (t as IssueWithAssignees).assignees
+      })));
+    }
+    
+    return filtered;
+  }, [issues, user]);

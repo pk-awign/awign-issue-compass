@@ -227,41 +227,33 @@ export class SMSService {
   /**
    * Send SMS message
    */
-  static async sendSMSMessage(messageData: SMSMessageData): Promise<boolean> {
+  static async sendSMSMessageViaProxy(action: string, data: any): Promise<boolean> {
     try {
-      // Validate configuration first
-      if (!this.validateConfig()) {
-        console.error('❌ [SMS SERVICE] SMS configuration validation failed');
-        return false;
-      }
+      console.log('📱 [SMS SERVICE] Sending SMS via proxy:', { action, data });
 
-      console.log('📱 [SMS SERVICE] Sending SMS message:', {
-        mobile_number: messageData.sms.mobile_number,
-        template_id: messageData.sms.template_id,
-        sender_id: messageData.sms.sender_id
-      });
-
-      const response = await fetch(SMS_CONFIG.API_URL, {
+      // Use Netlify function proxy to avoid CORS issues
+      const proxyUrl = '/.netlify/functions/sms-proxy';
+      
+      const response = await fetch(proxyUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'access-token': SMS_CONFIG.ACCESS_TOKEN,
-          'client': SMS_CONFIG.CLIENT,
-          'uid': SMS_CONFIG.UID,
-          'X-CLIENT_ID': SMS_CONFIG.CLIENT_ID
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(messageData)
+        body: JSON.stringify({
+          action,
+          data
+        })
       });
 
       const result = await response.json();
       
-      console.log('📱 [SMS SERVICE] SMS API response:', {
+      console.log('📱 [SMS SERVICE] SMS proxy response:', {
         status: response.status,
         ok: response.ok,
         result: result
       });
 
-      if (response.ok) {
+      if (response.ok && result.success) {
         console.log('✅ [SMS SERVICE] SMS sent successfully');
         return true;
       } else {
@@ -327,7 +319,7 @@ export class SMSService {
         ticketLink: ticketData.ticketLink
       };
       
-      return await this.sendTicketCreationNotification(smsData);
+      return await this.sendSMSMessageViaProxy('sendTicketCreationNotification', smsData);
       
     } catch (error) {
       console.error('❌ [SMS SERVICE] Error sending SMS by Resource ID:', error);
@@ -420,7 +412,7 @@ Escalation Portal -Awign`,
         }
       };
 
-      const success = await this.sendSMSMessage(messageData);
+      const success = await this.sendSMSMessageViaProxy('sendTicketUpdateNotification', smsData);
       
       if (success) {
         console.log('✅ [SMS SERVICE] Ticket update SMS sent to:', smsData.name);
@@ -456,7 +448,9 @@ Escalation Portal -Awign`,
         }
       };
 
-      const success = await this.sendSMSMessage(testMessage);
+      const success = await this.sendSMSMessageViaProxy('testSMS', {
+        mobileNumber: '7060700600'
+      });
       
       if (success) {
         console.log('✅ [SMS SERVICE] SMS connection test successful');
