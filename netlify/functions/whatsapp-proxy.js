@@ -33,12 +33,24 @@ export const handler = async function(event, context) {
     // WhatsApp API Configuration
     const WHATSAPP_CONFIG = {
       API_URL: 'https://waba-v2.360dialog.io/messages',
-      API_KEY: process.env.WHATSAPP_API_KEY || 'mOxReSysI12sL3CQIBQRVJyuAK', // Use environment variable
-      NAMESPACE: process.env.WHATSAPP_NAMESPACE || '74a67158_77ff_47a7_a86e_3b004a21d236', // Use environment variable
-      TEMPLATE_NAME: process.env.WHATSAPP_TEMPLATE_NAME || 'ticke_raised_test', // Use environment variable
-      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TEMPLATE_NAME || 'ticke_raised_test', // Use same template name for ticket creation
-      COMMENT_UPDATE_TEMPLATE: 'awign_escalation_management_ticket_update_2' // Template for comment notifications
+      API_KEY: process.env.WHATSAPP_API_KEY,
+      NAMESPACE: process.env.WHATSAPP_NAMESPACE,
+      TEMPLATE_NAME: process.env.WHATSAPP_TEMPLATE_NAME,
+      TICKET_CREATION_TEMPLATE: process.env.WHATSAPP_TEMPLATE_NAME,
+      COMMENT_UPDATE_TEMPLATE: 'awign_escalation_management_ticket_update_2'
     };
+
+    // Validate required environment variables
+    if (!WHATSAPP_CONFIG.API_KEY || !WHATSAPP_CONFIG.NAMESPACE || !WHATSAPP_CONFIG.TEMPLATE_NAME) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'Missing required environment variables',
+          details: 'WHATSAPP_API_KEY, WHATSAPP_NAMESPACE, and WHATSAPP_TEMPLATE_NAME must be set'
+        })
+      };
+    }
 
     if (action === 'sendMessage') {
       // Send WhatsApp message
