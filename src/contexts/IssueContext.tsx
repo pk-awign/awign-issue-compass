@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Issue, Comment } from '@/types/issue';
 import { TicketService } from '@/services/ticketService';
 import { supabase } from '@/integrations/supabase/client';
+import { NotificationService } from '@/services/notificationService';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface IssueContextType {
   issues: Issue[];
@@ -32,6 +34,7 @@ export const useIssues = () => {
 export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
 
   // Real-time subscription for ticket updates
   useEffect(() => {
@@ -167,18 +170,47 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const refreshIssues = async (): Promise<void> => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First, get the total count of tickets
+      const { count: totalCount, error: countError } = await supabase
         .from('tickets')
-        .select(`
-          *,
-          comments (
-            id,
-            content,
-            author,
-            author_role,
-            is_internal,
-            created_at,
-            comment_attachments (
+        .select('id', { count: 'exact', head: true });
+      
+      if (countError) throw countError;
+      
+      console.log(`📊 [TICKET FETCH] Total tickets in database: ${totalCount}`);
+      
+      // Fetch all tickets in batches to avoid Supabase's default 1000 limit
+      const batchSize = 1000;
+      const totalBatches = Math.ceil((totalCount || 0) / batchSize);
+      let allTickets: any[] = [];
+      
+      for (let batch = 0; batch < totalBatches; batch++) {
+        const from = batch * batchSize;
+        const to = Math.min(from + batchSize - 1, (totalCount || 0) - 1);
+        
+        console.log(`📊 [TICKET FETCH] Fetching batch ${batch + 1}/${totalBatches} (${from}-${to})`);
+        
+        const { data: batchData, error: batchError } = await supabase
+          .from('tickets')
+          .select(`
+            *,
+            comments (
+              id,
+              content,
+              author,
+              author_role,
+              is_internal,
+              created_at,
+              comment_attachments (
+                id,
+                file_name,
+                file_size,
+                file_type,
+                storage_path,
+                uploaded_at
+              )
+            ),
+            attachments (
               id,
               file_name,
               file_size,
@@ -186,31 +218,68 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               storage_path,
               uploaded_at
             )
-          ),
-          attachments (
-            id,
-            file_name,
-            file_size,
-            file_type,
-            storage_path,
-            uploaded_at
-          )
-        `)
-        .order('created_at', { ascending: false });
+          `)
+          .order('created_at', { ascending: false })
+          .range(from, to);
+          
+        if (batchError) throw batchError;
+        
+        allTickets = allTickets.concat(batchData || []);
+      }
+      
+      console.log(`📊 [TICKET FETCH] Successfully fetched ${allTickets.length} tickets`);
+      
+      // Log sample of ticket assignments for debugging
+      const sampleTickets = allTickets.slice(0, 5).map(t => ({
+        ticketNumber: t.ticket_number,
+        assignedResolver: t.assigned_resolver,
+        assignedApprover: t.assigned_approver,
+        created_at: t.created_at
+      }));
+      console.log(`📊 [TICKET FETCH] Sample tickets:`, sampleTickets);
+      
+      const data = allTickets;
 
-      if (error) throw error;
-
-      // Fetch all assignees in one go
-      const { data: assigneesData, error: assigneesError } = await supabase
+      // Fetch all assignees in batches to avoid Supabase's default 1000 limit
+      const { count: totalAssigneesCount, error: assigneesCountError } = await supabase
         .from('ticket_assignees')
-        .select('*');
-      if (assigneesError) throw assigneesError;
+        .select('id', { count: 'exact', head: true });
+      
+      if (assigneesCountError) throw assigneesCountError;
+      
+      console.log(`📊 [ASSIGNMENT FETCH] Total assignments in database: ${totalAssigneesCount}`);
+      
+      const assigneesBatchSize = 1000;
+      const totalAssigneesBatches = Math.ceil((totalAssigneesCount || 0) / assigneesBatchSize);
+      let allAssignees: any[] = [];
+      
+      for (let batch = 0; batch < totalAssigneesBatches; batch++) {
+        const from = batch * assigneesBatchSize;
+        const to = Math.min(from + assigneesBatchSize - 1, (totalAssigneesCount || 0) - 1);
+        
+        console.log(`📊 [ASSIGNMENT FETCH] Fetching batch ${batch + 1}/${totalAssigneesBatches} (${from}-${to})`);
+        
+        const { data: assigneesBatchData, error: assigneesBatchError } = await supabase
+          .from('ticket_assignees')
+          .select('*')
+          .range(from, to);
+          
+        if (assigneesBatchError) throw assigneesBatchError;
+        
+        allAssignees = allAssignees.concat(assigneesBatchData || []);
+      }
+      
+      console.log('📊 [ASSIGNMENT DEBUG] Fetched assignees:', allAssignees.length);
+      console.log('📊 [ASSIGNMENT DEBUG] Sample assignees:', allAssignees.slice(0, 5));
+      
       // Group assignees by ticket_id
       const assigneesByTicket: Record<string, any[]> = {};
-      (assigneesData || []).forEach(a => {
+      allAssignees.forEach(a => {
         if (!assigneesByTicket[a.ticket_id]) assigneesByTicket[a.ticket_id] = [];
         assigneesByTicket[a.ticket_id].push(a);
       });
+      
+      console.log('📊 [ASSIGNMENT DEBUG] Assignees grouped by ticket:', Object.keys(assigneesByTicket).length, 'tickets have assignments');
 
       const mappedIssues = data.map((ticket: any) => {
         // Get assignments for this ticket
@@ -231,6 +300,28 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           };
         }) : [];
 
+        // Sort comments by timestamp (newest first)
+        const sortedComments = ticket.comments?.map((comment: any) => ({
+          id: comment.id,
+          content: comment.content,
+          author: comment.author,
+          authorRole: comment.author_role,
+          timestamp: new Date(comment.created_at),
+          isInternal: comment.is_internal,
+          isFromInvigilator: comment.author === 'anonymous' || comment.author === 'Anonymous' || comment.author_role === 'invigilator',
+          attachments: comment.comment_attachments?.map((att: any) => {
+            const { data: pub } = supabase.storage.from('comment-attachments').getPublicUrl(att.storage_path);
+            return {
+              id: att.id,
+              fileName: att.file_name,
+              fileSize: att.file_size,
+              fileType: att.file_type,
+              downloadUrl: pub.publicUrl,
+              uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
+            };
+          }) || [],
+        })).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()) || [];
+
         return {
           id: ticket.id,
           ticketNumber: ticket.ticket_number,
@@ -247,37 +338,29 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           submittedBy: ticket.submitted_by,
           submittedByUserId: ticket.submitted_by_user_id,
           submittedAt: new Date(ticket.submitted_at),
-          // Use new assignment data if available, fallback to legacy fields
-          assignedResolver: resolverAssignment?.user_id || ticket.assigned_resolver,
-          assignedApprover: approverAssignment?.user_id || ticket.assigned_approver,
+          // Use only new assignment system
+          assignedResolver: resolverAssignment?.user_id || null,
+          assignedApprover: approverAssignment?.user_id || null,
           resolutionNotes: ticket.resolution_notes,
           resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
-          comments: ticket.comments?.map((comment: any) => ({
-            id: comment.id,
-            content: comment.content,
-            author: comment.author,
-            authorRole: comment.author_role,
-            timestamp: new Date(comment.created_at),
-            isInternal: comment.is_internal,
-            attachments: comment.comment_attachments?.map((att: any) => {
-              const { data: pub } = supabase.storage.from('comment-attachments').getPublicUrl(att.storage_path);
-              return {
-                id: att.id,
-                fileName: att.file_name,
-                fileSize: att.file_size,
-                fileType: att.file_type,
-                downloadUrl: pub.publicUrl,
-                uploadedAt: att.uploaded_at ? new Date(att.uploaded_at) : undefined,
-              };
-            }) || [],
-          })) || [],
+          comments: sortedComments,
           attachments,
           issueEvidence: [],
           assignees: assigneesByTicket[ticket.id] || [],
         };
       });
 
-      setIssues(mappedIssues);
+      // Sort tickets by last comment timestamp (newest first)
+      const sortedIssues = mappedIssues.sort((a, b) => {
+        const aLastComment = a.comments && a.comments.length > 0 ? a.comments[0].timestamp : a.submittedAt;
+        const bLastComment = b.comments && b.comments.length > 0 ? b.comments[0].timestamp : b.submittedAt;
+        return bLastComment.getTime() - aLastComment.getTime();
+      });
+
+      setIssues(sortedIssues);
+      
+      // Process notifications for new invigilator comments (only for assigned tickets)
+      NotificationService.processNewComments(sortedIssues, user?.id);
     } catch (error) {
       console.error('Error refreshing issues:', error);
     } finally {

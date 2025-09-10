@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Search, Filter, X, Calendar as CalendarIcon } from 'lucide-react';
 import { Issue } from '@/types/issue';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DateRange } from 'react-day-picker';
@@ -30,6 +29,10 @@ interface TicketFiltersProps {
   setDateRange?: (range: DateRange | undefined) => void;
   onClearFilters: () => void;
   activeFiltersCount: number;
+  uniqueCities?: string[];
+  uniqueResourceIds?: { value: string; label: string }[];
+  uniqueSeverities?: string[];
+  uniqueCategories?: string[];
 }
 
 export const TicketFilters: React.FC<TicketFiltersProps> = ({
@@ -48,7 +51,11 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   dateRange,
   setDateRange,
   onClearFilters,
-  activeFiltersCount
+  activeFiltersCount,
+  uniqueCities = [],
+  uniqueResourceIds = [],
+  uniqueSeverities = [],
+  uniqueCategories = []
 }) => {
   return (
     <Card>
@@ -117,9 +124,14 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Severity</SelectItem>
-                <SelectItem value="sev1">SEV1 - Critical</SelectItem>
-                <SelectItem value="sev2">SEV2 - High</SelectItem>
-                <SelectItem value="sev3">SEV3 - Medium</SelectItem>
+                {uniqueSeverities.map(severity => (
+                  <SelectItem key={severity} value={severity}>
+                    {severity === 'sev1' ? 'SEV1 - Critical' :
+                     severity === 'sev2' ? 'SEV2 - High' :
+                     severity === 'sev3' ? 'SEV3 - Medium' :
+                     severity.charAt(0).toUpperCase() + severity.slice(1)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -132,15 +144,18 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="payment_delay">Payment Delay</SelectItem>
-                <SelectItem value="partial_payment">Partial Payment</SelectItem>
-                <SelectItem value="behavioral_complaint">Behavioral Complaint</SelectItem>
-                <SelectItem value="improvement_request">Improvement Request</SelectItem>
-                <SelectItem value="facility_issue">Facility Issue</SelectItem>
-                <SelectItem value="penalty_issue">Penalty Issue</SelectItem>
-                <SelectItem value="malpractice">Malpractice</SelectItem>
-                <SelectItem value="app_issue">App Issue</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                {uniqueCategories.map(category => (
+                  <SelectItem key={category} value={category}>
+                    {category === 'payment_delay' ? 'Payment Delay' :
+                     category === 'partial_payment' ? 'Partial Payment' :
+                     category === 'behavioral_complaint' ? 'Behavioral Complaint' :
+                     category === 'improvement_request' ? 'Improvement Request' :
+                     category === 'facility_issue' ? 'Facility Issue' :
+                     category === 'penalty_issue' ? 'Penalty Issue' :
+                     category === 'app_issue' ? 'App Issue' :
+                     category.charAt(0).toUpperCase() + category.slice(1)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -153,88 +168,88 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Cities</SelectItem>
-                <SelectItem value="Mumbai">Mumbai</SelectItem>
-                <SelectItem value="Delhi">Delhi</SelectItem>
-                <SelectItem value="Bangalore">Bangalore</SelectItem>
-                <SelectItem value="Chennai">Chennai</SelectItem>
-                <SelectItem value="Hyderabad">Hyderabad</SelectItem>
-                <SelectItem value="Pune">Pune</SelectItem>
+                {uniqueCities.map(city => (
+                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
 
-        {/* Date Range Filter */}
-        {setDateRange && (
-          <div>
-            <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
-                    ) : (
-                      format(dateRange.from, "LLL dd, y")
-                    )
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
-            {dateRange && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Filtering tickets created between {dateRange.from && format(dateRange.from, "MMM dd, yyyy")} 
-                {dateRange.to && ` and ${format(dateRange.to, "MMM dd, yyyy")}`}
-              </p>
-            )}
-          </div>
-        )}
+        {/* Resource ID and Date Range Filters - Side by Side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Resource ID Filter */}
+          {setResourceIdFilter && (
+            <div>
+              <label className="text-sm font-medium mb-1 block">Resource ID</label>
+              <Select value={resourceIdFilter.length > 0 ? resourceIdFilter[0] : 'all'} onValueChange={(value) => {
+                if (value === 'all') {
+                  setResourceIdFilter([]);
+                } else {
+                  setResourceIdFilter([value]);
+                }
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Resource IDs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Resource IDs</SelectItem>
+                  {uniqueResourceIds.map(resourceId => (
+                    <SelectItem key={resourceId.value} value={resourceId.value}>{resourceId.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-        {/* Resource ID Filter */}
-        {setResourceIdFilter && (
-          <div>
-            <label className="text-sm font-medium mb-1 block">
-              Resource ID {resourceIdFilter.length > 0 && (
-                <Badge variant="secondary" className="ml-2 text-xs">
-                  {resourceIdFilter.length} selected
-                </Badge>
+          {/* Date Range Filter */}
+          {setDateRange && (
+            <div>
+              <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+              {dateRange && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Filtering tickets created between {dateRange.from && format(dateRange.from, "MMM dd, yyyy")} 
+                  {dateRange.to && ` and ${format(dateRange.to, "MMM dd, yyyy")}`}
+                </p>
               )}
-            </label>
-            <MultiSelect
-              selected={resourceIdFilter}
-              onChange={setResourceIdFilter}
-              placeholder="Enter Resource IDs (comma-separated)..."
-              className="w-full"
-            />
-            {resourceIdFilter.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Enter comma-separated Resource IDs to filter tickets
-              </p>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

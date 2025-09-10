@@ -1,114 +1,113 @@
-// NotificationService: Centralized notification logic for email, WhatsApp, and SMS
-import { EmailService } from './emailService';
-import { SMSService } from './smsService';
-// import { WhatsAppAdapter } from './whatsappAdapter'; // Placeholder for WhatsApp integration
+import { Issue, Comment } from '@/types/issue';
 
-interface NotificationLog {
-  userId: string;
-  type: string;
-  channels: string[];
-  status: string;
+export interface NotificationItem {
+  id: string;
+  ticketId: string;
+  ticketNumber: string;
+  commentId: string;
+  commentContent: string;
   timestamp: Date;
+  isRead: boolean;
 }
 
-const INTERNAL_GROUP_EMAIL = 'awign-escalation@googlegroups.com';
-
 export class NotificationService {
-  // Notify on ticket creation
-  static async notifyTicketCreated(ticket: any, user: any) {
-    await EmailService.sendTicketCreatedNotification(ticket, INTERNAL_GROUP_EMAIL);
-    // Placeholder: Replace with your WhatsApp message generator
-    const whatsappContent = `Your ticket ${ticket.ticketNumber} has been created.`;
+  private static notifications: NotificationItem[] = [];
+  private static listeners: ((notifications: NotificationItem[]) => void)[] = [];
 
-    // Send Email
-    let emailStatus = 'not_sent';
-    if (user.email) {
-      const sent = await EmailService.sendTicketCreatedNotification(ticket);
-      emailStatus = sent ? 'sent' : 'failed';
+  static addNotification(comment: Comment, ticket: Issue): void {
+    // Only add notifications for invigilator comments
+    if (!comment.isFromInvigilator) return;
+
+    const notification: NotificationItem = {
+      id: `notification-${comment.id}`,
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber,
+      commentId: comment.id,
+      commentContent: comment.content,
+      timestamp: comment.timestamp,
+      isRead: false,
+    };
+
+    // Remove any existing notification for the same comment
+    this.notifications = this.notifications.filter(n => n.commentId !== comment.id);
+    
+    // Add new notification at the top
+    this.notifications.unshift(notification);
+
+    // Keep only last 50 notifications
+    if (this.notifications.length > 50) {
+      this.notifications = this.notifications.slice(0, 50);
     }
 
-    // Send WhatsApp (if user has opted in)
-    let whatsappStatus = 'not_sent';
-    if (user.whatsappOptIn && user.phone) {
-      // await WhatsAppAdapter.send(user.phone, whatsappContent);
-      whatsappStatus = 'sent'; // Simulate success
-    }
-
-    // Send SMS (if user has phone number)
-    let smsStatus = 'not_sent';
-    if (user.phone) {
-      try {
-        const smsData = {
-          mobileNumber: user.phone,
-          name: user.name || ticket.submittedBy,
-          ticketNumber: ticket.ticketNumber,
-          ticketLink: ticket.ticketLink || `https://awign-invigilation-escalation.netlify.app/track?id=${ticket.ticketNumber}`
-        };
-        const sent = await SMSService.sendTicketCreationNotification(smsData);
-        smsStatus = sent ? 'sent' : 'failed';
-      } catch (error) {
-        console.error('SMS notification error:', error);
-        smsStatus = 'failed';
-      }
-    }
-
-    // Log the notification (replace with DB logging if needed)
-    console.log('NotificationLog', {
-      userId: user.id,
-      type: 'ticket_created',
-      channels: ['email', 'whatsapp', 'sms'],
-      status: `${emailStatus},${whatsappStatus},${smsStatus}`,
-      timestamp: new Date()
-    });
+    // Notify listeners
+    this.notifyListeners();
   }
 
-  // Notify on ticket status change
-  static async notifyStatusChanged(ticket: any, user: any, oldStatus: string, newStatus: string) {
-    await EmailService.sendStatusChangeNotification(ticket.ticketNumber, oldStatus, newStatus, user.name, undefined, INTERNAL_GROUP_EMAIL);
-    // Placeholder: Replace with your WhatsApp message generator
-    const whatsappContent = `Ticket ${ticket.ticketNumber} status changed: ${oldStatus} → ${newStatus}`;
-
-    // Send Email
-    let emailStatus = 'not_sent';
-    if (user.email) {
-      const sent = await EmailService.sendStatusChangeNotification(ticket.ticketNumber, oldStatus, newStatus, user.name);
-      emailStatus = sent ? 'sent' : 'failed';
-    }
-
-    // Send WhatsApp (if user has opted in)
-    let whatsappStatus = 'not_sent';
-    if (user.whatsappOptIn && user.phone) {
-      // await WhatsAppAdapter.send(user.phone, whatsappContent);
-      whatsappStatus = 'sent'; // Simulate success
-    }
-
-    // Send SMS (if user has phone number)
-    let smsStatus = 'not_sent';
-    if (user.phone) {
-      try {
-        const smsData = {
-          mobileNumber: user.phone,
-          name: user.name || ticket.submittedBy,
-          ticketNumber: ticket.ticketNumber,
-          ticketLink: ticket.ticketLink || `https://awign-invigilation-escalation.netlify.app/track?id=${ticket.ticketNumber}`
-        };
-        const sent = await SMSService.sendTicketUpdateNotification(smsData);
-        smsStatus = sent ? 'sent' : 'failed';
-      } catch (error) {
-        console.error('SMS notification error:', error);
-        smsStatus = 'failed';
-      }
-    }
-
-    // Log the notification
-    console.log('NotificationLog', {
-      userId: user.id,
-      type: 'status_changed',
-      channels: ['email', 'whatsapp', 'sms'],
-      status: `${emailStatus},${whatsappStatus},${smsStatus}`,
-      timestamp: new Date()
-    });
+  static getNotifications(): NotificationItem[] {
+    return [...this.notifications];
   }
 
-  // Add more notification types as needed...
-} 
+  static getUnreadCount(): number {
+    return this.notifications.filter(n => !n.isRead).length;
+  }
+
+  static markAsRead(notificationId: string): void {
+    const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification) {
+      notification.isRead = true;
+      this.notifyListeners();
+    }
+  }
+
+  static markAllAsRead(): void {
+    this.notifications.forEach(n => n.isRead = true);
+    this.notifyListeners();
+  }
+
+  static clearNotifications(): void {
+    this.notifications = [];
+    this.notifyListeners();
+  }
+
+  static subscribe(listener: (notifications: NotificationItem[]) => void): () => void {
+    this.listeners.push(listener);
+    
+    // Return unsubscribe function
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+
+  private static notifyListeners(): void {
+    this.listeners.forEach(listener => listener([...this.notifications]));
+  }
+
+  // Method to process new comments from tickets
+  static processNewComments(tickets: Issue[], currentUserId?: string): void {
+    tickets.forEach(ticket => {
+      if (ticket.comments && ticket.comments.length > 0) {
+        // Get the most recent comment
+        const latestComment = ticket.comments[0];
+        
+        // Check if this is a new invigilator comment
+        if (latestComment.isFromInvigilator) {
+          // Only create notifications for tickets assigned to the current user
+          const isAssignedToUser = currentUserId && (
+            ticket.assignedResolver === currentUserId ||
+            ticket.assignedApprover === currentUserId ||
+            (ticket as any).assignees?.some((a: any) => a.user_id === currentUserId)
+          );
+          
+          if (isAssignedToUser) {
+            // Check if we already have a notification for this comment
+            const existingNotification = this.notifications.find(n => n.commentId === latestComment.id);
+            
+            if (!existingNotification) {
+              this.addNotification(latestComment, ticket);
+            }
+          }
+        }
+      }
+    });
+  }
+}

@@ -208,10 +208,10 @@ export const WhatsAppTestComponent: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div><strong>API URL:</strong> {getConfig().API_URL}</div>
-                <div><strong>API Key:</strong> {getConfig().API_KEY.substring(0, 8)}...</div>
-                <div><strong>Namespace:</strong> {getConfig().NAMESPACE}</div>
-                <div><strong>Template:</strong> {getConfig().TEMPLATE_NAME}</div>
+                <div><strong>API URL:</strong> {getConfig()?.API_URL ?? 'N/A'}</div>
+                <div><strong>API Key:</strong> {(getConfig()?.API_KEY ? `${getConfig()?.API_KEY.slice(0, 8)}...` : 'not set')}</div>
+                <div><strong>Namespace:</strong> {getConfig()?.NAMESPACE ?? 'N/A'}</div>
+                <div><strong>Template:</strong> {getConfig()?.TEMPLATE_NAME ?? 'N/A'}</div>
               </CardContent>
             </Card>
             
@@ -223,9 +223,9 @@ export const WhatsAppTestComponent: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div><strong>Sheet ID:</strong> {getConfig().googleSheetUrl.split('/')[5]}</div>
+                <div><strong>Sheet ID:</strong> {getConfig()?.googleSheetUrl?.split?.('/')?.[5] ?? 'N/A'}</div>
                 <div><strong>Tab:</strong> Sheet1</div>
-                <div><strong>Contacts:</strong> {contacts.length}</div>
+                <div><strong>Contacts:</strong> {contacts?.length ?? 0}</div>
                 <div><strong>Columns:</strong> Resource_ID | Name | Contact_Number</div>
               </CardContent>
             </Card>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from '@/components/navigation/Header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -63,8 +63,11 @@ export const AdminPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [analytics, setAnalytics] = useState<any>(null);
-  const [resolverFilter, setResolverFilter] = useState<string>('all');
+  const [resolverFilterSingle, setResolverFilterSingle] = useState<string>('all');
+  const [resolverFilter, setResolverFilter] = useState<string[]>([]);
   const [resolvers, setResolvers] = useState<{ id: string; name: string }[]>([]);
+  const [approvers, setApprovers] = useState<{ id: string; name: string }[]>([]);
+  const [approverFilter, setApproverFilter] = useState<string[]>([]);
   const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
   const [resourceIds, setResourceIds] = useState<{ value: string; label: string }[]>([]);
   
@@ -82,6 +85,7 @@ export const AdminPage: React.FC = () => {
     to: new Date(),
   });
   const [filterDateRange, setFilterDateRange] = useState<DateRange | undefined>();
+  const [onlyUnassignedResolver, setOnlyUnassignedResolver] = useState<boolean>(false);
   const [downloadAll, setDownloadAll] = useState(false);
 
   // Pagination states
@@ -113,6 +117,27 @@ export const AdminPage: React.FC = () => {
     initializeSystem();
     loadAnalytics();
   }, []);
+  // Compute available resolver/approver IDs from the currently visible tickets
+  const availableResolverIds = useMemo(() => {
+    const ids = new Set<string>();
+    filteredTickets.forEach(t => {
+      (t as IssueWithAssignees).assignees?.forEach(a => {
+        if (a.role === 'resolver') ids.add(a.user_id);
+      });
+    });
+    return ids;
+  }, [filteredTickets]);
+
+  const availableApproverIds = useMemo(() => {
+    const ids = new Set<string>();
+    filteredTickets.forEach(t => {
+      (t as IssueWithAssignees).assignees?.forEach(a => {
+        if (a.role === 'approver') ids.add(a.user_id);
+      });
+    });
+    return ids;
+  }, [filteredTickets]);
+
 
   const initializeSystem = async () => {
     console.log('🚀 Initializing admin system...');
@@ -145,9 +170,9 @@ export const AdminPage: React.FC = () => {
         };
       } else {
         // For super admin, load all tickets with filters
-        const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter !== 'all' || resourceIdFilter.length > 0 || filterDateRange?.from;
+        const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter.length > 0 || approverFilter.length > 0 || resourceIdFilter.length > 0 || filterDateRange?.from;
         
-        if (hasFilters) {
+        if (hasFilters || onlyUnassignedResolver) {
           // Use filtered method when filters are applied
           result = await AdminService.getFilteredTickets(showDeleted, reset ? 1 : page, limit, {
             searchQuery,
@@ -156,8 +181,10 @@ export const AdminPage: React.FC = () => {
             categoryFilter,
             cityFilter,
             resolverFilter,
+            approverFilter,
             resourceIdFilter,
-            dateRange: filterDateRange
+            dateRange: filterDateRange,
+            onlyUnassignedResolver
           });
         } else {
           // Use regular method when no filters
@@ -192,7 +219,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter, filterDateRange, isTicketAdmin, user?.id]);
+  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, isTicketAdmin, user?.id]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   useEffect(() => {
@@ -202,15 +229,21 @@ export const AdminPage: React.FC = () => {
     setFilteredTickets([]);
     loadTickets(true);
     // eslint-disable-next-line
-  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, resourceIdFilter, filterDateRange]);
+  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver]);
 
-  // Fetch resolvers for filter dropdown
+  // Fetch resolvers/approvers for filter dropdowns
   useEffect(() => {
     const fetchResolvers = async () => {
       const users = await AdminService.getUsersByRole('resolver');
       setResolvers(users.map(u => ({ id: u.id, name: u.name })));
     };
+    const fetchApprovers = async () => {
+      const users = await AdminService.getUsersByRole('approver');
+      // Show only active approvers in filters
+      setApprovers(users.filter(u => u.isActive).map(u => ({ id: u.id, name: u.name })));
+    };
     fetchResolvers();
+    fetchApprovers();
   }, []);
 
   // Fix handleLoadMore to be a no-arg function
@@ -225,9 +258,11 @@ export const AdminPage: React.FC = () => {
     setSeverityFilter('all');
     setCategoryFilter('all');
     setCityFilter('all');
-    setResolverFilter('all');
+    setResolverFilter([]);
+    setApproverFilter([]);
     setResourceIdFilter([]);
     setFilterDateRange(undefined);
+    setOnlyUnassignedResolver(false);
   };
 
   // Check if there are active filters
@@ -236,9 +271,11 @@ export const AdminPage: React.FC = () => {
     severityFilter !== 'all' || 
     categoryFilter !== 'all' || 
     cityFilter !== 'all' || 
-    resolverFilter !== 'all' || 
+    resolverFilter.length > 0 || 
+    approverFilter.length > 0 ||
     resourceIdFilter.length > 0 || 
-    filterDateRange?.from;
+    filterDateRange?.from ||
+    onlyUnassignedResolver;
 
   // When page changes (and not reset), load next page
   useEffect(() => {
@@ -259,10 +296,16 @@ export const AdminPage: React.FC = () => {
         data = await AdminService.getTicketAnalytics();
       }
       setAnalytics(data);
+      console.log('📊 Analytics refreshed:', data);
     } catch (err) {
       console.error('Error loading analytics:', err);
     }
   };
+
+  // Refresh analytics when filters change
+  useEffect(() => {
+    loadAnalytics();
+  }, [statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange]);
 
   const handleLogout = () => {
     logout();
@@ -325,6 +368,10 @@ export const AdminPage: React.FC = () => {
 
   // Get unique cities for filter
   const uniqueCities = Array.from(new Set(tickets.map(ticket => ticket.city)));
+
+  // Get unique values for dynamic filters
+  const uniqueSeverities = Array.from(new Set(tickets.map(ticket => ticket.severity))).filter(Boolean);
+  const uniqueCategories = Array.from(new Set(tickets.map(ticket => ticket.issueCategory))).filter(Boolean);
 
   // Get unique resource IDs for filter
   useEffect(() => {
@@ -830,8 +877,8 @@ export const AdminPage: React.FC = () => {
                       />
                     </div>
                     
-                    {/* Filters - Grid Layout */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                    {/* Row 1: Status, Severity, Category, City */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                       <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger>
                           <SelectValue placeholder="Status" />
@@ -854,9 +901,14 @@ export const AdminPage: React.FC = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Severity</SelectItem>
-                          <SelectItem value="sev1">SEV1</SelectItem>
-                          <SelectItem value="sev2">SEV2</SelectItem>
-                          <SelectItem value="sev3">SEV3</SelectItem>
+                          {uniqueSeverities.map(severity => (
+                            <SelectItem key={severity} value={severity}>
+                              {severity === 'sev1' ? 'SEV1' :
+                               severity === 'sev2' ? 'SEV2' :
+                               severity === 'sev3' ? 'SEV3' :
+                               (severity as string).charAt(0).toUpperCase() + (severity as string).slice(1)}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
 
@@ -866,15 +918,18 @@ export const AdminPage: React.FC = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Categories</SelectItem>
-                          <SelectItem value="payment_delay">Payment Delay</SelectItem>
-                          <SelectItem value="partial_payment">Partial Payment</SelectItem>
-                          <SelectItem value="behavioral_complaint">Behavioral Complaint</SelectItem>
-                          <SelectItem value="improvement_request">Improvement Request</SelectItem>
-                          <SelectItem value="facility_issue">Facility Issue</SelectItem>
-                          <SelectItem value="penalty_issue">Penalty Issue</SelectItem>
-                          <SelectItem value="malpractice">Malpractice</SelectItem>
-                          <SelectItem value="app_issue">App Issue</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                          {uniqueCategories.map(category => (
+                            <SelectItem key={category} value={category}>
+                              {category === 'payment_delay' ? 'Payment Delay' :
+                               category === 'partial_payment' ? 'Partial Payment' :
+                               category === 'behavioral_complaint' ? 'Behavioral Complaint' :
+                               category === 'improvement_request' ? 'Improvement Request' :
+                               category === 'facility_issue' ? 'Facility Issue' :
+                               category === 'penalty_issue' ? 'Penalty Issue' :
+                               category === 'app_issue' ? 'App Issue' :
+                               category.charAt(0).toUpperCase() + category.slice(1)}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
 
@@ -889,94 +944,121 @@ export const AdminPage: React.FC = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
 
-                      {/* Resolver Filter */}
-                      <Select value={resolverFilter} onValueChange={setResolverFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Resolver" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Resolvers</SelectItem>
-                          {resolvers.map(resolver => (
-                            <SelectItem key={resolver.id} value={resolver.id}>{resolver.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    {/* Row 2: Resource ID, Date Range, Approvers */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+                      <div className="lg:col-span-1">
+                        <label className="text-sm font-medium mb-1 block">
+                          Resource ID {resourceIdFilter.length > 0 && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              {resourceIdFilter.length} selected
+                            </Badge>
+                          )}
+                        </label>
+                        <MultiSelect
+                          selected={resourceIdFilter}
+                          onChange={setResourceIdFilter}
+                          placeholder="Enter Resource IDs (comma-separated)..."
+                          className="w-full"
+                        />
+                        {resourceIdFilter.length === 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Enter comma-separated Resource IDs to filter tickets
+                          </p>
+                        )}
+                      </div>
 
-                                    {/* Resource ID Filter */}
-              <div className="lg:col-span-2">
-                <label className="text-sm font-medium mb-1 block">
-                  Resource ID {resourceIdFilter.length > 0 && (
-                    <Badge variant="secondary" className="ml-2 text-xs">
-                      {resourceIdFilter.length} selected
-                    </Badge>
-                  )}
-                </label>
-                <MultiSelect
-                  selected={resourceIdFilter}
-                  onChange={setResourceIdFilter}
-                  placeholder="Enter Resource IDs (comma-separated)..."
-                  className="w-full"
-                />
-                {resourceIdFilter.length === 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Enter comma-separated Resource IDs to filter tickets
-                  </p>
-                )}
-              </div>
+                      <div className="lg:col-span-1">
+                        <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !filterDateRange && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {filterDateRange?.from ? (
+                                filterDateRange.to ? (
+                                  <>
+                                    {format(filterDateRange.from, "LLL dd, y")} - {format(filterDateRange.to, "LLL dd, y")}
+                                  </>
+                                ) : (
+                                  format(filterDateRange.from, "LLL dd, y")
+                                )
+                              ) : (
+                                <span>Pick a date range</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              initialFocus
+                              mode="range"
+                              defaultMonth={filterDateRange?.from}
+                              selected={filterDateRange}
+                              onSelect={setFilterDateRange}
+                              numberOfMonths={2}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        {filterDateRange && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Filtering tickets created between {filterDateRange.from && format(filterDateRange.from, "MMM dd, yyyy")} {filterDateRange.to && ` and ${format(filterDateRange.to, "MMM dd, yyyy")}`}
+                          </p>
+                        )}
+                      </div>
 
-              {/* Date Range Filter */}
-              <div className="lg:col-span-2">
-                <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !filterDateRange && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filterDateRange?.from ? (
-                        filterDateRange.to ? (
-                          <>
-                            {format(filterDateRange.from, "LLL dd, y")} -{" "}
-                            {format(filterDateRange.to, "LLL dd, y")}
-                          </>
-                        ) : (
-                          format(filterDateRange.from, "LLL dd, y")
-                        )
-                      ) : (
-                        <span>Pick a date range</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={filterDateRange?.from}
-                      selected={filterDateRange}
-                      onSelect={setFilterDateRange}
-                      numberOfMonths={2}
-                    />
-                  </PopoverContent>
-                </Popover>
-                {filterDateRange && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Filtering tickets created between {filterDateRange.from && format(filterDateRange.from, "MMM dd, yyyy")} 
-                    {filterDateRange.to && ` and ${format(filterDateRange.to, "MMM dd, yyyy")}`}
-                  </p>
-                )}
-              </div>
+                      <div className="lg:col-span-1">
+                        <label className="text-sm font-medium mb-1 block">
+                          Approvers {approverFilter.length > 0 && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              {approverFilter.length} selected
+                            </Badge>
+                          )}
+                        </label>
+                        <MultiSelect
+                          options={approvers
+                            .filter(a => availableApproverIds.size === 0 || availableApproverIds.has(a.id))
+                            .map(a => ({ value: a.id, label: a.name }))}
+                          selected={approverFilter}
+                          onChange={setApproverFilter}
+                          placeholder="Select approvers..."
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Row 3: Resolvers */}
+                    <div className="grid grid-cols-1 gap-3 mt-3">
+                      <div>
+                        <label className="text-sm font-medium mb-1 block">
+                          Resolvers {resolverFilter.length > 0 && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              {resolverFilter.length} selected
+                            </Badge>
+                          )}
+                        </label>
+                        <MultiSelect
+                          options={resolvers
+                            .filter(r => availableResolverIds.size === 0 || availableResolverIds.has(r.id))
+                            .map(r => ({ value: r.id, label: r.name }))}
+                          selected={resolverFilter}
+                          onChange={setResolverFilter}
+                          placeholder="Select resolvers..."
+                          className="w-full"
+                        />
+                      </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               {/* Show Deleted Tickets Toggle and Download Button */}
-              <div className="flex items-center gap-4 mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center flex-wrap gap-3 sm:gap-4 mb-4">
                 <Switch
                   id="show-deleted"
                   checked={showDeleted}
@@ -985,7 +1067,17 @@ export const AdminPage: React.FC = () => {
                 <label htmlFor="show-deleted" className="text-sm font-medium">
                   {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
                 </label>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="only-unassigned-resolver"
+                    checked={onlyUnassignedResolver}
+                    onCheckedChange={(checked) => setOnlyUnassignedResolver(checked)}
+                  />
+                  <label htmlFor="only-unassigned-resolver" className="text-sm font-medium">
+                    Only unassigned to resolver
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
                     <Button 
                         variant="outline" 
                         onClick={() => openDownloadDialog('all')}
@@ -1111,6 +1203,44 @@ export const AdminPage: React.FC = () => {
               {/* Desktop Table */}
               <div className="hidden md:block">
                 <Card>
+                  <CardHeader className="p-4 pb-0">
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Tickets ({totalTickets})</span>
+                      <div className="hidden md:flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // Select only current page (up to 50)
+                            setSelectedTickets(filteredTickets.map(t => t.id));
+                          }}
+                        >
+                          Select 50 on this page
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            const ids = await AdminService.getFilteredTicketIds(showDeleted, {
+                              searchQuery,
+                              statusFilter,
+                              severityFilter,
+                              categoryFilter,
+                              cityFilter,
+                              resolverFilter,
+                              approverFilter,
+                              resourceIdFilter,
+                              dateRange: filterDateRange,
+                              onlyUnassignedResolver
+                            });
+                            setSelectedTickets(ids);
+                          }}
+                        >
+                          Select all {totalTickets}
+                        </Button>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent className="p-0">
                     {isLoading ? (
                       <div className="p-8 text-center">
@@ -1224,13 +1354,21 @@ export const AdminPage: React.FC = () => {
                   </CardContent>
                 </Card>
               </div>
-              {hasMore && (
-                <div className="flex justify-center my-4">
-                  <Button onClick={handleLoadMore} disabled={isLoading}>
-                    {isLoading ? 'Loading...' : 'Load More'}
+              {/* Pagination Controls */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 my-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {filteredTickets.length} of {totalTickets} tickets
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                    Prev
+                  </Button>
+                  <span className="text-sm">Page {page}</span>
+                  <Button variant="outline" size="sm" disabled={!hasMore || isLoading} onClick={() => setPage(p => p + 1)}>
+                    Next
                   </Button>
                 </div>
-              )}
+              </div>
             </TabsContent>
 
             <TabsContent value="analytics">

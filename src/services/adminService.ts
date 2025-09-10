@@ -29,12 +29,15 @@ export interface TicketFilters {
   severityFilter?: string;
   categoryFilter?: string;
   cityFilter?: string;
-  resolverFilter?: string;
+  resolverFilter?: string[];
+  approverFilter?: string[];
   resourceIdFilter?: string[]; // Array of resource IDs for multiselect
   dateRange?: {
     from: Date;
     to?: Date;
   };
+  // Show only tickets that are NOT assigned to any resolver
+  onlyUnassignedResolver?: boolean;
 }
 
 export class AdminService {
@@ -393,6 +396,18 @@ export class AdminService {
       if (!showDeleted) {
         query = query.eq('deleted', false);
       }
+      
+      // Debug logging for ticket fetching
+      console.log(`🔍 Fetching tickets batch ${page}, showDeleted: ${showDeleted}`);
+      
+      // Also check total count for debugging
+      if (page === 1) {
+        const { count } = await supabase
+          .from('tickets')
+          .select('*', { count: 'exact', head: true })
+          .eq('deleted', false);
+        console.log(`🔍 Total non-deleted tickets in DB: ${count}`);
+      }
 
       if (startDate) {
         query = query.gte('submitted_at', startDate.toISOString());
@@ -443,7 +458,8 @@ export class AdminService {
       allTickets.push(...tickets);
       page++;
     }
-    
+
+    console.log(`🔍 getAllTicketsUnpaginated completed: ${allTickets.length} tickets fetched`);
     return allTickets;
   }
 
@@ -457,7 +473,7 @@ export class AdminService {
       // Build the base query
       let query = supabase
         .from('tickets')
-        .select('ticket_number, assigned_resolver, resource_id') // <-- fetch resource_id for filtering
+        .select('id, ticket_number, resource_id, status, severity, issue_category, city, centre_code, created_at') // include all fields we filter on
         .eq('deleted', includeDeleted);
 
       // Apply filters
@@ -476,6 +492,7 @@ export class AdminService {
         }
       }
       if (filters.statusFilter && filters.statusFilter !== 'all') {
+        console.log('🔍 [FILTER DEBUG] Status filter applied:', filters.statusFilter);
         query = query.eq('status', filters.statusFilter);
       }
       if (filters.severityFilter && filters.severityFilter !== 'all') {
@@ -487,8 +504,47 @@ export class AdminService {
       if (filters.cityFilter && filters.cityFilter !== 'all') {
         query = query.eq('city', filters.cityFilter);
       }
-      if (filters.resolverFilter && filters.resolverFilter !== 'all') {
-        query = query.eq('assigned_resolver', filters.resolverFilter);
+      // Handle resolver filter using ticket_assignees table
+      if (filters.resolverFilter && filters.resolverFilter.length > 0) {
+        console.log('🔍 [FILTER DEBUG] Resolver filter applied:', filters.resolverFilter);
+        const { data: resolverAssignedTickets, error: resolverError } = await supabase
+          .from('ticket_assignees')
+          .select('ticket_id')
+          .eq('role', 'resolver')
+          .in('user_id', filters.resolverFilter);
+        
+        if (resolverError) throw resolverError;
+        
+        console.log('🔍 [FILTER DEBUG] Resolver assignments found:', resolverAssignedTickets?.length || 0);
+        
+        if (resolverAssignedTickets && resolverAssignedTickets.length > 0) {
+          const ticketIds = resolverAssignedTickets.map(t => t.ticket_id);
+          console.log('🔍 [FILTER DEBUG] Filtering tickets by IDs:', ticketIds.slice(0, 5), '...');
+          query = query.in('id', ticketIds);
+        } else {
+          // No tickets match the resolver filter, return empty result
+          console.log('🔍 [FILTER DEBUG] No resolver assignments found, returning empty result');
+          query = query.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+        }
+      }
+      
+      // Handle approver filter using ticket_assignees table
+      if (filters.approverFilter && filters.approverFilter.length > 0) {
+        const { data: approverAssignedTickets, error: approverError } = await supabase
+          .from('ticket_assignees')
+          .select('ticket_id')
+          .eq('role', 'approver')
+          .in('user_id', filters.approverFilter);
+        
+        if (approverError) throw approverError;
+        
+        if (approverAssignedTickets && approverAssignedTickets.length > 0) {
+          const ticketIds = approverAssignedTickets.map(t => t.ticket_id);
+          query = query.in('id', ticketIds);
+        } else {
+          // No tickets match the approver filter, return empty result
+          query = query.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+        }
       }
       if (filters.resourceIdFilter && filters.resourceIdFilter.length > 0) {
         query = query.in('resource_id', filters.resourceIdFilter);
@@ -501,15 +557,135 @@ export class AdminService {
         query = query.gte('created_at', fromDate).lte('created_at', toDate);
       }
 
-      // Get total count for analytics
-      const { count: totalCount, error: countError } = await query;
-      if (countError) throw countError;
+      // Note: We intentionally avoid server-side not.in filtering for onlyUnassignedResolver
+      // to prevent very long URLs. We'll filter client-side below.
 
-      // Get paginated ticket numbers
-      const { data: tickets, error } = await query
-        .order('created_at', { ascending: false })
-        .range((page - 1) * limit, page * limit - 1);
-      if (error) throw error;
+      // Build a separate count query (typesafe) with same filters
+      let countQuery = supabase
+        .from('tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('deleted', includeDeleted);
+
+      if (filters.searchQuery) {
+        const searchTerms = filters.searchQuery.split(',').map(term => term.trim()).filter(term => term.length > 0);
+        if (searchTerms.length > 0) {
+          const orConditions = searchTerms.map(term => 
+            `ticket_number.ilike.%${term}%,issue_description.ilike.%${term}%,city.ilike.%${term}%,centre_code.ilike.%${term}%`
+          );
+          const combinedOrCondition = orConditions.join(',');
+          countQuery = countQuery.or(combinedOrCondition);
+        }
+      }
+      if (filters.statusFilter && filters.statusFilter !== 'all') {
+        countQuery = countQuery.eq('status', filters.statusFilter);
+      }
+      if (filters.severityFilter && filters.severityFilter !== 'all') {
+        countQuery = countQuery.eq('severity', filters.severityFilter);
+      }
+      if (filters.categoryFilter && filters.categoryFilter !== 'all') {
+        countQuery = countQuery.eq('issue_category', filters.categoryFilter);
+      }
+      if (filters.cityFilter && filters.cityFilter !== 'all') {
+        countQuery = countQuery.eq('city', filters.cityFilter);
+      }
+      // Handle resolver filter using ticket_assignees table for count query
+      if (filters.resolverFilter && filters.resolverFilter.length > 0) {
+        const { data: resolverAssignedTickets, error: resolverError } = await supabase
+          .from('ticket_assignees')
+          .select('ticket_id')
+          .eq('role', 'resolver')
+          .in('user_id', filters.resolverFilter);
+        
+        if (resolverError) throw resolverError;
+        
+        if (resolverAssignedTickets && resolverAssignedTickets.length > 0) {
+          const ticketIds = resolverAssignedTickets.map(t => t.ticket_id);
+          countQuery = countQuery.in('id', ticketIds);
+        } else {
+          // No tickets match the resolver filter, return empty result
+          countQuery = countQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+        }
+      }
+      
+      // Handle approver filter using ticket_assignees table for count query
+      if (filters.approverFilter && filters.approverFilter.length > 0) {
+        const { data: approverAssignedTickets, error: approverError } = await supabase
+          .from('ticket_assignees')
+          .select('ticket_id')
+          .eq('role', 'approver')
+          .in('user_id', filters.approverFilter);
+        
+        if (approverError) throw approverError;
+        
+        if (approverAssignedTickets && approverAssignedTickets.length > 0) {
+          const ticketIds = approverAssignedTickets.map(t => t.ticket_id);
+          countQuery = countQuery.in('id', ticketIds);
+        } else {
+          // No tickets match the approver filter, return empty result
+          countQuery = countQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+        }
+      }
+      if (filters.resourceIdFilter && filters.resourceIdFilter.length > 0) {
+        countQuery = countQuery.in('resource_id', filters.resourceIdFilter);
+      }
+      if (filters.dateRange?.from) {
+        const fromDate = filters.dateRange.from.toISOString();
+        const toDate = filters.dateRange.to ? filters.dateRange.to.toISOString() : filters.dateRange.from.toISOString();
+        countQuery = countQuery.gte('created_at', fromDate).lte('created_at', toDate);
+      }
+
+      // For onlyUnassignedResolver, exclude tickets assigned to resolvers in ticket_assignees
+      if (filters.onlyUnassignedResolver) {
+        const { data: resolverAssignedForCount, error: raCountErr } = await supabase
+          .from('ticket_assignees')
+          .select('ticket_id')
+          .eq('role', 'resolver');
+        if (!raCountErr && resolverAssignedForCount && resolverAssignedForCount.length > 0) {
+          const ids = resolverAssignedForCount.map(r => r.ticket_id).join(',');
+          countQuery = countQuery.not('id', 'in', `(${ids})`);
+        }
+      }
+
+      let totalCount: number | null = null;
+      if (filters.onlyUnassignedResolver) {
+        // Avoid not.in in count HEAD query; compute total via batched ID collection instead
+        const allMatchingIds = await this.getFilteredTicketIds(includeDeleted, filters);
+        totalCount = allMatchingIds.length;
+      } else {
+        const { count, error: countError } = await countQuery;
+        if (countError) throw countError;
+        totalCount = count;
+      }
+      
+      console.log('🔍 [FILTER DEBUG] Total count after filters:', totalCount);
+
+      // Get paginated ticket numbers (with optional unassigned-to-resolver filter)
+      let tickets: any[] | null = null;
+      let error: any = null;
+      if (filters.onlyUnassignedResolver) {
+        // Compute full matching unassigned IDs, then fetch just the page
+        const allMatchingIds = await this.getFilteredTicketIds(includeDeleted, filters);
+        const start = (page - 1) * limit;
+        const end = Math.min(start + limit, allMatchingIds.length);
+        const pageIds = allMatchingIds.slice(start, end);
+        if (pageIds.length === 0) {
+          tickets = [];
+        } else {
+          const { data, error: fetchErr } = await supabase
+            .from('tickets')
+            .select('ticket_number')
+            .in('id', pageIds)
+            .order('created_at', { ascending: false });
+          if (fetchErr) throw fetchErr;
+          tickets = data || [];
+        }
+      } else {
+        const { data, error: fetchErr } = await query
+          .order('created_at', { ascending: false })
+          .range((page - 1) * limit, page * limit - 1);
+        if (fetchErr) throw fetchErr;
+        tickets = data || [];
+      }
 
       // Fetch each ticket individually using TicketService to get full data with comments
       const ticketPromises = (tickets || []).map(async (ticket) => {
@@ -527,6 +703,111 @@ export class AdminService {
     } catch (error) {
       console.error('Error in getFilteredTickets:', error);
       return { tickets: [], total: 0, hasMore: false };
+    }
+  }
+
+  // Return all ticket IDs matching current filters (no pagination) for bulk selection
+  static async getFilteredTicketIds(
+    includeDeleted: boolean = false,
+    filters: TicketFilters
+  ): Promise<string[]> {
+    const ids: string[] = [];
+    const BATCH_SIZE = 1000;
+    let page = 1;
+    try {
+      while (true) {
+        let q = supabase
+          .from('tickets')
+          .select('id')
+          .eq('deleted', includeDeleted);
+
+        if (filters.searchQuery) {
+          const searchTerms = filters.searchQuery.split(',').map(term => term.trim()).filter(term => term.length > 0);
+          if (searchTerms.length > 0) {
+            const orConditions = searchTerms.map(term =>
+              `ticket_number.ilike.%${term}%,issue_description.ilike.%${term}%,city.ilike.%${term}%,centre_code.ilike.%${term}%`
+            );
+            q = q.or(orConditions.join(','));
+          }
+        }
+        if (filters.statusFilter && filters.statusFilter !== 'all') q = q.eq('status', filters.statusFilter);
+        if (filters.severityFilter && filters.severityFilter !== 'all') q = q.eq('severity', filters.severityFilter);
+        if (filters.categoryFilter && filters.categoryFilter !== 'all') q = q.eq('issue_category', filters.categoryFilter);
+        if (filters.cityFilter && filters.cityFilter !== 'all') q = q.eq('city', filters.cityFilter);
+        // Handle resolver filter using ticket_assignees table
+        if (filters.resolverFilter && filters.resolverFilter.length > 0) {
+          const { data: resolverAssignedTickets, error: resolverError } = await supabase
+            .from('ticket_assignees')
+            .select('ticket_id')
+            .eq('role', 'resolver')
+            .in('user_id', filters.resolverFilter);
+          
+          if (resolverError) throw resolverError;
+          
+          if (resolverAssignedTickets && resolverAssignedTickets.length > 0) {
+            const ticketIds = resolverAssignedTickets.map(t => t.ticket_id);
+            q = q.in('id', ticketIds);
+          } else {
+            // No tickets match the resolver filter, return empty result
+            q = q.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+          }
+        }
+        
+        // Handle approver filter using ticket_assignees table
+        if (filters.approverFilter && filters.approverFilter.length > 0) {
+          const { data: approverAssignedTickets, error: approverError } = await supabase
+            .from('ticket_assignees')
+            .select('ticket_id')
+            .eq('role', 'approver')
+            .in('user_id', filters.approverFilter);
+          
+          if (approverError) throw approverError;
+          
+          if (approverAssignedTickets && approverAssignedTickets.length > 0) {
+            const ticketIds = approverAssignedTickets.map(t => t.ticket_id);
+            q = q.in('id', ticketIds);
+          } else {
+            // No tickets match the approver filter, return empty result
+            q = q.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+          }
+        }
+        if (filters.resourceIdFilter && filters.resourceIdFilter.length > 0) q = q.in('resource_id', filters.resourceIdFilter);
+        if (filters.dateRange?.from) {
+          const fromDate = filters.dateRange.from.toISOString();
+          const toDate = filters.dateRange.to ? filters.dateRange.to.toISOString() : filters.dateRange.from.toISOString();
+          q = q.gte('created_at', fromDate).lte('created_at', toDate);
+        }
+
+        if (filters.onlyUnassignedResolver) {
+          // We'll filter client-side after fetching each batch to avoid not.in
+        }
+
+        const { data, error } = await q
+          .order('created_at', { ascending: false })
+          .range((page - 1) * BATCH_SIZE, page * BATCH_SIZE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        if (filters.onlyUnassignedResolver) {
+          // Fetch resolver-assigned set once and filter locally
+          const { data: resolverAssigned } = await supabase
+            .from('ticket_assignees')
+            .select('ticket_id')
+            .eq('role', 'resolver');
+          const assignedSet = new Set((resolverAssigned || []).map(r => r.ticket_id));
+          const unassignedIds = (data as any[])
+            .map(r => r.id)
+            .filter((id: string) => !assignedSet.has(id));
+          ids.push(...unassignedIds);
+        } else {
+          ids.push(...(data as any[]).map(r => r.id));
+        }
+        if (data.length < BATCH_SIZE) break;
+        page += 1;
+      }
+      return ids;
+    } catch (err) {
+      console.error('Error in getFilteredTicketIds:', err);
+      return ids;
     }
   }
 
@@ -583,11 +864,10 @@ export class AdminService {
       // Use individual updates instead of bulk upsert
       const updatePromises = ticketIds.map(async ticketId => {
         try {
-          // 1. Update legacy field
+          // 1. Update ticket status
           const { error: updateError } = await supabase
             .from('tickets')
             .update({
-              assigned_resolver: resolverId,
               status: 'in_progress'
             })
             .eq('id', ticketId);
@@ -635,17 +915,39 @@ export class AdminService {
 
   static async assignTicket(params: { ticketId: string; assignedTo: string; type: string }): Promise<boolean> {
     try {
-      const { data, error } = await supabase
-        .from('tickets')
-        .update({ assigned_resolver: params.assignedTo })
-        .eq('id', params.ticketId);
+      const role = params.type === 'approver' ? 'approver' : 'resolver';
+      
+      // Check if assignment already exists
+      const { data: existing, error: existsError } = await supabase
+        .from('ticket_assignees')
+        .select('id')
+        .eq('ticket_id', params.ticketId)
+        .eq('user_id', params.assignedTo)
+        .eq('role', role);
 
-      if (error) {
-        console.error('Error assigning ticket:', error);
+      if (existsError) {
+        console.error('Error checking existing assignment:', existsError);
         return false;
       }
 
-      console.log('Ticket assigned successfully:', data);
+      // Add assignment if it doesn't exist
+      if (!existing || existing.length === 0) {
+        const { error: assignError } = await TicketService.addAssignee(
+          params.ticketId, 
+          params.assignedTo, 
+          role, 
+          params.assignedTo, 
+          'System', 
+          'super_admin'
+        );
+        
+        if (assignError) {
+          console.error('Error adding assignment:', assignError);
+          return false;
+        }
+      }
+
+      console.log('Ticket assigned successfully');
       return true;
     } catch (error) {
       console.error('Error in assignTicket:', error);
@@ -657,45 +959,37 @@ export class AdminService {
     try {
       console.log(`🔄 Assigning ticket ${ticketId} to approver ${approverId}`);
       
-      // 1. Update the legacy field for compatibility
-      const { data, error } = await supabase
-        .from('tickets')
-        .update({ assigned_approver: approverId })
-        .eq('id', ticketId);
+      // Check if assignment already exists
+      const { data: existing, error: existsError } = await supabase
+        .from('ticket_assignees')
+        .select('id')
+        .eq('ticket_id', ticketId)
+        .eq('user_id', approverId)
+        .eq('role', 'approver');
 
-      if (error) {
-        console.error('❌ Error assigning ticket to approver:', error);
+      if (existsError) {
+        console.error('Error checking existing approver assignment:', existsError);
         return false;
       }
 
-      // 2. Add to ticket_assignees if not already present
-      try {
-        // Fetch current assignees for this ticket
-        const { data: assigneesData, error: assigneesError } = await supabase
-          .from('ticket_assignees')
-          .select('*')
-          .eq('ticket_id', ticketId)
-          .eq('user_id', approverId)
-          .eq('role', 'approver');
-          
-        if (assigneesError) {
-          console.error('❌ Error checking existing assignees:', assigneesError);
+      // Add assignment if it doesn't exist
+      if (!existing || existing.length === 0) {
+        const { error: assignError } = await TicketService.addAssignee(
+          ticketId, 
+          approverId, 
+          'approver', 
+          approverId, 
+          'System', 
+          'super_admin'
+        );
+        
+        if (assignError) {
+          console.error('Error adding approver assignment:', assignError);
           return false;
         }
-        
-        if (!assigneesData || assigneesData.length === 0) {
-          // Add the approver to ticket_assignees
-          await TicketService.addAssignee(ticketId, approverId, 'approver', approverId, 'System', 'super_admin');
-          console.log(`✅ Successfully added approver ${approverId} to ticket ${ticketId}`);
-        } else {
-          console.log(`ℹ️ Approver ${approverId} already assigned to ticket ${ticketId}`);
-        }
-      } catch (assigneeError) {
-        console.error('❌ Error adding approver to ticket_assignees:', assigneeError);
-        return false;
       }
 
-      console.log('✅ Ticket assigned to approver successfully:', data);
+      console.log('✅ Ticket assigned to approver successfully');
       return true;
     } catch (error) {
       console.error('❌ Error in assignToApprover:', error);
@@ -707,13 +1001,15 @@ export class AdminService {
     try {
       console.log(`🔄 Assigning ticket ${ticketId} to ticket admin ${ticketAdminId}`);
       
-      // Add to ticket_admin_assignments table
+      // Add to ticket_assignees table (using new unified system)
       const { data, error } = await supabase
-        .from('ticket_admin_assignments')
+        .from('ticket_assignees')
         .insert([{
           ticket_id: ticketId,
-          ticket_admin_id: ticketAdminId,
-          assigned_by: ticketAdminId // This will be validated by the trigger
+          user_id: ticketAdminId,
+          role: 'ticket_admin',
+          assigned_at: new Date().toISOString(),
+          performed_by: ticketAdminId
         }]);
 
       if (error) {
@@ -733,11 +1029,12 @@ export class AdminService {
     try {
       console.log(`🔄 Getting tickets assigned to admin ${adminId}`);
       
-      // Get tickets assigned to this ticket admin
+      // Get tickets assigned to this ticket admin using new system
       const { data: assignments, error: assignmentsError } = await supabase
-        .from('ticket_admin_assignments')
+        .from('ticket_assignees')
         .select('ticket_id')
-        .eq('ticket_admin_id', adminId);
+        .eq('user_id', adminId)
+        .eq('role', 'ticket_admin');
 
       if (assignmentsError) {
         console.error('❌ Error fetching ticket admin assignments:', assignmentsError);
@@ -796,18 +1093,18 @@ export class AdminService {
         centreCode: ticket.centre_code,
         city: ticket.city,
         resourceId: ticket.resource_id,
-        awignAppTicketId: ticket.awign_app_ticket_id,
-        issueCategory: ticket.issue_category,
+        awignAppTicketId: (ticket as any).awign_app_ticket_id,
+        issueCategory: ticket.issue_category as any,
         issueDescription: ticket.issue_description,
-        issueDate: ticket.issue_date,
-        severity: ticket.severity,
-        status: ticket.status,
+        issueDate: this.parseIssueDate(ticket.issue_date),
+        severity: ticket.severity as any,
+        status: ticket.status as any,
         isAnonymous: ticket.is_anonymous,
         submittedBy: ticket.submitted_by,
         submittedByUserId: ticket.submitted_by_user_id,
         submittedAt: new Date(ticket.submitted_at),
-        assignedResolver: ticket.assigned_resolver,
-        assignedApprover: ticket.assigned_approver,
+        assignedResolver: null, // Will be populated from ticket_assignees in IssueContext
+        assignedApprover: null, // Will be populated from ticket_assignees in IssueContext
         resolutionNotes: ticket.resolution_notes,
         resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
         comments: (ticket.comments || []).map((comment: any) => ({
@@ -841,16 +1138,16 @@ export class AdminService {
           };
         }),
         issueEvidence: [],
-        reopenCount: ticket.reopen_count || 0,
-        lastReopenedAt: ticket.last_reopened_at ? new Date(ticket.last_reopened_at) : undefined,
-        reopenedBy: ticket.reopened_by,
-        statusChangedAt: ticket.status_changed_at ? new Date(ticket.status_changed_at) : undefined,
-        statusChangedBy: ticket.status_changed_by,
-        deleted: ticket.deleted || false
+        reopenCount: (ticket as any).reopen_count || 0,
+        lastReopenedAt: (ticket as any).last_reopened_at ? new Date((ticket as any).last_reopened_at) : undefined,
+        reopenedBy: (ticket as any).reopened_by,
+        statusChangedAt: (ticket as any).status_changed_at ? new Date((ticket as any).status_changed_at) : undefined,
+        statusChangedBy: (ticket as any).status_changed_by,
+        deleted: (ticket as any).deleted || false
       }));
 
       console.log(`✅ Returning ${mappedTickets.length} tickets assigned to admin ${adminId}`);
-      return mappedTickets;
+      return mappedTickets as unknown as Issue[];
     } catch (error) {
       console.error('❌ Error in getTicketsAssignedToAdmin:', error);
       return [];
@@ -908,6 +1205,13 @@ export class AdminService {
       if (assignmentsError) {
         console.error('Error fetching assignments for analytics:', assignmentsError);
       }
+      
+      // Debug: Check if assignments exist
+      console.log('🔍 Assignments debug:', {
+        assignmentsCount: assignments?.length || 0,
+        assignmentsError: assignmentsError,
+        sampleAssignments: assignments?.slice(0, 3)
+      });
 
       const userMap = new Map();
       if (users) {
@@ -941,12 +1245,36 @@ export class AdminService {
       const sev2Tickets = tickets.filter(t => t.severity === 'sev2').length;
       const sev3Tickets = tickets.filter(t => t.severity === 'sev3').length;
 
-      // Calculate assignments using new ticket_assignees table
-      const assignedTickets = tickets.filter(t => {
-        const ticketAssigns = ticketAssignments.get(t.id);
-        return ticketAssigns && ticketAssigns.some(a => a.role === 'resolver');
-      }).length;
+      // Calculate assignments strictly per request:
+      // totalTickets = unique tickets from tickets table (already computed)
+      // assignedTickets = count of unique ticket_id in ticket_assignees
+      // unassignedTickets = totalTickets - assignedTickets
+      const ticketsSet = new Set<string>(tickets.map(t => (t as any).id));
+      const assignedTicketIds = new Set<string>();
+      if (assignments) {
+        assignments.forEach(a => {
+          const tid = (a as any).ticket_id as string;
+          // Only count if the ticket exists in the current (non-deleted) ticket set
+          if (tid && ticketsSet.has(tid)) {
+            assignedTicketIds.add(tid);
+          }
+        });
+      }
+      const assignedTickets = assignedTicketIds.size;
       const unassignedTickets = Math.max(totalTickets - assignedTickets, 0);
+      
+      // Debug logging
+      console.log('🔍 Analytics Debug:', {
+        totalTickets,
+        assignedTickets,
+        unassignedTickets,
+        ticketsCount: tickets.length,
+        assignmentsCount: assignments?.length || 0,
+        ticketsSetSize: ticketsSet.size,
+        assignedTicketIdsSize: assignedTicketIds.size,
+        sampleAssignments: assignments?.slice(0, 5),
+        sampleTicketIds: Array.from(ticketsSet).slice(0, 5)
+      });
       const slaBreachedTickets = tickets.filter(t => (t as any).isSlaBreached).length;
 
       // Calculate average resolution time (hours)
@@ -1049,7 +1377,7 @@ export class AdminService {
       const openTickets = assignedTickets.filter(t => t.status === 'open').length;
       const inProgressTickets = assignedTickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = assignedTickets.filter(t => t.status === 'resolved').length;
-      const closedTickets = assignedTickets.filter(t => t.status === 'closed').length;
+      const closedTickets = assignedTickets.filter(t => (t as any).status === 'closed').length;
       
       const sev1Tickets = assignedTickets.filter(t => t.severity === 'sev1').length;
       const sev2Tickets = assignedTickets.filter(t => t.severity === 'sev2').length;
@@ -1339,6 +1667,39 @@ export class AdminService {
     try {
       console.log(`🔍 Getting tickets assigned to resolver: ${resolverName}`);
       
+      // First, find the user ID for the resolver name
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .ilike('name', `%${resolverName}%`)
+        .eq('role', 'resolver')
+        .single();
+
+      if (userError || !user) {
+        console.error('❌ Error finding resolver user:', userError);
+        return [];
+      }
+
+      // Get tickets assigned to this resolver using the new assignment system
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('ticket_assignees')
+        .select('ticket_id')
+        .eq('user_id', user.id)
+        .eq('role', 'resolver');
+
+      if (assignmentsError) {
+        console.error('❌ Error fetching resolver assignments:', assignmentsError);
+        return [];
+      }
+
+      if (!assignments || assignments.length === 0) {
+        console.log('ℹ️ No tickets assigned to this resolver');
+        return [];
+      }
+
+      const ticketIds = assignments.map(a => a.ticket_id);
+      
+      // Fetch the actual tickets
       const { data: tickets, error } = await supabase
         .from('tickets')
         .select(`
@@ -1368,7 +1729,7 @@ export class AdminService {
             uploaded_at
           )
         `)
-        .ilike('assigned_resolver', `%${resolverName}%`)
+        .in('id', ticketIds)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -1383,18 +1744,18 @@ export class AdminService {
         centreCode: ticket.centre_code,
         city: ticket.city,
         resourceId: ticket.resource_id,
-        awignAppTicketId: ticket.awign_app_ticket_id,
-        issueCategory: ticket.issue_category,
+        awignAppTicketId: (ticket as any).awign_app_ticket_id,
+        issueCategory: ticket.issue_category as any,
         issueDescription: ticket.issue_description,
-        issueDate: ticket.issue_date,
-        severity: ticket.severity,
-        status: ticket.status,
+        issueDate: this.parseIssueDate(ticket.issue_date),
+        severity: ticket.severity as any,
+        status: ticket.status as any,
         isAnonymous: ticket.is_anonymous,
         submittedBy: ticket.submitted_by,
         submittedByUserId: ticket.submitted_by_user_id,
-        submittedAt: ticket.submitted_at,
-        assignedResolver: ticket.assigned_resolver,
-        assignedApprover: ticket.assigned_approver,
+        submittedAt: new Date(ticket.submitted_at),
+        assignedResolver: null, // Will be populated from ticket_assignees in IssueContext
+        assignedApprover: null, // Will be populated from ticket_assignees in IssueContext
         resolutionNotes: ticket.resolution_notes,
         resolvedAt: ticket.resolved_at,
         createdAt: ticket.created_at,
@@ -1404,7 +1765,7 @@ export class AdminService {
       }));
 
       console.log(`✅ Found ${mappedTickets.length} tickets assigned to resolver: ${resolverName}`);
-      return mappedTickets;
+      return mappedTickets as unknown as Issue[];
     } catch (error) {
       console.error('❌ Error in getTicketsByResolverName:', error);
       return [];

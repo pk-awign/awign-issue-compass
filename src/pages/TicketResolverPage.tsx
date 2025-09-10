@@ -9,6 +9,7 @@ import { useIssues } from '@/contexts/IssueContext';
 import { TicketDetailsModal } from '@/components/TicketDetailsModal';
 import { TicketFilters } from '@/components/TicketFilters';
 import { TicketStatsCards } from '@/components/TicketStatsCards';
+import { NotificationBell } from '@/components/NotificationBell';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Issue } from '@/types/issue';
@@ -62,6 +63,13 @@ export const TicketResolverPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleTicketClick = (ticketId: string) => {
+    const ticket = assignedTickets.find(t => t.id === ticketId);
+    if (ticket) {
+      handleViewTicket(ticket);
+    }
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedTicket(null);
@@ -71,15 +79,66 @@ export const TicketResolverPage: React.FC = () => {
   // Get tickets assigned to current resolver
   const assignedTickets = useMemo(() => {
     if (!user) return [];
-    return issues.filter(issue => {
+    
+    const filtered = issues.filter(issue => {
       // Super admin can see all tickets
       if (user.role === 'super_admin') return true;
-      // Only show tickets assigned to this resolver
-      // Check both the assignees array (if it exists) and the assigned_resolver field
+      // Only show tickets assigned to this resolver using new assignment system
       const hasAssigneeMatch = (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'resolver');
-      const hasResolverMatch = issue.assignedResolver === user.id;
-      return hasAssigneeMatch || hasResolverMatch;
+      
+      // Debug logging for resolver visibility
+      if (user.role === 'resolver' && hasAssigneeMatch) {
+        console.log('🔍 [RESOLVER DEBUG] Ticket visible:', {
+          ticketNumber: issue.ticketNumber,
+          status: issue.status,
+          assignedResolver: issue.assignedResolver,
+          assignees: (issue as IssueWithAssignees).assignees,
+          hasAssigneeMatch,
+          userId: user.id
+        });
+      }
+      
+      return hasAssigneeMatch;
     });
+    
+    // Debug logging for resolver
+    if (user?.role === 'resolver') {
+      console.log('🔍 [RESOLVER DEBUG] Total issues:', issues.length);
+      console.log('🔍 [RESOLVER DEBUG] Filtered resolver tickets:', filtered.length);
+      console.log('🔍 [RESOLVER DEBUG] User ID:', user.id);
+      console.log('🔍 [RESOLVER DEBUG] User name:', user.name);
+      console.log('🔍 [RESOLVER DEBUG] Sample ticket assignments:', issues.slice(0, 5).map(t => ({
+        ticketNumber: t.ticketNumber,
+        assignedResolver: t.assignedResolver,
+        assignees: (t as IssueWithAssignees).assignees
+      })));
+      
+      // Check specifically for the problematic ticket
+      const problematicTicket = issues.find(t => t.id === 'd61dcf47-2abe-41bd-ae0f-ca8bf166670e');
+      if (problematicTicket) {
+        console.log('🔍 [RESOLVER DEBUG] Problematic ticket found:', {
+          ticketId: problematicTicket.id,
+          ticketNumber: problematicTicket.ticketNumber,
+          assignedResolver: problematicTicket.assignedResolver,
+          assignees: (problematicTicket as IssueWithAssignees).assignees,
+          userId: user.id,
+          hasAssigneeMatch: (problematicTicket as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'resolver'),
+          assigneesLength: (problematicTicket as IssueWithAssignees).assignees?.length || 0
+        });
+      } else {
+        console.log('🔍 [RESOLVER DEBUG] Problematic ticket NOT found in issues list');
+      }
+      
+      // Check all tickets with assignments
+      const ticketsWithAssignments = issues.filter(t => (t as IssueWithAssignees).assignees && (t as IssueWithAssignees).assignees!.length > 0);
+      console.log('🔍 [RESOLVER DEBUG] Tickets with assignments:', ticketsWithAssignments.length);
+      console.log('🔍 [RESOLVER DEBUG] Sample tickets with assignments:', ticketsWithAssignments.slice(0, 3).map(t => ({
+        ticketNumber: t.ticketNumber,
+        assignees: (t as IssueWithAssignees).assignees
+      })));
+    }
+    
+    return filtered;
   }, [issues, user]);
 
   // Apply filters
@@ -111,9 +170,13 @@ export const TicketResolverPage: React.FC = () => {
       });
     }
 
-    // Status filter
+    // Status filter (normalize UI value to backend value)
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.status === statusFilter);
+      const statusMap: Record<string, string> = {
+        approval_pending: 'send_for_approval'
+      };
+      const backendStatus = statusMap[statusFilter] || statusFilter;
+      filtered = filtered.filter(ticket => ticket.status === backendStatus);
     }
 
     // Severity filter
@@ -294,6 +357,10 @@ export const TicketResolverPage: React.FC = () => {
   // Get unique cities for filter
   const uniqueCities = Array.from(new Set(assignedTickets.map(ticket => ticket.city)));
 
+  // Get unique values for dynamic filters
+  const uniqueSeverities = Array.from(new Set(assignedTickets.map(ticket => ticket.severity))).filter(Boolean);
+  const uniqueCategories = Array.from(new Set(assignedTickets.map(ticket => ticket.issueCategory))).filter(Boolean);
+
   // Get unique resource IDs for filter
   const uniqueResourceIds = Array.from(new Set(assignedTickets.map(ticket => ticket.resourceId)))
     .filter(id => id && id.trim() !== '')
@@ -302,7 +369,7 @@ export const TicketResolverPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onLogout={handleLogout} />
+      <Header onLogout={handleLogout} onTicketClick={handleTicketClick} />
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-6">
@@ -340,6 +407,10 @@ export const TicketResolverPage: React.FC = () => {
             setDateRange={setDateRange}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
+            uniqueCities={uniqueCities}
+            uniqueResourceIds={uniqueResourceIds}
+            uniqueSeverities={uniqueSeverities}
+            uniqueCategories={uniqueCategories}
           />
 
           {/* Tickets Tabs */}

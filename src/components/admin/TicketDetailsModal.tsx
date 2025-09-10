@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +75,11 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [commentAttachments, setCommentAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Use only new assignment system for display
+  const displayAssignees = useMemo(() => {
+    return assignees;
+  }, [assignees]);
 
   useEffect(() => {
     if (isOpen) {
@@ -311,14 +316,50 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
 
   const handleAddAssignee = async () => {
     if (!ticket?.id || !newAssignee || !user) return;
+    
+    console.log('🔍 [UI ASSIGNMENT DEBUG] handleAddAssignee called:', {
+      ticketId: ticket.id,
+      newAssignee,
+      assigneeRole,
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role
+      }
+    });
+    
     setIsAssigneeLoading(true);
     const selectedUser = allUsers.find(u => u.id === newAssignee);
-    if (!selectedUser) return;
-    await TicketService.addAssignee(ticket.id, newAssignee, assigneeRole, user.id, user.name, user.role);
-    setNewAssignee('');
-    await loadAssignees();
-    await loadTimeline();
-    setIsAssigneeLoading(false);
+    if (!selectedUser) {
+      console.error('❌ [UI ASSIGNMENT DEBUG] Selected user not found:', newAssignee);
+      setIsAssigneeLoading(false);
+      return;
+    }
+    
+    console.log('🔍 [UI ASSIGNMENT DEBUG] Selected user:', selectedUser);
+    
+    try {
+      // Use AdminService methods which update both legacy and new fields
+      if (assigneeRole === 'resolver') {
+        await AdminService.assignTicket({
+          ticketId: ticket.id,
+          assignedTo: newAssignee,
+          type: 'resolver'
+        });
+      } else if (assigneeRole === 'approver') {
+        await AdminService.assignToApprover(ticket.id, newAssignee);
+      }
+      
+      setNewAssignee('');
+      await loadAssignees();
+      await loadTimeline();
+      console.log('✅ [UI ASSIGNMENT DEBUG] Assignment completed successfully');
+    } catch (error) {
+      console.error('❌ [UI ASSIGNMENT DEBUG] Assignment failed:', error);
+      toast.error('Failed to assign user: ' + (error as Error).message);
+    } finally {
+      setIsAssigneeLoading(false);
+    }
   };
 
   const handleRemoveAssignee = async (userId: string, role: string) => {
@@ -608,25 +649,47 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                     <div>
                       <label className="text-sm font-medium text-gray-600">Assigned Resolvers</label>
                       <p className="text-sm">
-                        {assignees.filter(a => a.role === 'resolver').length === 0
-                          ? 'Not assigned'
-                          : assignees.filter(a => a.role === 'resolver').map(a => {
+                        {(() => {
+                          const resolverAssignees = assignees.filter(a => a.role === 'resolver');
+                          if (resolverAssignees.length > 0) {
+                            return resolverAssignees.map(a => {
                               const u = allUsers.find(u => u.id === a.user_id);
                               return u ? `${u.name} (${u.role})` : a.user_id;
-                            }).join(', ')
-                      }
-                    </p>
+                            }).join(', ');
+                          }
+                          // Fallback to legacy fields on the ticket if assignees table is empty
+                          if (ticket.assignedResolverDetails?.name) {
+                            return `${ticket.assignedResolverDetails.name} (${ticket.assignedResolverDetails.role || 'resolver'})`;
+                          }
+                          if (ticket.assignedResolver) {
+                            const u = allUsers.find(u => u.id === ticket.assignedResolver);
+                            return u ? `${u.name} (${u.role})` : ticket.assignedResolver;
+                          }
+                          return 'Not assigned';
+                        })()}
+                      </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Assigned Approvers</label>
                       <p className="text-sm">
-                        {assignees.filter(a => a.role === 'approver').length === 0
-                          ? 'Not assigned'
-                          : assignees.filter(a => a.role === 'approver').map(a => {
+                        {(() => {
+                          const approverAssignees = assignees.filter(a => a.role === 'approver');
+                          if (approverAssignees.length > 0) {
+                            return approverAssignees.map(a => {
                               const u = allUsers.find(u => u.id === a.user_id);
                               return u ? `${u.name} (${u.role})` : a.user_id;
-                            }).join(', ')
-                        }
+                            }).join(', ');
+                          }
+                          // Fallback to legacy fields on the ticket if assignees table is empty
+                          if (ticket.assignedApproverDetails?.name) {
+                            return `${ticket.assignedApproverDetails.name} (${ticket.assignedApproverDetails.role || 'approver'})`;
+                          }
+                          if (ticket.assignedApprover) {
+                            const u = allUsers.find(u => u.id === ticket.assignedApprover);
+                            return u ? `${u.name} (${u.role})` : ticket.assignedApprover;
+                          }
+                          return 'Not assigned';
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -711,7 +774,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
           )}
 
           {/* Management Tab */}
-          {activeTab === 'management' && user?.role === 'super_admin' && (
+          {activeTab === 'management' && user && ['super_admin', 'ticket_admin'].includes(user.role) && (
             <div className="space-y-6">
               {/* Assignment Management - Only for Super Admin */}
               <Card>
@@ -722,10 +785,10 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                   <div>
                     <label className="text-sm font-medium text-gray-600 mb-2 block">Current Assignees</label>
                     <div className="space-y-2">
-                      {assignees.length === 0 ? (
+                      {displayAssignees.length === 0 ? (
                         <p className="text-sm text-gray-500">No assignees</p>
                       ) : (
-                        assignees.map(a => {
+                        displayAssignees.map(a => {
                           const u = allUsers.find(u => u.id === a.user_id);
                           return (
                             <div key={a.user_id + a.role} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg">
@@ -747,7 +810,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="resolver">Resolver</SelectItem>
-                          {user?.role === 'super_admin' && (
+                          {user && ['super_admin', 'ticket_admin'].includes(user.role) && (
                             <SelectItem value="approver">Approver</SelectItem>
                           )}
                         </SelectContent>

@@ -54,6 +54,7 @@ export interface Comment {
   authorRole: 'invigilator' | 'admin' | 'resolver' | 'approver' | 'super_admin' | 'anonymous';
   timestamp: Date;
   isInternal: boolean;
+  isFromInvigilator?: boolean; // New field to track invigilator comments
   attachments?: CommentAttachment[];
 }
 

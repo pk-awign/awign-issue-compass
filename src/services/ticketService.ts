@@ -298,23 +298,23 @@ export class TicketService {
   static getAllowedStatusTransitions(role: string, currentStatus: Issue['status']): Issue['status'][] {
     // Corrected status flow
     const empty: Issue['status'][] = [];
-    // Resolver: OPEN → IN PROGRESS/USER_DEPENDENCY, IN PROGRESS → SEND FOR APPROVAL/OPS INPUT REQUIRED/USER_DEPENDENCY
+    // Resolver: All movements require comments
     const RESOLVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
-      open: ['in_progress', 'user_dependency'],
+      open: ['in_progress'],
       in_progress: ['send_for_approval', 'ops_input_required', 'user_dependency'],
       ops_input_required: ['in_progress', 'user_dependency'],
-      user_dependency: ['in_progress', 'send_for_approval'],
+      user_dependency: ['in_progress'],
       send_for_approval: [],
       approved: [],
       resolved: [],
     };
-    // Approver: SEND FOR APPROVAL → APPROVED/OPS INPUT REQUIRED, APPROVED → RESOLVED
+    // Approver: SEND FOR APPROVAL → APPROVED/IN PROGRESS, APPROVED → RESOLVED
     const APPROVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
       open: [],
       in_progress: [],
       ops_input_required: [],
       user_dependency: [],
-      send_for_approval: ['approved', 'ops_input_required'],
+      send_for_approval: ['approved', 'in_progress'],
       approved: ['resolved'],
       resolved: [],
     };
@@ -727,22 +727,42 @@ export class TicketService {
 
   // --- Log assignment add ---
   static async addAssignee(ticketId: string, userId: string, role: string, performedBy: string, performedByName: string, performedByRole: string) {
-    // Role validation: Only super_admin can assign resolvers
-    if (role === 'resolver' && performedByRole !== 'super_admin') {
-      throw new Error('Only super admins can assign resolvers');
+    console.log('🔍 [ASSIGNMENT DEBUG] addAssignee called with:', {
+      ticketId,
+      userId,
+      role,
+      performedBy,
+      performedByName,
+      performedByRole
+    });
+    
+    // Role validation: Allow super_admin and ticket_admin to assign
+    const allowedAssignRoles = ['super_admin', 'ticket_admin'];
+    if ((role === 'resolver' || role === 'approver') && !allowedAssignRoles.includes(performedByRole || '')) {
+      console.error('❌ [ASSIGNMENT DEBUG] Role validation failed:', {
+        role,
+        performedByRole,
+        allowedAssignRoles
+      });
+      throw new Error('Only super admins or ticket admins can assign');
     }
     
-    // Role validation: Only super_admin can assign approvers
-    if (role === 'approver' && performedByRole !== 'super_admin') {
-      throw new Error('Only super admins can assign approvers');
-    }
+    console.log('✅ [ASSIGNMENT DEBUG] Role validation passed, proceeding with assignment');
 
     const { error } = await supabase.from('ticket_assignees').insert([{
       ticket_id: ticketId,
       user_id: userId,
       role,
-      assigned_at: new Date().toISOString()
+      assigned_at: new Date().toISOString(),
+      performed_by: performedBy
     }]);
+    
+    if (error) {
+      console.error('❌ [ASSIGNMENT DEBUG] Database insert error:', error);
+    } else {
+      console.log('✅ [ASSIGNMENT DEBUG] Assignment inserted successfully');
+    }
+    
     if (!error) {
       await this.addTimelineEvent({
         ticketId,
@@ -768,15 +788,11 @@ export class TicketService {
 
   // --- Log assignment remove ---
   static async removeAssignee(ticketId: string, userId: string, role: string, performedBy: string, performedByName: string, performedByRole: string) {
-    // Role validation: Only super_admin can remove resolver assignments
-    if (role === 'resolver' && performedByRole !== 'super_admin') {
-      throw new Error('Only super admins can remove resolver assignments');
+    // Role validation: Allow super_admin and ticket_admin to remove
+    const allowedRemoveRoles = ['super_admin', 'ticket_admin'];
+    if ((role === 'resolver' || role === 'approver') && !allowedRemoveRoles.includes(performedByRole || '')) {
+      throw new Error('Only super admins or ticket admins can remove assignments');
     }
-    
-    // Role validation: Only super_admin can remove approver assignments
-    if (role === 'approver' && performedByRole !== 'super_admin') {
-      throw new Error('Only super admins can remove approver assignments');
-      }
 
     const { error } = await supabase.from('ticket_assignees').delete().match({ ticket_id: ticketId, user_id: userId, role });
     if (!error) {

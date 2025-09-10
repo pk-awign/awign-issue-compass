@@ -4,14 +4,16 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, Users, LogOut, Shield, UserCog, Home, Menu, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { NotificationBell } from '@/components/NotificationBell';
 import { toast } from 'sonner';
 
 interface HeaderProps {
   onLogout: () => void;
   showRoleSwitcher?: boolean;
+  onTicketClick?: (ticketId: string) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = false }) => {
+export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = false, onTicketClick }) => {
   const { user, isSuperAdmin, isResolver, isApprover, isInvigilator, isTicketAdmin, switchRole } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -91,6 +93,10 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
             
             {user ? (
               <>
+                {/* Show notification bell for resolvers */}
+                {isResolver && onTicketClick && (
+                  <NotificationBell onTicketClick={onTicketClick} />
+                )}
                 <div className="flex items-center gap-2">
                   <RoleIcon className="h-4 w-4" />
                   <span className="text-sm font-medium">{user.name}</span>

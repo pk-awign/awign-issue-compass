@@ -145,15 +145,42 @@ export const ResolutionApproverPage: React.FC = () => {
   // Get tickets for approval based on user's city
   const approverTickets = useMemo(() => {
     if (!user) return [];
-    return issues.filter(issue => {
+    
+    const filtered = issues.filter(issue => {
       // Super admin can see all tickets
       if (user.role === 'super_admin') return true;
-      // Only show tickets assigned to this approver
-      // Check both the assignees array (if it exists) and the assigned_approver field
+      // Show tickets where this user is approver using new assignment system
       const hasAssigneeMatch = (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'approver');
-      const hasApproverMatch = issue.assignedApprover === user.id;
-      return hasAssigneeMatch || hasApproverMatch;
+      
+      // Debug logging for approver visibility
+      if (user.role === 'approver' && hasAssigneeMatch) {
+        console.log('🔍 [APPROVER DEBUG] Ticket visible:', {
+          ticketNumber: issue.ticketNumber,
+          status: issue.status,
+          assignedApprover: issue.assignedApprover,
+          assignees: (issue as IssueWithAssignees).assignees,
+          hasAssigneeMatch,
+          userId: user.id
+        });
+      }
+      
+      return !!hasAssigneeMatch;
     });
+    
+    // Debug logging for approver
+    if (user?.role === 'approver') {
+      console.log('🔍 [APPROVER DEBUG] Total issues:', issues.length);
+      console.log('🔍 [APPROVER DEBUG] Filtered approver tickets:', filtered.length);
+      console.log('🔍 [APPROVER DEBUG] User ID:', user.id);
+      console.log('🔍 [APPROVER DEBUG] User name:', user.name);
+      console.log('🔍 [APPROVER DEBUG] Sample ticket assignments:', issues.slice(0, 5).map(t => ({
+        ticketNumber: t.ticketNumber,
+        assignedApprover: t.assignedApprover,
+        assignees: (t as IssueWithAssignees).assignees
+      })));
+    }
+    
+    return filtered;
   }, [issues, user]);
 
   // Apply filters
@@ -185,9 +212,13 @@ export const ResolutionApproverPage: React.FC = () => {
       });
     }
 
-    // Status filter
+    // Status filter (normalize UI value to backend value)
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.status === statusFilter);
+      const statusMap: Record<string, string> = {
+        approval_pending: 'send_for_approval'
+      };
+      const backendStatus = statusMap[statusFilter] || statusFilter;
+      filtered = filtered.filter(ticket => ticket.status === backendStatus);
     }
 
     // Severity filter
@@ -251,6 +282,10 @@ export const ResolutionApproverPage: React.FC = () => {
 
   // Get unique cities for filter
   const uniqueCities = Array.from(new Set(approverTickets.map(ticket => ticket.city)));
+
+  // Get unique values for dynamic filters
+  const uniqueSeverities = Array.from(new Set(approverTickets.map(ticket => ticket.severity))).filter(Boolean);
+  const uniqueCategories = Array.from(new Set(approverTickets.map(ticket => ticket.issueCategory))).filter(Boolean);
 
   // Get unique resource IDs for filter
   const uniqueResourceIds = Array.from(new Set(approverTickets.map(ticket => ticket.resourceId)))
@@ -440,12 +475,12 @@ export const ResolutionApproverPage: React.FC = () => {
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => handleStatusChange(ticket.id, 'ops_input_required')}
+                      onClick={() => handleStatusChange(ticket.id, 'in_progress')}
                       disabled={isUpdating}
                       className="text-xs"
                     >
                       <ThumbsDown className="h-3 w-3 mr-1" />
-                      Send back to Ops
+                      Send back to CX
                     </Button>
                   )}
                   
@@ -699,6 +734,10 @@ export const ResolutionApproverPage: React.FC = () => {
             setDateRange={setDateRange}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
+            uniqueCities={uniqueCities}
+            uniqueResourceIds={uniqueResourceIds}
+            uniqueSeverities={uniqueSeverities}
+            uniqueCategories={uniqueCategories}
           />
 
           {/* Tickets Tabs */}
@@ -706,19 +745,19 @@ export const ResolutionApproverPage: React.FC = () => {
             <TabsList className="grid grid-cols-2 sm:flex sm:flex-row w-full gap-3 sm:gap-0 bg-white p-2 rounded-xl border shadow-md my-4 z-10">
               <TabsTrigger value="all" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 All
-                <Badge variant="secondary" className="ml-2">{approverTickets.length}</Badge>
+                <Badge variant="secondary" className="ml-2">{ticketsByStatus.all_tickets.length}</Badge>
               </TabsTrigger>
               <TabsTrigger value="approval_pending" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 Approval Pending
-                <Badge variant="secondary" className="ml-2">{approverTickets.filter(t => t.status === 'send_for_approval').length}</Badge>
+                <Badge variant="secondary" className="ml-2">{ticketsByStatus.pending_approval.length}</Badge>
               </TabsTrigger>
               <TabsTrigger value="approved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 Approved
-                <Badge variant="secondary" className="ml-2">{approverTickets.filter(t => t.status === 'approved').length}</Badge>
+                <Badge variant="secondary" className="ml-2">{filteredTickets.filter(t => t.status === 'approved').length}</Badge>
               </TabsTrigger>
               <TabsTrigger value="resolved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 Resolved
-                <Badge variant="secondary" className="ml-2">{approverTickets.filter(t => t.status === 'resolved').length}</Badge>
+                <Badge variant="secondary" className="ml-2">{filteredTickets.filter(t => t.status === 'resolved').length}</Badge>
               </TabsTrigger>
             </TabsList>
 
@@ -728,7 +767,7 @@ export const ResolutionApproverPage: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : approverTickets.length === 0 ? (
+              ) : filteredTickets.length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" />
@@ -740,7 +779,7 @@ export const ResolutionApproverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {approverTickets.map(renderTicketCard)}
+                  {filteredTickets.map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>
@@ -751,7 +790,7 @@ export const ResolutionApproverPage: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : approverTickets.filter(t => t.status === 'send_for_approval').length === 0 ? (
+              ) : ticketsByStatus.pending_approval.length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
@@ -761,7 +800,7 @@ export const ResolutionApproverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {approverTickets.filter(t => t.status === 'send_for_approval').map(renderApprovalCard)}
+                  {ticketsByStatus.pending_approval.map(renderApprovalCard)}
                 </div>
               )}
             </TabsContent>
@@ -772,7 +811,7 @@ export const ResolutionApproverPage: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : approverTickets.filter(t => t.status === 'approved').length === 0 ? (
+              ) : filteredTickets.filter(t => t.status === 'approved').length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
@@ -782,7 +821,7 @@ export const ResolutionApproverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {approverTickets.filter(t => t.status === 'approved').map(renderTicketCard)}
+                  {filteredTickets.filter(t => t.status === 'approved').map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>
@@ -793,7 +832,7 @@ export const ResolutionApproverPage: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : approverTickets.filter(t => t.status === 'resolved').length === 0 ? (
+              ) : filteredTickets.filter(t => t.status === 'resolved').length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
@@ -803,7 +842,7 @@ export const ResolutionApproverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {approverTickets.filter(t => t.status === 'resolved').map(renderTicketCard)}
+                  {filteredTickets.filter(t => t.status === 'resolved').map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>

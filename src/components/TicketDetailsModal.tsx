@@ -361,7 +361,11 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                 {ticket.comments.length > 0 ? (
                   <div className="space-y-3">
                     {[...ticket.comments].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((comment) => (
-                      <div key={comment.id} className="border-l-4 border-blue-200 bg-blue-50 p-3 rounded-r-md">
+                      <div key={comment.id} className={`border-l-4 p-3 rounded-r-md ${
+                        comment.isFromInvigilator 
+                          ? 'border-green-500 bg-green-50' 
+                          : 'border-blue-200 bg-blue-50'
+                      }`}>
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{comment.author}</span>
@@ -371,6 +375,11 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                             {comment.isInternal && (
                               <Badge variant="secondary" className="text-xs">
                                 Internal
+                              </Badge>
+                            )}
+                            {comment.isFromInvigilator && (
+                              <Badge variant="default" className="text-xs bg-green-500">
+                                Invigilator Comment
                               </Badge>
                             )}
                           </div>
