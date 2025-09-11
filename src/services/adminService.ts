@@ -9,11 +9,18 @@ export interface TicketAnalytics {
   inProgressTickets: number;
   resolvedTickets: number;
   closedTickets: number;
+  userDependencyTickets: number;
+  opsInputRequiredTickets: number;
+  approvedTickets: number;
+  sendForApprovalTickets: number;
   sev1Tickets: number;
   sev2Tickets: number;
   sev3Tickets: number;
   assignedTickets: number;
   unassignedTickets: number;
+  unassignedToResolverTickets: number;
+  openTicketsAssignedToResolver: number;
+  openTicketsUnassignedToResolver: number;
   slaBreachedTickets: number;
   avgResolutionHours: number;
   cityBreakdown: Array<{ city: string; count: number }>;
@@ -458,7 +465,7 @@ export class AdminService {
       allTickets.push(...tickets);
       page++;
     }
-
+    
     console.log(`🔍 getAllTicketsUnpaginated completed: ${allTickets.length} tickets fetched`);
     return allTickets;
   }
@@ -653,7 +660,7 @@ export class AdminService {
         totalCount = allMatchingIds.length;
       } else {
         const { count, error: countError } = await countQuery;
-        if (countError) throw countError;
+      if (countError) throw countError;
         totalCount = count;
       }
       
@@ -681,8 +688,8 @@ export class AdminService {
         }
       } else {
         const { data, error: fetchErr } = await query
-          .order('created_at', { ascending: false })
-          .range((page - 1) * limit, page * limit - 1);
+        .order('created_at', { ascending: false })
+        .range((page - 1) * limit, page * limit - 1);
         if (fetchErr) throw fetchErr;
         tickets = data || [];
       }
@@ -714,7 +721,40 @@ export class AdminService {
     const ids: string[] = [];
     const BATCH_SIZE = 1000;
     let page = 1;
+    let resolverAssignedSet: Set<string> | null = null;
+    
     try {
+      // If filtering for unassigned resolver, fetch all resolver assignments first
+      if (filters.onlyUnassignedResolver) {
+        console.log('🔍 Fetching all resolver assignments for filtering...');
+        resolverAssignedSet = new Set<string>();
+        let resolverPage = 1;
+        
+        while (true) {
+          const { data: resolverAssignments, error: resolverError } = await supabase
+            .from('ticket_assignees')
+            .select('ticket_id')
+            .eq('role', 'resolver')
+            .range((resolverPage - 1) * BATCH_SIZE, resolverPage * BATCH_SIZE - 1);
+            
+          if (resolverError) {
+            console.error('❌ Error fetching resolver assignments:', resolverError);
+            break;
+          }
+          
+          if (!resolverAssignments || resolverAssignments.length === 0) break;
+          
+          resolverAssignments.forEach(assignment => {
+            resolverAssignedSet!.add(assignment.ticket_id);
+          });
+          
+          if (resolverAssignments.length < BATCH_SIZE) break;
+          resolverPage += 1;
+        }
+        
+        console.log(`✅ Fetched ${resolverAssignedSet.size} resolver assignments`);
+      }
+      
       while (true) {
         let q = supabase
           .from('tickets')
@@ -788,15 +828,10 @@ export class AdminService {
         if (error) throw error;
         if (!data || data.length === 0) break;
         if (filters.onlyUnassignedResolver) {
-          // Fetch resolver-assigned set once and filter locally
-          const { data: resolverAssigned } = await supabase
-            .from('ticket_assignees')
-            .select('ticket_id')
-            .eq('role', 'resolver');
-          const assignedSet = new Set((resolverAssigned || []).map(r => r.ticket_id));
+          // Use pre-fetched resolver assignments to filter locally
           const unassignedIds = (data as any[])
             .map(r => r.id)
-            .filter((id: string) => !assignedSet.has(id));
+            .filter((id: string) => !resolverAssignedSet!.has(id));
           ids.push(...unassignedIds);
         } else {
           ids.push(...(data as any[]).map(r => r.id));
@@ -961,17 +996,17 @@ export class AdminService {
       
       // Check if assignment already exists
       const { data: existing, error: existsError } = await supabase
-        .from('ticket_assignees')
+          .from('ticket_assignees')
         .select('id')
-        .eq('ticket_id', ticketId)
-        .eq('user_id', approverId)
-        .eq('role', 'approver');
-
+          .eq('ticket_id', ticketId)
+          .eq('user_id', approverId)
+          .eq('role', 'approver');
+          
       if (existsError) {
         console.error('Error checking existing approver assignment:', existsError);
-        return false;
-      }
-
+          return false;
+        }
+        
       // Add assignment if it doesn't exist
       if (!existing || existing.length === 0) {
         const { error: assignError } = await TicketService.addAssignee(
@@ -985,7 +1020,7 @@ export class AdminService {
         
         if (assignError) {
           console.error('Error adding approver assignment:', assignError);
-          return false;
+        return false;
         }
       }
 
@@ -1197,19 +1232,35 @@ export class AdminService {
         console.error('Error fetching users for analytics:', usersError);
       }
 
-      // Get all ticket assignments from the new ticket_assignees table
+      // Get all ticket assignments from the new ticket_assignees table (with pagination)
+      let allAssignments = [];
+      let assignmentPage = 1;
+      const BATCH_SIZE = 1000;
+      
+      while (true) {
       const { data: assignments, error: assignmentsError } = await supabase
         .from('ticket_assignees')
-        .select('*');
+          .select('*')
+          .range((assignmentPage - 1) * BATCH_SIZE, assignmentPage * BATCH_SIZE - 1);
 
       if (assignmentsError) {
         console.error('Error fetching assignments for analytics:', assignmentsError);
+          break;
+        }
+        
+        if (!assignments || assignments.length === 0) break;
+        
+        allAssignments.push(...assignments);
+        
+        if (assignments.length < BATCH_SIZE) break;
+        assignmentPage += 1;
       }
+      
+      const assignments = allAssignments;
       
       // Debug: Check if assignments exist
       console.log('🔍 Assignments debug:', {
         assignmentsCount: assignments?.length || 0,
-        assignmentsError: assignmentsError,
         sampleAssignments: assignments?.slice(0, 3)
       });
 
@@ -1240,6 +1291,10 @@ export class AdminService {
       const inProgressTickets = tickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = tickets.filter(t => t.status === 'resolved').length;
       const closedTickets = tickets.filter(t => (t as any).status === 'closed').length;
+      const userDependencyTickets = tickets.filter(t => t.status === 'user_dependency').length;
+      const opsInputRequiredTickets = tickets.filter(t => t.status === 'ops_input_required').length;
+      const approvedTickets = tickets.filter(t => t.status === 'approved').length;
+      const sendForApprovalTickets = tickets.filter(t => t.status === 'send_for_approval').length;
 
       const sev1Tickets = tickets.filter(t => t.severity === 'sev1').length;
       const sev2Tickets = tickets.filter(t => t.severity === 'sev2').length;
@@ -1251,30 +1306,56 @@ export class AdminService {
       // unassignedTickets = totalTickets - assignedTickets
       const ticketsSet = new Set<string>(tickets.map(t => (t as any).id));
       const assignedTicketIds = new Set<string>();
+      const resolverAssignedTicketIds = new Set<string>();
       if (assignments) {
         assignments.forEach(a => {
           const tid = (a as any).ticket_id as string;
           // Only count if the ticket exists in the current (non-deleted) ticket set
           if (tid && ticketsSet.has(tid)) {
             assignedTicketIds.add(tid);
+            // Also track resolver-specific assignments
+            if ((a as any).role === 'resolver') {
+              resolverAssignedTicketIds.add(tid);
+            }
           }
         });
       }
       const assignedTickets = assignedTicketIds.size;
       const unassignedTickets = Math.max(totalTickets - assignedTickets, 0);
+      const unassignedToResolverTickets = Math.max(totalTickets - resolverAssignedTicketIds.size, 0);
+      
+      // Calculate open tickets assigned/unassigned to resolver
+      const openTicketsAssignedToResolver = tickets.filter(t => 
+        t.status === 'open' && resolverAssignedTicketIds.has((t as any).id)
+      ).length;
+      const openTicketsUnassignedToResolver = openTickets - openTicketsAssignedToResolver;
       
       // Debug logging
       console.log('🔍 Analytics Debug:', {
         totalTickets,
         assignedTickets,
         unassignedTickets,
+        unassignedToResolverTickets,
+        openTickets,
+        openTicketsAssignedToResolver,
+        openTicketsUnassignedToResolver,
         ticketsCount: tickets.length,
         assignmentsCount: assignments?.length || 0,
         ticketsSetSize: ticketsSet.size,
         assignedTicketIdsSize: assignedTicketIds.size,
+        resolverAssignedTicketIdsSize: resolverAssignedTicketIds.size,
         sampleAssignments: assignments?.slice(0, 5),
         sampleTicketIds: Array.from(ticketsSet).slice(0, 5)
       });
+      
+      // Expected numbers based on analysis:
+      // Total Tickets: 2,337
+      // Tickets with at least 1 Resolver: 1,484
+      // Tickets without any Resolver: 853
+      console.log('📊 Expected vs Actual:');
+      console.log(`  Expected Total: 2,337 | Actual: ${totalTickets}`);
+      console.log(`  Expected with Resolver: 1,484 | Actual: ${resolverAssignedTicketIds.size}`);
+      console.log(`  Expected without Resolver: 853 | Actual: ${unassignedToResolverTickets}`);
       const slaBreachedTickets = tickets.filter(t => (t as any).isSlaBreached).length;
 
       // Calculate average resolution time (hours)
@@ -1342,11 +1423,18 @@ export class AdminService {
         inProgressTickets,
         resolvedTickets,
         closedTickets,
+        userDependencyTickets,
+        opsInputRequiredTickets,
+        approvedTickets,
+        sendForApprovalTickets,
         sev1Tickets,
         sev2Tickets,
         sev3Tickets,
         assignedTickets,
         unassignedTickets,
+        unassignedToResolverTickets,
+        openTicketsAssignedToResolver,
+        openTicketsUnassignedToResolver,
         slaBreachedTickets,
         avgResolutionHours,
         cityBreakdown,
@@ -1378,6 +1466,10 @@ export class AdminService {
       const inProgressTickets = assignedTickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = assignedTickets.filter(t => t.status === 'resolved').length;
       const closedTickets = assignedTickets.filter(t => (t as any).status === 'closed').length;
+      const userDependencyTickets = assignedTickets.filter(t => t.status === 'user_dependency').length;
+      const opsInputRequiredTickets = assignedTickets.filter(t => t.status === 'ops_input_required').length;
+      const approvedTickets = assignedTickets.filter(t => t.status === 'approved').length;
+      const sendForApprovalTickets = assignedTickets.filter(t => t.status === 'send_for_approval').length;
       
       const sev1Tickets = assignedTickets.filter(t => t.severity === 'sev1').length;
       const sev2Tickets = assignedTickets.filter(t => t.severity === 'sev2').length;
@@ -1449,11 +1541,18 @@ export class AdminService {
         inProgressTickets,
         resolvedTickets,
         closedTickets,
+        userDependencyTickets,
+        opsInputRequiredTickets,
+        approvedTickets,
+        sendForApprovalTickets,
         sev1Tickets,
         sev2Tickets,
         sev3Tickets,
         assignedTickets: assignedTicketsCount,
         unassignedTickets,
+        unassignedToResolverTickets: 0, // For ticket admin, all tickets are considered assigned
+        openTicketsAssignedToResolver: openTickets, // For ticket admin, all open tickets are assigned
+        openTicketsUnassignedToResolver: 0, // For ticket admin, no unassigned tickets
         slaBreachedTickets,
         avgResolutionHours,
         cityBreakdown,
@@ -1474,11 +1573,18 @@ export class AdminService {
       inProgressTickets: 0,
       resolvedTickets: 0,
       closedTickets: 0,
+      userDependencyTickets: 0,
+      opsInputRequiredTickets: 0,
+      approvedTickets: 0,
+      sendForApprovalTickets: 0,
       sev1Tickets: 0,
       sev2Tickets: 0,
       sev3Tickets: 0,
       assignedTickets: 0,
       unassignedTickets: 0,
+      unassignedToResolverTickets: 0,
+      openTicketsAssignedToResolver: 0,
+      openTicketsUnassignedToResolver: 0,
       slaBreachedTickets: 0,
       avgResolutionHours: 0,
       cityBreakdown: [],

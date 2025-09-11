@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2, MessageSquare } from 'lucide-react';
+import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2, MessageSquare, User, CheckCircle2, Send } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -713,7 +713,7 @@ export const AdminPage: React.FC = () => {
 
             <TabsContent value="overview" className="space-y-6">
               {/* Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <Card>
                   <CardContent className="p-4 text-center">
                     <div className="flex items-center justify-center mb-2">
@@ -731,6 +731,12 @@ export const AdminPage: React.FC = () => {
                     </div>
                     <div className="text-2xl font-bold">{analytics ? analytics.openTickets : '-'}</div>
                     <div className="text-sm text-muted-foreground">Open</div>
+                    {analytics && analytics.openTickets > 0 && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        <div>Assigned: {analytics.openTicketsAssignedToResolver}</div>
+                        <div>Unassigned: {analytics.openTicketsUnassignedToResolver}</div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
                 
@@ -747,20 +753,41 @@ export const AdminPage: React.FC = () => {
                 <Card>
                   <CardContent className="p-4 text-center">
                     <div className="flex items-center justify-center mb-2">
-                      <CheckCircle className="h-8 w-8 text-green-500" />
+                      <Settings className="h-8 w-8 text-purple-500" />
                     </div>
-                    <div className="text-2xl font-bold">{analytics ? analytics.resolvedTickets : '-'}</div>
-                    <div className="text-sm text-muted-foreground">Resolved</div>
+                    <div className="text-2xl font-bold">
+                      {(analytics ? analytics.userDependencyTickets : 0) + 
+                       (analytics ? analytics.opsInputRequiredTickets : 0) + 
+                       (analytics ? analytics.sendForApprovalTickets : 0)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Pending Actions</div>
+                    {analytics && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        <div>User Dep: {analytics.userDependencyTickets}</div>
+                        <div>Ops Input: {analytics.opsInputRequiredTickets}</div>
+                        <div>Send Approval: {analytics.sendForApprovalTickets}</div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-
+                
                 <Card>
                   <CardContent className="p-4 text-center">
                     <div className="flex items-center justify-center mb-2">
-                      <TrendingUp className="h-8 w-8 text-orange-500" />
+                      <CheckCircle2 className="h-8 w-8 text-green-500" />
                     </div>
-                    <div className="text-2xl font-bold">{analytics ? analytics.unassignedTickets : '-'}</div>
-                    <div className="text-sm text-muted-foreground">Unassigned</div>
+                    <div className="text-2xl font-bold">{analytics ? analytics.approvedTickets : '-'}</div>
+                    <div className="text-sm text-muted-foreground">Approved</div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center mb-2">
+                      <CheckCircle className="h-8 w-8 text-emerald-500" />
+                    </div>
+                    <div className="text-2xl font-bold">{analytics ? analytics.resolvedTickets : '-'}</div>
+                    <div className="text-sm text-muted-foreground">Resolved</div>
                   </CardContent>
                 </Card>
               </div>
@@ -1074,7 +1101,7 @@ export const AdminPage: React.FC = () => {
                     onCheckedChange={(checked) => setOnlyUnassignedResolver(checked)}
                   />
                   <label htmlFor="only-unassigned-resolver" className="text-sm font-medium">
-                    Only unassigned to resolver
+                    Unassigned Tickets
                   </label>
                 </div>
                 <div className="flex flex-wrap gap-2">

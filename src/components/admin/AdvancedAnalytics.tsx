@@ -94,6 +94,10 @@ export const AdvancedAnalytics: React.FC = () => {
   const statusData = [
     { name: 'Open', value: analytics.openTickets, color: '#ef4444' },
     { name: 'In Progress', value: analytics.inProgressTickets, color: '#f97316' },
+    { name: 'User Dependency', value: analytics.userDependencyTickets, color: '#8b5cf6' },
+    { name: 'Ops Input Required', value: analytics.opsInputRequiredTickets, color: '#f59e0b' },
+    { name: 'Approved', value: analytics.approvedTickets, color: '#10b981' },
+    { name: 'Send for Approval', value: analytics.sendForApprovalTickets, color: '#3b82f6' },
     { name: 'Resolved', value: analytics.resolvedTickets, color: '#22c55e' },
     { name: 'Closed', value: analytics.closedTickets, color: '#6b7280' },
   ].filter(item => item.value > 0); // Only show non-zero values
