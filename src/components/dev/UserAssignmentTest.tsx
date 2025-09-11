@@ -1,131 +1,136 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useIssues } from '../../contexts/IssueContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Badge } from '../ui/badge';
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { AdminService } from '@/services/adminService';
+import { toast } from 'sonner';
 
 export const UserAssignmentTest: React.FC = () => {
-  const { user } = useAuth();
-  const { issues } = useIssues();
-  const [userTickets, setUserTickets] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (!user || !issues) return;
-
-    // Filter tickets assigned to current user
-    const assignedTickets = issues.filter(issue => {
-      // Check both assignees array and direct assignment fields
-      const hasAssigneeMatch = (issue as any).assignees?.some((a: any) => a.user_id === user.id);
-      const hasResolverMatch = issue.assignedResolver === user.id;
-      const hasApproverMatch = issue.assignedApprover === user.id;
-      
-      return hasAssigneeMatch || hasResolverMatch || hasApproverMatch;
-    });
-
-    setUserTickets(assignedTickets);
-  }, [user, issues]);
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open': return 'bg-blue-100 text-blue-800';
-      case 'in_progress': return 'bg-yellow-100 text-yellow-800';
-      case 'ops_input_required': return 'bg-purple-100 text-purple-800';
-      case 'send_for_approval': return 'bg-orange-100 text-orange-800';
-      case 'approved': return 'bg-green-100 text-green-800';
-      case 'resolved': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'open': return 'bg-green-500';
+      case 'in_progress': return 'bg-yellow-500';
+      case 'resolved': return 'bg-blue-500';
+      default: return 'bg-gray-500';
     }
   };
 
-  const getAssignmentType = (issue: any) => {
-    if (issue.assignedResolver === user?.id) return 'Resolver';
-    if (issue.assignedApprover === user?.id) return 'Approver';
-    if ((issue as any).assignees?.some((a: any) => a.user_id === user?.id)) {
-      const assignee = (issue as any).assignees.find((a: any) => a.user_id === user?.id);
-      return assignee?.role || 'Assignee';
+  const testAssignments = async () => {
+    setLoading(true);
+    try {
+      console.log('🔍 [ASSIGNMENT TEST] Starting user assignment test...');
+      
+      const ticketResult = await AdminService.getAllTickets();
+      const tickets = ticketResult.tickets;
+      console.log('🔍 [ASSIGNMENT TEST] Retrieved tickets with assignees:', tickets.length);
+      
+      const assignedTickets = tickets.filter(ticket => 
+        ticket.assignedResolver || ticket.assignedApprover || ticket.assignedTicketAdmin
+      );
+      
+      console.log('🔍 [ASSIGNMENT TEST] Assigned tickets:', assignedTickets.length);
+      
+      setResult({
+        totalTickets: tickets.length,
+        assignedTickets: assignedTickets.length,
+        unassignedTickets: tickets.length - assignedTickets.length,
+        tickets: tickets.slice(0, 10), // Show first 10 for testing
+        statusBreakdown: tickets.reduce((acc, ticket) => {
+          acc[ticket.status] = (acc[ticket.status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      });
+      
+      toast.success(`Test completed! Found ${assignedTickets.length} assigned tickets`);
+      
+    } catch (error: any) {
+      console.error('❌ [ASSIGNMENT TEST] Error:', error);
+      toast.error('Assignment test failed');
+      setResult({ error: error?.message || 'Unknown error' });
+    } finally {
+      setLoading(false);
     }
-    return 'Unknown';
   };
 
-  if (!user) {
-    return <div>Please log in to see your assigned tickets.</div>;
-  }
+  const clearResults = () => {
+    setResult(null);
+  };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle>User Assignment Test - {user.name}</CardTitle>
-          <p className="text-sm text-gray-600">
-            User ID: {user.id} | Role: {user.role}
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold mb-2">
-              📊 Total Assigned Tickets: {userTickets.length}
-            </h3>
-            
-            {/* Status breakdown */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {Object.entries(
-                userTickets.reduce((acc, ticket) => {
-                  acc[ticket.status] = (acc[ticket.status] || 0) + 1;
-                  return acc;
-                }, {} as Record<string, number>)
-              ).map(([status, count]) => (
-                <Badge key={status} className={getStatusColor(status)}>
-                  {status}: {count}
-                </Badge>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>🧪 User Assignment Test</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2">
+          <Button onClick={testAssignments} disabled={loading}>
+            {loading ? 'Testing...' : 'Test User Assignments'}
+          </Button>
+          {result && (
+            <Button variant="outline" onClick={clearResults}>
+              Clear Results
+            </Button>
+          )}
+        </div>
+
+        {result && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-3 bg-blue-50 rounded">
+                <div className="font-semibold">Total Tickets</div>
+                <div className="text-2xl">{result.totalTickets || 0}</div>
+              </div>
+              <div className="p-3 bg-green-50 rounded">
+                <div className="font-semibold">Assigned</div>
+                <div className="text-2xl">{result.assignedTickets || 0}</div>
+              </div>
+              <div className="p-3 bg-red-50 rounded">
+                <div className="font-semibold">Unassigned</div>
+                <div className="text-2xl">{result.unassignedTickets || 0}</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="font-semibold">Status Breakdown:</div>
+              <div className="flex flex-wrap gap-2">
+                {result.statusBreakdown && Object.entries(
+                  result.statusBreakdown as Record<string, number>
+                ).map(([status, count]) => (
+                  <Badge key={status} className={getStatusColor(status)}>
+                    {status}: {count}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">📋 Sample Tickets:</h3>
+              {result.tickets && result.tickets.slice(0, 5).map((ticket: any) => (
+                <div key={ticket.id} className="p-3 border rounded">
+                  <div className="font-medium">{ticket.ticketNumber}</div>
+                  <div className="text-sm text-gray-600">
+                    {ticket.issueCategory} - {ticket.city}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Resolver: {ticket.assignedResolver || 'Unassigned'} | 
+                    Approver: {ticket.assignedApprover || 'Unassigned'}
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
 
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">📋 Assigned Tickets:</h3>
-            {userTickets.length === 0 ? (
-              <div className="text-gray-500">No tickets assigned to this user.</div>
-            ) : (
-              userTickets.map((ticket, index) => (
-                <Card key={ticket.id} className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-medium">{ticket.ticketNumber}</h4>
-                    <div className="flex gap-2">
-                      <Badge className={getStatusColor(ticket.status)}>
-                        {ticket.status}
-                      </Badge>
-                      <Badge variant="outline">
-                        {getAssignmentType(ticket)}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-600">
-                    <div><strong>Severity:</strong> {ticket.severity}</div>
-                    <div><strong>City:</strong> {ticket.city}</div>
-                    <div><strong>Centre:</strong> {ticket.centreCode}</div>
-                    <div><strong>Created:</strong> {new Date(ticket.createdAt).toLocaleDateString()}</div>
-                  </div>
-                  <div className="mt-2 text-sm">
-                    <strong>Description:</strong> {ticket.issueDescription.substring(0, 100)}
-                    {ticket.issueDescription.length > 100 && '...'}
-                  </div>
-                  
-                  {/* Debug info */}
-                  <div className="mt-2 text-xs text-gray-500 border-t pt-2">
-                    <strong>Debug Info:</strong>
-                    <br />
-                    assignedResolver: {ticket.assignedResolver || 'null'}
-                    <br />
-                    assignedApprover: {ticket.assignedApprover || 'null'}
-                    <br />
-                    assignees: {JSON.stringify((ticket as any).assignees || [])}
-                  </div>
-                </Card>
-              ))
+            {result.error && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded">
+                <div className="font-semibold text-red-800">Error:</div>
+                <div className="text-red-700">{String(result.error)}</div>
+              </div>
             )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };

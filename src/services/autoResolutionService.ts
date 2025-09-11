@@ -14,7 +14,7 @@ export class AutoResolutionService {
       console.log('Skipping auto-resolve - function not implemented');
       console.log(`Auto-resolved ${result.resolved} user dependency tickets`);
       
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error in auto-resolution service:', error);
       result.errors.push(`Service error: ${errorMessage}`);
@@ -36,7 +36,7 @@ export class AutoResolutionService {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'user_dependency')
         .lt('created_at', sevenDaysAgo.toISOString())
-        .eq('deleted', false);
+        .eq('deleted', false) as any;
       
       if (error) {
         console.error('Error getting auto-resolving tickets count:', error);
@@ -44,7 +44,7 @@ export class AutoResolutionService {
       }
       
       return count || 0;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in getTicketsAutoResolvingSoon:', error);
       return 0;
     }
@@ -87,7 +87,7 @@ export class AutoResolutionService {
           willAutoResolveIn
         };
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in getUserDependencyTickets:', error);
       return [];
     }

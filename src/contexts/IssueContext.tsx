@@ -346,7 +346,18 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           comments: sortedComments,
           attachments,
           issueEvidence: [],
-          assignees: assigneesByTicket[ticket.id] || [],
+          assignees: {
+            resolver: resolverAssignment ? { 
+              name: resolverAssignment.name || 'Unknown', 
+              role: 'resolver', 
+              id: resolverAssignment.user_id 
+            } : undefined,
+            approver: approverAssignment ? { 
+              name: approverAssignment.name || 'Unknown', 
+              role: 'approver', 
+              id: approverAssignment.user_id 
+            } : undefined
+          },
         };
       });
 
