@@ -65,6 +65,29 @@ export const ResolutionApproverPage: React.FC = () => {
   const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
+  // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
+  const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
+    const raw: any = (issue as any).assignees;
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      return raw.filter(Boolean);
+    }
+    if (typeof raw === 'object') {
+      return Object.values(raw)
+        .filter(Boolean)
+        .map((a: any) => ({ user_id: a?.id ?? a?.user_id, role: a?.role }))
+        .filter((a: any) => a?.user_id && a?.role);
+    }
+    return [];
+  };
+
+  const getResolverIdList = (ticket: Issue): string => {
+    const ids = getAllAssignees(ticket)
+      .filter(a => a.role === 'resolver')
+      .map(a => a.user_id);
+    return ids.length ? ids.join(', ') : 'Unassigned';
+  };
+
   useEffect(() => {
     refreshIssues();
   }, []);
@@ -150,7 +173,7 @@ export const ResolutionApproverPage: React.FC = () => {
       // Super admin can see all tickets
       if (user.role === 'super_admin') return true;
       // Show tickets where this user is approver using new assignment system
-      const hasAssigneeMatch = (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'approver');
+      const hasAssigneeMatch = getAllAssignees(issue).some(a => a.user_id === user.id && a.role === 'approver');
       
       // Debug logging for approver visibility
       if (user.role === 'approver' && hasAssigneeMatch) {
@@ -158,7 +181,7 @@ export const ResolutionApproverPage: React.FC = () => {
           ticketNumber: issue.ticketNumber,
           status: issue.status,
           assignedApprover: issue.assignedApprover,
-          assignees: (issue as IssueWithAssignees).assignees,
+          assignees: (issue as any).assignees,
           hasAssigneeMatch,
           userId: user.id
         });
@@ -394,7 +417,7 @@ export const ResolutionApproverPage: React.FC = () => {
                     <UserCheck className="h-3 w-3" />
                     <span>Resolved by:</span>
                   </div>
-                  <div>Assigned Resolvers: {(ticket as IssueWithAssignees).assignees?.filter(a => a.role === 'resolver').map(a => a.user_id).join(', ') || 'Unassigned'}</div>
+                  <div>Assigned Resolvers: {getResolverIdList(ticket)}</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1 text-muted-foreground">
@@ -571,7 +594,7 @@ export const ResolutionApproverPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <User className="h-3 w-3" />
-                  <span>Assigned to: {(ticket as IssueWithAssignees).assignees?.filter(a => a.role === 'resolver').map(a => a.user_id).join(', ') || 'Unassigned'}</span>
+                  <span>Assigned to: {getResolverIdList(ticket)}</span>
                 </div>
                 {ticket.status === 'resolved' && (
                   <ArrowRight className="h-3 w-3 text-orange-500" />
