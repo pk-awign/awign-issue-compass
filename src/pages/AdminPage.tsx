@@ -88,6 +88,22 @@ export const AdminPage: React.FC = () => {
   const [onlyUnassignedResolver, setOnlyUnassignedResolver] = useState<boolean>(false);
   const [downloadAll, setDownloadAll] = useState(false);
 
+  // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
+  const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
+    const raw: any = (issue as any).assignees;
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      return raw.filter(Boolean);
+    }
+    if (typeof raw === 'object') {
+      return Object.values(raw)
+        .filter(Boolean)
+        .map((a: any) => ({ user_id: a?.id ?? a?.user_id, role: a?.role }))
+        .filter((a: any) => a?.user_id && a?.role);
+    }
+    return [];
+  };
+
   // Pagination states
   const [page, setPage] = useState(1);
   const limit = 50;
@@ -121,7 +137,7 @@ export const AdminPage: React.FC = () => {
   const availableResolverIds = useMemo(() => {
     const ids = new Set<string>();
     filteredTickets.forEach(t => {
-      (t as IssueWithAssignees).assignees?.forEach(a => {
+      getAllAssignees(t).forEach(a => {
         if (a.role === 'resolver') ids.add(a.user_id);
       });
     });
@@ -131,7 +147,7 @@ export const AdminPage: React.FC = () => {
   const availableApproverIds = useMemo(() => {
     const ids = new Set<string>();
     filteredTickets.forEach(t => {
-      (t as IssueWithAssignees).assignees?.forEach(a => {
+      getAllAssignees(t).forEach(a => {
         if (a.role === 'approver') ids.add(a.user_id);
       });
     });

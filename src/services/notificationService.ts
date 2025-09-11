@@ -92,10 +92,17 @@ export class NotificationService {
         // Check if this is a new invigilator comment
         if (latestComment.isFromInvigilator) {
           // Only create notifications for tickets assigned to the current user
-          const isAssignedToUser = currentUserId && (
+          const raw = (ticket as any).assignees;
+          const normalized = Array.isArray(raw)
+            ? raw
+            : (raw && typeof raw === 'object')
+              ? Object.values(raw).map((a: any) => ({ user_id: a?.id ?? a?.user_id, role: a?.role }))
+              : [];
+
+          const isAssignedToUser = !!currentUserId && (
             ticket.assignedResolver === currentUserId ||
             ticket.assignedApprover === currentUserId ||
-            (ticket as any).assignees?.some((a: any) => a.user_id === currentUserId)
+            normalized.some((a: any) => a.user_id === currentUserId)
           );
           
           if (isAssignedToUser) {

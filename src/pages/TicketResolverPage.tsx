@@ -48,6 +48,22 @@ export const TicketResolverPage: React.FC = () => {
   const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
+  // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
+  const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
+    const raw: any = (issue as any).assignees;
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      return raw.filter(Boolean);
+    }
+    if (typeof raw === 'object') {
+      return Object.values(raw)
+        .filter(Boolean)
+        .map((a: any) => ({ user_id: a?.id ?? a?.user_id, role: a?.role }))
+        .filter((a: any) => a?.user_id && a?.role);
+    }
+    return [];
+  };
+
   useEffect(() => {
     refreshIssues();
   }, []);
@@ -84,7 +100,7 @@ export const TicketResolverPage: React.FC = () => {
       // Super admin can see all tickets
       if (user.role === 'super_admin') return true;
       // Only show tickets assigned to this resolver using new assignment system
-      const hasAssigneeMatch = (issue as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'resolver');
+      const hasAssigneeMatch = getAllAssignees(issue).some(a => a.user_id === user.id && a.role === 'resolver');
       
       // Debug logging for resolver visibility
       if (user.role === 'resolver' && hasAssigneeMatch) {
@@ -92,7 +108,7 @@ export const TicketResolverPage: React.FC = () => {
           ticketNumber: issue.ticketNumber,
           status: issue.status,
           assignedResolver: issue.assignedResolver,
-          assignees: (issue as IssueWithAssignees).assignees,
+          assignees: (issue as any).assignees,
           hasAssigneeMatch,
           userId: user.id
         });
@@ -120,21 +136,21 @@ export const TicketResolverPage: React.FC = () => {
           ticketId: problematicTicket.id,
           ticketNumber: problematicTicket.ticketNumber,
           assignedResolver: problematicTicket.assignedResolver,
-          assignees: (problematicTicket as IssueWithAssignees).assignees,
+          assignees: (problematicTicket as any).assignees,
           userId: user.id,
-          hasAssigneeMatch: (problematicTicket as IssueWithAssignees).assignees?.some(a => a.user_id === user.id && a.role === 'resolver'),
-          assigneesLength: (problematicTicket as IssueWithAssignees).assignees?.length || 0
+          hasAssigneeMatch: getAllAssignees(problematicTicket).some(a => a.user_id === user.id && a.role === 'resolver'),
+          assigneesLength: getAllAssignees(problematicTicket).length
         });
       } else {
         console.log('🔍 [RESOLVER DEBUG] Problematic ticket NOT found in issues list');
       }
       
       // Check all tickets with assignments
-      const ticketsWithAssignments = issues.filter(t => (t as IssueWithAssignees).assignees && (t as IssueWithAssignees).assignees!.length > 0);
+      const ticketsWithAssignments = issues.filter(t => getAllAssignees(t).length > 0);
       console.log('🔍 [RESOLVER DEBUG] Tickets with assignments:', ticketsWithAssignments.length);
       console.log('🔍 [RESOLVER DEBUG] Sample tickets with assignments:', ticketsWithAssignments.slice(0, 3).map(t => ({
         ticketNumber: t.ticketNumber,
-        assignees: (t as IssueWithAssignees).assignees
+        assignees: (t as any).assignees
       })));
     }
     
