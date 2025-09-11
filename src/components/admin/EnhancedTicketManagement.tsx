@@ -11,6 +11,7 @@ import { Issue, TimelineEvent, StatusTransition } from '../../types/issue';
 import { TicketService } from '../../services/ticketService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
+import { formatRole, getTimelineDescription } from '../../utils/timelineUtils';
 import { 
   Clock, 
   User, 
@@ -327,23 +328,15 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
                             {event.performedByName || 'System'}
                           </span>
                           <Badge variant="outline" className="text-xs">
-                            {event.performedByRole || 'system'}
+                            {formatRole(event.performedByRole || 'system')}
                           </Badge>
                           <span className="text-xs text-gray-500">
                             {formatDate(event.createdAt)}
                           </span>
                         </div>
                         <p className="text-sm text-gray-600 mt-1">
-                          {event.eventType.replace('_', ' ').toUpperCase()}
-                          {event.oldValue && event.newValue && (
-                            <span>: {event.oldValue} → {event.newValue}</span>
-                          )}
+                          {getTimelineDescription(event)}
                         </p>
-                        {event.details && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            {JSON.stringify(event.details)}
-                          </p>
-                        )}
                       </div>
                     </div>
                   ))

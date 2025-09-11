@@ -37,6 +37,7 @@ import { TicketService } from '@/services/ticketService';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatRole, getTimelineDescription, formatEventType } from '@/utils/timelineUtils';
 
 interface TicketDetailsModalProps {
   isOpen: boolean;
@@ -943,15 +944,13 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
                               <span className="font-medium text-sm">{event.performedByName || 'System'}</span>
                               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                {event.eventType.replace('_', ' ')}
+                                {formatEventType(event.eventType)}
                               </span>
                               <span className="text-xs text-gray-400 sm:ml-auto">{formatDate(new Date(event.createdAt))}</span>
                             </div>
-                            {event.details && (
-                              <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded text-wrap break-words">
-                                {typeof event.details === 'string' ? event.details : JSON.stringify(event.details, null, 2)}
-                              </div>
-                            )}
+                            <div className="text-sm text-gray-700">
+                              {getTimelineDescription(event)}
+                            </div>
                           </div>
                         );
                       } else {
@@ -962,15 +961,16 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
                               <span className="font-medium text-sm">{raw.performed_by || 'System'}</span>
                               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                {(raw.action_type || '').replace('_', ' ')}
+                                {formatEventType(raw.action_type || '')}
                               </span>
                               <span className="text-xs text-gray-400 sm:ml-auto">{formatDate(new Date(raw.performed_at))}</span>
                             </div>
-                            {raw.details && (
-                              <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded text-wrap break-words">
-                                {typeof raw.details === 'string' ? raw.details : JSON.stringify(raw.details, null, 2)}
-                              </div>
-                            )}
+                            <div className="text-sm text-gray-700">
+                              {raw.old_value && raw.new_value ? 
+                                `${formatEventType(raw.action_type)}: "${raw.old_value}" → "${raw.new_value}"` :
+                                formatEventType(raw.action_type)
+                              }
+                            </div>
                           </div>
                         );
                       }
