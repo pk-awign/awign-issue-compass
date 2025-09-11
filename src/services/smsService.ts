@@ -195,7 +195,7 @@ Escalation Portal -Awign`,
         }
       };
 
-      const success = await this.sendSMSMessage(messageData);
+      const success = await this.sendSMSMessageViaProxy('sendTicketCreationNotification', smsData);
       
       if (success) {
         console.log('✅ [SMS SERVICE] Ticket creation SMS sent to:', smsData.name);

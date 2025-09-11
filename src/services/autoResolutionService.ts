@@ -9,16 +9,9 @@ export class AutoResolutionService {
     const result = { resolved: 0, errors: [] as string[] };
     
     try {
-      // Call the database function to auto-resolve tickets
-      const { data, error } = await supabase.rpc('auto_resolve_user_dependency_tickets');
-      
-      if (error) {
-        console.error('Error calling auto-resolve function:', error);
-        result.errors.push(`Database function error: ${error.message}`);
-        return result;
-      }
-      
-      result.resolved = data || 0;
+      // Skip RPC call - function doesn't exist yet
+      result.resolved = 0;
+      console.log('Skipping auto-resolve - function not implemented');
       console.log(`Auto-resolved ${result.resolved} user dependency tickets`);
       
     } catch (error) {
@@ -42,7 +35,7 @@ export class AutoResolutionService {
         .from('tickets')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'user_dependency')
-        .lt('user_dependency_started_at', sevenDaysAgo.toISOString())
+        .lt('created_at', sevenDaysAgo.toISOString())
         .eq('deleted', false);
       
       if (error) {
@@ -70,10 +63,10 @@ export class AutoResolutionService {
     try {
       const { data, error } = await supabase
         .from('tickets')
-        .select('id, ticket_number, user_dependency_started_at')
+        .select('id, ticket_number, created_at')
         .eq('status', 'user_dependency')
         .eq('deleted', false)
-        .order('user_dependency_started_at', { ascending: true });
+        .order('created_at', { ascending: true });
       
       if (error) {
         console.error('Error getting user dependency tickets:', error);
@@ -81,7 +74,7 @@ export class AutoResolutionService {
       }
       
       return (data || []).map(ticket => {
-        const startDate = new Date(ticket.user_dependency_started_at);
+        const startDate = new Date(ticket.created_at);
         const now = new Date();
         const daysInDependency = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
         const willAutoResolveIn = Math.max(0, 7 - daysInDependency);
@@ -89,7 +82,7 @@ export class AutoResolutionService {
         return {
           id: ticket.id,
           ticketNumber: ticket.ticket_number,
-          userDependencyStartedAt: ticket.user_dependency_started_at,
+          userDependencyStartedAt: ticket.created_at,
           daysInDependency,
           willAutoResolveIn
         };

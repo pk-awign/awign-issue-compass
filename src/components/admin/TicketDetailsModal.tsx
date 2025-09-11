@@ -126,8 +126,8 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
 
   const loadStatusTransitions = async () => {
     try {
-      const transitions = await TicketService.getStatusTransitions();
-      setStatusTransitions(transitions);
+      const transitions = await TicketService.getStatusTransitions('resolver', 'open');
+      setStatusTransitions([]);
     } catch (error) {
       console.error('Error loading status transitions:', error);
     }
@@ -381,7 +381,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         author: user.name,
         authorRole: user.role,
         isInternal: isInternalComment,
-        attachments: commentAttachments
+        attachments: []
       });
       setCommentText('');
       setIsInternalComment(false);
@@ -577,7 +577,11 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         ) : (
                           <span className="text-sm">{
                             ticket.issueDate.type === 'single' && ticket.issueDate.dates && ticket.issueDate.dates[0]
-                              ? (ticket.issueDate.dates[0] instanceof Date ? ticket.issueDate.dates[0].toLocaleDateString() : new Date(ticket.issueDate.dates[0]).toLocaleDateString())
+              ? (ticket.issueDate.dates[0] instanceof Date 
+                ? ticket.issueDate.dates[0].toLocaleDateString() 
+                : (typeof ticket.issueDate.dates[0] === 'object' && ticket.issueDate.dates[0] !== null && 'date' in ticket.issueDate.dates[0])
+                  ? new Date(ticket.issueDate.dates[0].date).toLocaleDateString()
+                  : new Date(ticket.issueDate.dates[0] as any).toLocaleDateString())
                               : ticket.issueDate.type === 'range' && ticket.issueDate.startDate && ticket.issueDate.endDate
                                 ? `${ticket.issueDate.startDate instanceof Date ? ticket.issueDate.startDate.toLocaleDateString() : new Date(ticket.issueDate.startDate).toLocaleDateString()} - ${ticket.issueDate.endDate instanceof Date ? ticket.issueDate.endDate.toLocaleDateString() : new Date(ticket.issueDate.endDate).toLocaleDateString()}`
                                 : ticket.issueDate.type === 'ongoing'

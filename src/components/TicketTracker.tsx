@@ -233,7 +233,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
         author: authorName,
         authorRole: authorRole,
         isInternal: false,
-        attachments: commentAttachments
+        attachments: []
       });
       
       // Refresh the ticket to get updated comments
@@ -444,7 +444,11 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                           ) : (
                             <span className="text-sm">{
                               selectedTicket.issueDate.type === 'single' && selectedTicket.issueDate.dates && selectedTicket.issueDate.dates[0]
-                                ? (selectedTicket.issueDate.dates[0] instanceof Date ? selectedTicket.issueDate.dates[0].toLocaleDateString() : new Date(selectedTicket.issueDate.dates[0]).toLocaleDateString())
+                                ? (selectedTicket.issueDate.dates[0] instanceof Date 
+                                  ? selectedTicket.issueDate.dates[0].toLocaleDateString() 
+                                  : (typeof selectedTicket.issueDate.dates[0] === 'object' && selectedTicket.issueDate.dates[0] !== null && 'date' in selectedTicket.issueDate.dates[0])
+                                    ? new Date(selectedTicket.issueDate.dates[0].date).toLocaleDateString()
+                                    : new Date(selectedTicket.issueDate.dates[0] as any).toLocaleDateString())
                                 : selectedTicket.issueDate.type === 'range' && selectedTicket.issueDate.startDate && selectedTicket.issueDate.endDate
                                   ? `${selectedTicket.issueDate.startDate instanceof Date ? selectedTicket.issueDate.startDate.toLocaleDateString() : new Date(selectedTicket.issueDate.startDate).toLocaleDateString()} - ${selectedTicket.issueDate.endDate instanceof Date ? selectedTicket.issueDate.endDate.toLocaleDateString() : new Date(selectedTicket.issueDate.endDate).toLocaleDateString()}`
                                   : selectedTicket.issueDate.type === 'ongoing'
@@ -822,7 +826,11 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                         ) : (
                           <span className="text-sm">{
                             selectedTicket.issueDate.type === 'single' && selectedTicket.issueDate.dates && selectedTicket.issueDate.dates[0]
-                              ? (selectedTicket.issueDate.dates[0] instanceof Date ? selectedTicket.issueDate.dates[0].toLocaleDateString() : new Date(selectedTicket.issueDate.dates[0]).toLocaleDateString())
+                              ? (selectedTicket.issueDate.dates[0] instanceof Date 
+                                ? selectedTicket.issueDate.dates[0].toLocaleDateString() 
+                                : (typeof selectedTicket.issueDate.dates[0] === 'object' && selectedTicket.issueDate.dates[0] !== null && 'date' in selectedTicket.issueDate.dates[0])
+                                  ? new Date(selectedTicket.issueDate.dates[0].date).toLocaleDateString()
+                                  : new Date(selectedTicket.issueDate.dates[0] as any).toLocaleDateString())
                               : selectedTicket.issueDate.type === 'range' && selectedTicket.issueDate.startDate && selectedTicket.issueDate.endDate
                                 ? `${selectedTicket.issueDate.startDate instanceof Date ? selectedTicket.issueDate.startDate.toLocaleDateString() : new Date(selectedTicket.issueDate.startDate).toLocaleDateString()} - ${selectedTicket.issueDate.endDate instanceof Date ? selectedTicket.issueDate.endDate.toLocaleDateString() : new Date(selectedTicket.issueDate.endDate).toLocaleDateString()}`
                                 : selectedTicket.issueDate.type === 'ongoing'

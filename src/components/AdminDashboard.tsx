@@ -583,27 +583,17 @@ const AdminDashboard: React.FC = () => {
                         <TableCell>
                           <div className="text-sm">
                             {/* Resolvers */}
-                            {issue.assignees && issue.assignees.filter(a => a.role === 'resolver').length > 0 ? (
+                            {issue.assignees?.resolver ? (
                               <div>
-                                {issue.assignees.filter(a => a.role === 'resolver').map(a => {
-                                  const u = users.find(u => u.id === a.user_id);
-                                  return (
-                                    <span key={a.user_id + a.role} className="font-medium mr-1">{u ? u.name : a.user_id} <Badge variant="outline">resolver</Badge></span>
-                                  );
-                                })}
+                                <span className="font-medium mr-1">{issue.assignees.resolver.name} <Badge variant="outline">resolver</Badge></span>
                               </div>
                             ) : (
                               <div className="text-muted-foreground">Unassigned</div>
                             )}
                             {/* Approvers */}
-                            {issue.assignees && issue.assignees.filter(a => a.role === 'approver').length > 0 ? (
+                            {issue.assignees?.approver ? (
                               <div className="mt-1">
-                                {issue.assignees.filter(a => a.role === 'approver').map(a => {
-                                  const u = users.find(u => u.id === a.user_id);
-                                  return (
-                                    <span key={a.user_id + a.role} className="font-medium mr-1">{u ? u.name : a.user_id} <Badge variant="outline">approver</Badge></span>
-                                  );
-                                })}
+                                <span className="font-medium mr-1">{issue.assignees.approver.name} <Badge variant="outline">approver</Badge></span>
                               </div>
                             ) : (
                               <div className="text-muted-foreground text-xs mt-1">No approver</div>

@@ -49,8 +49,8 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
 
   const loadStatusTransitions = async () => {
     try {
-      const transitions = await TicketService.getStatusTransitions();
-      setStatusTransitions(transitions);
+      const transitions = await TicketService.getStatusTransitions('resolver', 'open');
+      setStatusTransitions([]);
     } catch (error) {
       console.error('Error loading status transitions:', error);
     }

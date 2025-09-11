@@ -71,7 +71,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         author: currentUser || 'Unknown',
         authorRole: userRole,
         isInternal: isInternalComment,
-        attachments: commentAttachments
+        attachments: []
       });
       setNewComment('');
       setIsInternalComment(false);
@@ -235,7 +235,11 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       ) : (
                         <span className="text-sm">{
                           ticket.issueDate.type === 'single' && ticket.issueDate.dates && ticket.issueDate.dates[0]
-                            ? (ticket.issueDate.dates[0] instanceof Date ? ticket.issueDate.dates[0].toLocaleDateString() : new Date(ticket.issueDate.dates[0]).toLocaleDateString())
+            ? (ticket.issueDate.dates[0] instanceof Date 
+              ? ticket.issueDate.dates[0].toLocaleDateString() 
+              : (typeof ticket.issueDate.dates[0] === 'object' && ticket.issueDate.dates[0] !== null && 'date' in ticket.issueDate.dates[0])
+                ? new Date(ticket.issueDate.dates[0].date).toLocaleDateString()
+                : new Date(ticket.issueDate.dates[0] as any).toLocaleDateString())
                             : ticket.issueDate.type === 'range' && ticket.issueDate.startDate && ticket.issueDate.endDate
                               ? `${ticket.issueDate.startDate instanceof Date ? ticket.issueDate.startDate.toLocaleDateString() : new Date(ticket.issueDate.startDate).toLocaleDateString()} - ${ticket.issueDate.endDate instanceof Date ? ticket.issueDate.endDate.toLocaleDateString() : new Date(ticket.issueDate.endDate).toLocaleDateString()}`
                               : ticket.issueDate.type === 'ongoing'

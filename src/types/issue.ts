@@ -45,13 +45,21 @@ export interface Issue {
   deleted?: boolean;
   // New field for user dependency tracking
   userDependencyStartedAt?: Date;
+  // Assignees field for compatibility
+  assignees?: {
+    resolver?: { name: string; role: string; id: string } | null;
+    approver?: { name: string; role: string; id: string } | null;
+    ticketAdmin?: { name: string; role: string; id: string } | null;
+  };
+  createdAt?: Date; // For compatibility
+  ticketLink?: string; // For compatibility
 }
 
 export interface Comment {
   id: string;
   content: string;
   author: string;
-  authorRole: 'invigilator' | 'admin' | 'resolver' | 'approver' | 'super_admin' | 'anonymous';
+  authorRole: 'invigilator' | 'admin' | 'resolver' | 'approver' | 'super_admin' | 'anonymous' | 'ticket_admin';
   timestamp: Date;
   isInternal: boolean;
   isFromInvigilator?: boolean; // New field to track invigilator comments
@@ -89,6 +97,8 @@ export interface Attachment {
   fileType: string;
   downloadUrl: string;
   uploadedAt: Date;
+  name?: string; // Backward compatibility
+  size?: number; // Backward compatibility
 }
 
 export interface TimelineEvent {
