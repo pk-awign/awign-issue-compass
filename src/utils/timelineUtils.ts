@@ -23,17 +23,18 @@ export function formatEventType(eventType: string): string {
  */
 export function formatStatusValue(status: string): string {
   const statusMap: Record<string, string> = {
-    'open': 'Open',
-    'in_progress': 'In Progress',
-    'ops_input_required': 'Ops Input Required',
-    'user_dependency': 'User Dependency',
-    'send_for_approval': 'Send for Approval',
-    'approved': 'Approved',
-    'resolved': 'Resolved',
-    'closed': 'Closed'
+    'open': 'OPEN',
+    'in_progress': 'PENDING ON CX',
+    'ops_input_required': 'OPS DEPENDENCY',
+    'user_dependency': 'USER DEPENDENCY',
+    'ops_user_dependency': 'OPS + USER DEPENDENCY',
+    'send_for_approval': 'SEND FOR APPROVAL',
+    'approved': 'APPROVED',
+    'resolved': 'CLOSED',
+    'closed': 'CLOSED'
   };
   
-  return statusMap[status] || status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  return statusMap[status] || status.replace('_', ' ').toUpperCase();
 }
 
 /**

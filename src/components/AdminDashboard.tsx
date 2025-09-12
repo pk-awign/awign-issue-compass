@@ -186,7 +186,7 @@ const AdminDashboard: React.FC = () => {
     return (
       <Badge className={config?.color || 'bg-gray-100 text-gray-800'}>
         <Icon className="h-3 w-3 mr-1" />
-        {status.replace('_', ' ').toUpperCase()}
+        {formatStatusValue(status)}
       </Badge>
     );
   };

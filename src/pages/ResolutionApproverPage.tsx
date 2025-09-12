@@ -14,6 +14,8 @@ import { TicketStatsCards } from '@/components/TicketStatsCards';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Issue } from '@/types/issue';
+import { getStatusLabel } from '@/utils/status';
+import { exportTicketsAsCSV, generateExportFilename } from '@/utils/ticketExport';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { 
@@ -64,6 +66,9 @@ export const ResolutionApproverPage: React.FC = () => {
   const [cityFilter, setCityFilter] = useState('all');
   const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [isExporting, setIsExporting] = useState(false);
+  const [lastStatusFilter, setLastStatusFilter] = useState('all');
+  const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
 
   // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
   const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
@@ -102,6 +107,31 @@ export const ResolutionApproverPage: React.FC = () => {
     setIsModalOpen(false);
     setSelectedTicket(null);
     refreshIssues(); // Refresh to get latest data
+  };
+
+  const handleExportTickets = async () => {
+    if (!filteredTickets.length) {
+      toast.info('No tickets to export');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const filename = generateExportFilename('approver_tickets', {
+        statusFilter,
+        severityFilter,
+        categoryFilter,
+        cityFilter,
+        searchTerm
+      });
+      exportTicketsAsCSV(filteredTickets, filename);
+      toast.success(`Exported ${filteredTickets.length} tickets successfully!`);
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export tickets. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleStatusChange = async (ticketId: string, newStatus: Issue['status'], notes?: string) => {
@@ -275,23 +305,45 @@ export const ResolutionApproverPage: React.FC = () => {
       });
     }
 
+    // Last Status filter - filter by the last status change
+    if (lastStatusFilter !== 'all') {
+      filtered = filtered.filter(ticket => {
+        // For now, we'll use the current status as the "last status"
+        // In a real implementation, you might want to check ticket history
+        return ticket.status === lastStatusFilter;
+      });
+    }
+
+    // Last Comment by Invigilator filter
+    if (lastCommentByInvigilator) {
+      filtered = filtered.filter(ticket => {
+        return ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator;
+      });
+    }
+
     return filtered;
-  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, user]);
+  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, user]);
 
   // Categorize tickets by approval status
   const ticketsByStatus = useMemo(() => {
+    const getLastUpdatedAt = (t: any) => t.statusChangedAt || t.resolvedAt || t.submittedAt;
+    const sorted = [...filteredTickets].sort((a, b) => {
+      const aU = getLastUpdatedAt(a)?.getTime() || 0;
+      const bU = getLastUpdatedAt(b)?.getTime() || 0;
+      return bU - aU;
+    });
     return {
-      pending_approval: filteredTickets.filter(t => t.status === 'send_for_approval'),
-      all_tickets: filteredTickets,
-      open: filteredTickets.filter(t => t.status === 'open'),
-      in_progress: filteredTickets.filter(t => t.status === 'in_progress'),
-      ops_input_required: filteredTickets.filter(t => t.status === 'ops_input_required'),
-      user_dependency: filteredTickets.filter(t => t.status === 'user_dependency'),
+      pending_approval: sorted.filter(t => t.status === 'send_for_approval'),
+      all_tickets: sorted,
+      open: sorted.filter(t => t.status === 'open'),
+      in_progress: sorted.filter(t => t.status === 'in_progress'),
+      ops_input_required: sorted.filter(t => t.status === 'ops_input_required'),
+      user_dependency: sorted.filter(t => t.status === 'user_dependency'),
     };
   }, [filteredTickets]);
 
-  const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter]
-    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0);
+  const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, lastStatusFilter]
+    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0) + (lastCommentByInvigilator ? 1 : 0);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -301,6 +353,8 @@ export const ResolutionApproverPage: React.FC = () => {
     setCityFilter('all');
     setResourceIdFilter([]);
     setDateRange(undefined);
+    setLastStatusFilter('all');
+    setLastCommentByInvigilator(false);
   };
 
   // Get unique cities for filter
@@ -377,7 +431,7 @@ export const ResolutionApproverPage: React.FC = () => {
                     {ticket.severity.toUpperCase()}
                   </Badge>
                   <Badge className={getStatusColor(ticket.status)}>
-                    {ticket.status.replace('_', ' ').toUpperCase()}
+                    {getStatusLabel(ticket.status)}
                   </Badge>
                 </div>
               </div>
@@ -451,15 +505,15 @@ export const ResolutionApproverPage: React.FC = () => {
                     <SelectContent>
                       {TicketService.getAllowedStatusTransitions(user!.role, ticket.status).map(status => (
                         <SelectItem key={status} value={status} className="text-xs">
-                          {status.replace('_', ' ').toUpperCase()}
+                          {getStatusLabel(status)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 
-                {/* Resolution Notes for resolved status */}
-                {(getTicketStatus(ticket.id) === 'resolved' || ticket.status === 'resolved') && (
+                {/* Approver cannot resolve; no resolution notes here */}
+                {false && (
                   <div className="space-y-2">
                     <Textarea
                       placeholder="Enter resolution details..."
@@ -507,18 +561,7 @@ export const ResolutionApproverPage: React.FC = () => {
                     </Button>
                   )}
                   
-                  {ticket.status === 'approved' && (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={() => handleStatusChange(ticket.id, 'resolved', getTicketNotes(ticket.id))}
-                      disabled={isUpdating || !getTicketNotes(ticket.id).trim()}
-                      className="text-xs"
-                    >
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Resolve
-                    </Button>
-                  )}
+                  {/* Approver cannot close tickets */}
                 </div>
               </div>
             )}
@@ -553,7 +596,7 @@ export const ResolutionApproverPage: React.FC = () => {
   };
 
   const renderTicketCard = (ticket: Issue) => (
-    <Card key={ticket.id} className="hover:shadow-md transition-shadow">
+    <Card key={ticket.id} className={"hover:shadow-md transition-shadow"}>
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Header */}
@@ -566,7 +609,7 @@ export const ResolutionApproverPage: React.FC = () => {
                     {ticket.severity.toUpperCase()}
                   </Badge>
                   <Badge className={getStatusColor(ticket.status)}>
-                    {ticket.status.replace('_', ' ').toUpperCase()}
+                    {getStatusLabel(ticket.status)}
                   </Badge>
                 </div>
               </div>
@@ -715,29 +758,12 @@ export const ResolutionApproverPage: React.FC = () => {
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-6">
-          {/* Page Header */}
-          <div className="text-center space-y-2 px-2 sm:px-0">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">Resolution Approver Dashboard</h2>
-            <p className="text-xs sm:text-sm md:text-base text-gray-600">Review and approve issue resolutions</p>
-            {user && (
-              <div className="bg-purple-50 p-3 sm:p-4 rounded-lg flex flex-col items-center justify-center gap-2 text-center">
-                <p className="text-purple-800 text-xs sm:text-sm">
-                  Approver: {user.name} | City: {user.city}
-                </p>
-                <div className="flex flex-col items-center justify-center mt-2 sm:mt-0">
-                  <div className="text-center">
-                    <div className="text-xl sm:text-2xl font-bold text-purple-600">
-                      {ticketsByStatus.pending_approval.length}
-                    </div>
-                    <div className="text-xs text-purple-600">Pending Approvals</div>
-                  </div>
-                </div>
-              </div>
-            )}
+          {/* Page Header hidden per request (keeping only the top header) */}
+          {/* Hidden stats and header summary */}
+          <div className="hidden" />
+          <div className="hidden">
+            <TicketStatsCards tickets={approverTickets} userRole="approver" />
           </div>
-
-          {/* Stats Cards (remove Closed card) */}
-          <TicketStatsCards tickets={approverTickets} userRole="approver" />
 
           {/* Filters */}
           <TicketFilters
@@ -755,12 +781,18 @@ export const ResolutionApproverPage: React.FC = () => {
             setResourceIdFilter={setResourceIdFilter}
             dateRange={dateRange}
             setDateRange={setDateRange}
+            lastStatusFilter={lastStatusFilter}
+            setLastStatusFilter={setLastStatusFilter}
+            lastCommentByInvigilator={lastCommentByInvigilator}
+            setLastCommentByInvigilator={setLastCommentByInvigilator}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
             uniqueCities={uniqueCities}
             uniqueResourceIds={uniqueResourceIds}
             uniqueSeverities={uniqueSeverities}
             uniqueCategories={uniqueCategories}
+            onExportTickets={handleExportTickets}
+            isExporting={isExporting}
           />
 
           {/* Tickets Tabs */}
@@ -779,7 +811,7 @@ export const ResolutionApproverPage: React.FC = () => {
                 <Badge variant="secondary" className="ml-2">{filteredTickets.filter(t => t.status === 'approved').length}</Badge>
               </TabsTrigger>
               <TabsTrigger value="resolved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Resolved
+                Closed
                 <Badge variant="secondary" className="ml-2">{filteredTickets.filter(t => t.status === 'resolved').length}</Badge>
               </TabsTrigger>
             </TabsList>

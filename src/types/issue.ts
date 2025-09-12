@@ -17,7 +17,7 @@ export interface Issue {
     endDate?: Date;
   };
   severity: 'sev1' | 'sev2' | 'sev3';
-  status: 'open' | 'in_progress' | 'ops_input_required' | 'user_dependency' | 'send_for_approval' | 'approved' | 'resolved';
+  status: 'open' | 'in_progress' | 'ops_input_required' | 'user_dependency' | 'ops_user_dependency' | 'send_for_approval' | 'approved' | 'resolved';
   isAnonymous: boolean;
   submittedBy?: string;
   submittedByUserId?: string;

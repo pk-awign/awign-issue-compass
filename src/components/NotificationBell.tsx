@@ -53,35 +53,32 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onTicketClic
         <Button variant="outline" size="sm" className="relative">
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-            >
+            <span className="absolute -top-2 -right-2 h-5 min-w-5 px-1 rounded-full flex items-center justify-center text-[10px] font-medium bg-indigo-600 text-white">
               {unreadCount > 9 ? '9+' : unreadCount}
-            </Badge>
+            </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
+      <PopoverContent className="w-96 p-0" align="end">
         <Card className="border-0 shadow-none">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between px-1">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
-                New Comments
+                
                 {unreadCount > 0 && (
-                  <Badge variant="secondary" className="text-xs">
+                  <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-[11px] font-medium">
                     {unreadCount} new
-                  </Badge>
+                  </span>
                 )}
               </CardTitle>
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 {unreadCount > 0 && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={handleMarkAllAsRead}
-                    className="h-6 px-2 text-xs"
+                    className="h-7 px-3 text-xs rounded-full border-gray-300 hover:bg-gray-100"
                   >
                     Mark all read
                   </Button>
@@ -91,7 +88,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onTicketClic
                     variant="ghost"
                     size="sm"
                     onClick={handleClearAll}
-                    className="h-6 px-2 text-xs"
+                    className="h-7 px-3 text-xs rounded-full"
                   >
                     Clear all
                   </Button>
@@ -101,21 +98,23 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onTicketClic
           </CardHeader>
           <CardContent className="p-0">
             {notifications.length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">
+              <div className="p-6 text-center text-sm text-muted-foreground">
                 No new comments
               </div>
             ) : (
-              <ScrollArea className="h-64">
-                <div className="space-y-1">
-                  {notifications.map((notification) => (
+              <ScrollArea className="h-72">
+                <div className="divide-y">
+                  {notifications
+                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    .map((notification) => (
                     <div
                       key={notification.id}
-                      className={`p-3 cursor-pointer hover:bg-muted/50 border-b last:border-b-0 ${
-                        !notification.isRead ? 'bg-blue-50/50' : ''
+                      className={`p-4 cursor-pointer hover:bg-muted/40 ${
+                        !notification.isRead ? 'bg-gray-50' : ''
                       }`}
                       onClick={() => handleNotificationClick(notification)}
                     >
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-start gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-medium text-blue-600">
@@ -125,7 +124,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onTicketClic
                               <div className="w-2 h-2 bg-blue-500 rounded-full" />
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2">
+                          <p className="text-sm text-gray-700 line-clamp-2">
                             {notification.commentContent}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">

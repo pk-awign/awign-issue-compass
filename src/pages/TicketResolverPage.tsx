@@ -13,6 +13,8 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Issue } from '@/types/issue';
+import { getStatusLabel } from '@/utils/status';
+import { exportTicketsAsCSV, generateExportFilename } from '@/utils/ticketExport';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { 
@@ -27,6 +29,7 @@ import {
   User
 } from 'lucide-react';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { TicketService } from '@/services/ticketService';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
@@ -47,6 +50,24 @@ export const TicketResolverPage: React.FC = () => {
   const [cityFilter, setCityFilter] = useState('all');
   const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [isExporting, setIsExporting] = useState(false);
+  const [lastStatusFilter, setLastStatusFilter] = useState('all');
+  const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
+
+  const handleCloseTicket = async (ticketId: string) => {
+    if (!user) return;
+    try {
+      const ok = await TicketService.updateTicketStatus(ticketId, 'resolved', user.id, undefined, user.role);
+      if (ok) {
+        toast.success('Ticket closed');
+        refreshIssues();
+      } else {
+        toast.error('Failed to close ticket');
+      }
+    } catch (e) {
+      toast.error('Failed to close ticket');
+    }
+  };
 
   // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
   const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
@@ -77,6 +98,31 @@ export const TicketResolverPage: React.FC = () => {
   const handleViewTicket = (ticket: Issue) => {
     setSelectedTicket(ticket);
     setIsModalOpen(true);
+  };
+
+  const handleExportTickets = async () => {
+    if (!filteredTickets.length) {
+      toast.info('No tickets to export');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const filename = generateExportFilename('resolver_tickets', {
+        statusFilter,
+        severityFilter,
+        categoryFilter,
+        cityFilter,
+        searchTerm
+      });
+      exportTicketsAsCSV(filteredTickets, filename);
+      toast.success(`Exported ${filteredTickets.length} tickets successfully!`);
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export tickets. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleTicketClick = (ticketId: string) => {
@@ -226,25 +272,51 @@ export const TicketResolverPage: React.FC = () => {
       });
     }
 
-    return filtered;
-  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange]);
+    // Last Status filter - filter by the last status change
+    if (lastStatusFilter !== 'all') {
+      filtered = filtered.filter(ticket => {
+        // For now, we'll use the current status as the "last status"
+        // In a real implementation, you might want to check ticket history
+        return ticket.status === lastStatusFilter;
+      });
+    }
+
+    // Last Comment by Invigilator filter
+    if (lastCommentByInvigilator) {
+      filtered = filtered.filter(ticket => {
+        return ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator;
+      });
+    }
+
+    // Sort: primary by last comment timestamp, secondary by last updated (statusChangedAt), fallback submittedAt
+    const getLastCommentAt = (t: Issue) => (t.comments && t.comments.length > 0 ? t.comments[0].timestamp : undefined);
+    const getLastUpdatedAt = (t: any) => t.statusChangedAt || t.resolvedAt || t.submittedAt;
+    return [...filtered].sort((a, b) => {
+      const aC = getLastCommentAt(a)?.getTime() || 0;
+      const bC = getLastCommentAt(b)?.getTime() || 0;
+      if (aC !== bC) return bC - aC;
+      const aU = getLastUpdatedAt(a)?.getTime() || 0;
+      const bU = getLastUpdatedAt(b)?.getTime() || 0;
+      return bU - aU;
+    });
+  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator]);
 
   // Categorize tickets by status
   const ticketsByStatus = useMemo(() => {
     return {
       all: filteredTickets,
-      open: filteredTickets.filter(t => t.status === 'open'),
       in_progress: filteredTickets.filter(t => t.status === 'in_progress'),
-      ops_input_required: filteredTickets.filter(t => t.status === 'ops_input_required'),
       user_dependency: filteredTickets.filter(t => t.status === 'user_dependency'),
-      approval_pending: filteredTickets.filter(t => t.status === 'send_for_approval'),
+      ops_input_required: filteredTickets.filter(t => t.status === 'ops_input_required'),
+      ops_user_dependency: filteredTickets.filter(t => (t as any).status === 'ops_user_dependency'),
+      send_for_approval: filteredTickets.filter(t => t.status === 'send_for_approval'),
       approved: filteredTickets.filter(t => t.status === 'approved'),
       resolved: filteredTickets.filter(t => t.status === 'resolved'),
-    };
+    } as const;
   }, [filteredTickets]);
 
-  const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter]
-    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0);
+  const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, lastStatusFilter]
+    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0) + (lastCommentByInvigilator ? 1 : 0);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -254,6 +326,8 @@ export const TicketResolverPage: React.FC = () => {
     setCityFilter('all');
     setResourceIdFilter([]);
     setDateRange(undefined);
+    setLastStatusFilter('all');
+    setLastCommentByInvigilator(false);
   };
 
   const getSeverityColor = (severity: Issue['severity']) => {
@@ -285,7 +359,7 @@ export const TicketResolverPage: React.FC = () => {
   };
 
   const renderTicketCard = (ticket: Issue) => (
-    <Card key={ticket.id} className="hover:shadow-md transition-shadow">
+    <Card key={ticket.id} className={`hover:shadow-md transition-shadow ${ticket.comments[0]?.isFromInvigilator ? 'border border-green-400' : ''}`}>
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Header */}
@@ -297,19 +371,21 @@ export const TicketResolverPage: React.FC = () => {
                   {ticket.severity.toUpperCase()}
                 </Badge>
                 <Badge className={getStatusColor(ticket.status)}>
-                  {ticket.status.replace('_', ' ').toUpperCase()}
+                  {getStatusLabel(ticket.status)}
                 </Badge>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleViewTicket(ticket)}
-              className="flex items-center gap-1"
-            >
-              <Eye className="h-3 w-3" />
-              View
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleViewTicket(ticket)}
+                className="flex items-center gap-1"
+              >
+                <Eye className="h-3 w-3" />
+                View
+              </Button>
+            </div>
           </div>
 
           {/* Issue Info */}
@@ -342,11 +418,40 @@ export const TicketResolverPage: React.FC = () => {
             )}
           </div>
 
+          {/* Last Comment Info */}
+          {ticket.comments.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              {(() => {
+                const lastComment = ticket.comments[0];
+                if (lastComment.isFromInvigilator) {
+                  return "Last comment added by: Invigilator";
+                } else if (lastComment.isInternal) {
+                  return "Internal comment added";
+                } else {
+                  return `Last comment added by: ${lastComment.author || 'Unknown'}`;
+                }
+              })()}
+            </div>
+          )}
+
           {/* Resolution Notes Preview */}
           {ticket.resolutionNotes && (
             <div className="bg-green-50 p-2 rounded text-xs">
               <p className="text-green-700 font-medium">Resolution:</p>
               <p className="text-green-600 line-clamp-1">{ticket.resolutionNotes}</p>
+            </div>
+          )}
+
+          {/* Close Button - Bottom Right */}
+          {activeTab === 'approved' && ticket.status === 'approved' && (
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                onClick={() => handleCloseTicket(ticket.id)}
+                className="text-xs"
+              >
+                Close the ticket
+              </Button>
             </div>
           )}
         </div>
@@ -389,21 +494,11 @@ export const TicketResolverPage: React.FC = () => {
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-6">
-          {/* Page Header */}
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl md:text-3xl font-bold">Ticket Resolver Dashboard</h2>
-            <p className="text-sm md:text-base text-gray-600">Manage and resolve assigned tickets</p>
-            {user && (
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-blue-800 text-sm">
-                  Resolver: {user.name} | City: {user.city} | Centre: {user.centreCode}
-                </p>
-              </div>
-            )}
+          {/* Hide page header and stats per request (keep top header only) */}
+          <div className="hidden" />
+          <div className="hidden">
+            <TicketStatsCards tickets={assignedTickets} userRole="resolver" />
           </div>
-
-          {/* Stats Cards */}
-          <TicketStatsCards tickets={assignedTickets} userRole="resolver" />
 
           {/* Filters */}
           <TicketFilters
@@ -421,51 +516,69 @@ export const TicketResolverPage: React.FC = () => {
             setResourceIdFilter={setResourceIdFilter}
             dateRange={dateRange}
             setDateRange={setDateRange}
+            lastStatusFilter={lastStatusFilter}
+            setLastStatusFilter={setLastStatusFilter}
+            lastCommentByInvigilator={lastCommentByInvigilator}
+            setLastCommentByInvigilator={setLastCommentByInvigilator}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
             uniqueCities={uniqueCities}
             uniqueResourceIds={uniqueResourceIds}
             uniqueSeverities={uniqueSeverities}
             uniqueCategories={uniqueCategories}
+            onExportTickets={handleExportTickets}
+            isExporting={isExporting}
           />
 
           {/* Tickets Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid grid-cols-2 sm:flex sm:flex-row w-full gap-3 sm:gap-0 bg-white p-2 rounded-xl border shadow-md my-4 z-10">
               <TabsTrigger value="all" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                All Tickets
+                All
                 <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.all.length}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="open" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Open
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.open.length}
+                  {ticketsByStatus.all?.length ?? 0}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="in_progress" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                In Progress
+                Pending on CX
                 <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.in_progress.length}
+                  {ticketsByStatus.in_progress?.length ?? 0}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="approval_pending" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Approval Pending
+              <TabsTrigger value="user_dependency" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                User Dependency
                 <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.approval_pending.length}
+                  {ticketsByStatus.user_dependency?.length ?? 0}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="ops_input_required" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                Ops Dependency
+                <Badge variant="secondary" className="ml-2">
+                  {ticketsByStatus.ops_input_required?.length ?? 0}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="ops_user_dependency" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                Ops + User Dependency
+                <Badge variant="secondary" className="ml-2">
+                  {ticketsByStatus.ops_user_dependency?.length ?? 0}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="send_for_approval" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
+                Send for Approval
+                <Badge variant="secondary" className="ml-2">
+                  {ticketsByStatus.send_for_approval?.length ?? 0}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="approved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
                 Approved
                 <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.approved.length}
+                  {ticketsByStatus.approved?.length ?? 0}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="resolved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Resolved
+                Closed
                 <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.resolved.length}
+                  {ticketsByStatus.resolved?.length ?? 0}
                 </Badge>
               </TabsTrigger>
             </TabsList>
@@ -477,7 +590,7 @@ export const TicketResolverPage: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : ticketsByStatus.all.length === 0 ? (
+              ) : (ticketsByStatus.all?.length ?? 0) === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
@@ -487,27 +600,27 @@ export const TicketResolverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {ticketsByStatus.all.map(renderTicketCard)}
+                  {(ticketsByStatus.all ?? []).map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>
-            <TabsContent value="open" className="mt-6">
+            <TabsContent value="user_dependency" className="mt-6">
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : ticketsByStatus.open.length === 0 ? (
+              ) : (ticketsByStatus.user_dependency?.length ?? 0) === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No open tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in open status</p>
+                    <p className="text-lg font-medium">No user dependency tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in user dependency</p>
                   </CardContent>
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {ticketsByStatus.open.map(renderTicketCard)}
+                  {(ticketsByStatus.user_dependency ?? []).map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>
@@ -517,7 +630,7 @@ export const TicketResolverPage: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : ticketsByStatus.in_progress.length === 0 ? (
+              ) : (ticketsByStatus.in_progress?.length ?? 0) === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
@@ -527,27 +640,67 @@ export const TicketResolverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {ticketsByStatus.in_progress.map(renderTicketCard)}
+                  {(ticketsByStatus.in_progress ?? []).map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>
-            <TabsContent value="approval_pending" className="mt-6">
+            <TabsContent value="ops_input_required" className="mt-6">
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : ticketsByStatus.approval_pending.length === 0 ? (
+              ) : (ticketsByStatus.ops_input_required?.length ?? 0) === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No approval pending tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in send for approval status</p>
+                    <p className="text-lg font-medium">No ops dependency tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in ops dependency</p>
                   </CardContent>
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {ticketsByStatus.approval_pending.map(renderTicketCard)}
+                  {(ticketsByStatus.ops_input_required ?? []).map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="ops_user_dependency" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : (ticketsByStatus.ops_user_dependency?.length ?? 0) === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No ops + user dependency tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in ops + user dependency</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {(ticketsByStatus.ops_user_dependency ?? []).map(renderTicketCard)}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="send_for_approval" className="mt-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading tickets...</p>
+                </div>
+              ) : (ticketsByStatus.send_for_approval?.length ?? 0) === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="text-lg font-medium">No send for approval tickets</p>
+                    <p className="text-sm text-muted-foreground">No tickets in send for approval</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {(ticketsByStatus.send_for_approval ?? []).map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>
@@ -557,7 +710,7 @@ export const TicketResolverPage: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : ticketsByStatus.approved.length === 0 ? (
+              ) : (ticketsByStatus.approved?.length ?? 0) === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
@@ -567,7 +720,7 @@ export const TicketResolverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {ticketsByStatus.approved.map(renderTicketCard)}
+                  {(ticketsByStatus.approved ?? []).map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>
@@ -577,7 +730,7 @@ export const TicketResolverPage: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading tickets...</p>
                 </div>
-              ) : ticketsByStatus.resolved.length === 0 ? (
+              ) : (ticketsByStatus.resolved?.length ?? 0) === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
@@ -587,7 +740,7 @@ export const TicketResolverPage: React.FC = () => {
                 </Card>
               ) : (
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {ticketsByStatus.resolved.map(renderTicketCard)}
+                  {(ticketsByStatus.resolved ?? []).map(renderTicketCard)}
                 </div>
               )}
             </TabsContent>

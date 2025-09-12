@@ -173,7 +173,7 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
                 </Badge>
               )}
               <Badge className={getStatusColor(ticket.status)}>
-                {ticket.status.replace('_', ' ').toUpperCase()}
+                {getStatusLabel(ticket.status)}
               </Badge>
               <Badge className={getSeverityColor(ticket.severity)}>
                 {ticket.severity.toUpperCase()}
@@ -231,7 +231,7 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
               <label className="text-sm font-medium">Current Status</label>
               <div className="mt-1">
                 <Badge className={getStatusColor(ticket.status)}>
-                  {ticket.status.replace('_', ' ').toUpperCase()}
+                  {getStatusLabel(ticket.status)}
                 </Badge>
               </div>
             </div>
@@ -244,7 +244,7 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
                 <SelectContent>
                   {availableTransitions.map(status => (
                     <SelectItem key={status} value={status}>
-                      {status.replace('_', ' ').toUpperCase()}
+                      {getStatusLabel(status as any)}
                     </SelectItem>
                   ))}
                 </SelectContent>

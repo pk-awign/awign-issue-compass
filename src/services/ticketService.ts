@@ -194,8 +194,8 @@ export class TicketService {
 
       // Get user details for assigned users (handle missing fields gracefully)
       const [resolverDetails, approverDetails, submittedByDetails] = await Promise.all([
-        ticketData.assigned_resolver ? this.getUserDetails(ticketData.assigned_resolver) : null,
-        ticketData.assigned_approver ? this.getUserDetails(ticketData.assigned_approver) : null,
+        (ticketData as any).assigned_resolver ? this.getUserDetails((ticketData as any).assigned_resolver) : null,
+        (ticketData as any).assigned_approver ? this.getUserDetails((ticketData as any).assigned_approver) : null,
         ticketData.submitted_by_user_id ? this.getUserDetails(ticketData.submitted_by_user_id) : null,
       ]);
 
@@ -293,11 +293,12 @@ export class TicketService {
     // Resolver: All movements require comments
     const RESOLVER_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
       open: ['in_progress'],
-      in_progress: ['send_for_approval', 'ops_input_required', 'user_dependency'],
-      ops_input_required: ['in_progress', 'user_dependency'],
-      user_dependency: ['in_progress'],
+      in_progress: ['send_for_approval', 'user_dependency', 'ops_input_required', 'ops_user_dependency'],
+      ops_input_required: ['in_progress'],
+      user_dependency: ['in_progress', 'ops_input_required', 'ops_user_dependency', 'send_for_approval'],
+      ops_user_dependency: ['in_progress'],
       send_for_approval: [],
-      approved: [],
+      approved: ['resolved'],
       resolved: [],
     };
     // Approver: SEND FOR APPROVAL → APPROVED/IN PROGRESS, APPROVED → RESOLVED
@@ -306,19 +307,21 @@ export class TicketService {
       in_progress: [],
       ops_input_required: [],
       user_dependency: [],
+      ops_user_dependency: [],
       send_for_approval: ['approved', 'in_progress'],
-      approved: ['resolved'],
+      approved: [],
       resolved: [],
     };
     // Super Admin: can move to any status (including backward for management)
     const SUPER_ADMIN_TRANSITIONS: Record<Issue['status'], Issue['status'][]> = {
-      open: ['in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved'],
-      in_progress: ['open', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved'],
-      ops_input_required: ['open', 'in_progress', 'user_dependency', 'send_for_approval', 'approved', 'resolved'],
-      user_dependency: ['open', 'in_progress', 'ops_input_required', 'send_for_approval', 'approved', 'resolved'],
-      send_for_approval: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'approved', 'resolved'],
-      approved: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'resolved'],
-      resolved: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved'],
+      open: ['in_progress', 'ops_input_required', 'user_dependency', 'ops_user_dependency', 'send_for_approval', 'approved', 'resolved'],
+      in_progress: ['open', 'ops_input_required', 'user_dependency', 'ops_user_dependency', 'send_for_approval', 'approved', 'resolved'],
+      ops_input_required: ['open', 'in_progress', 'user_dependency', 'ops_user_dependency', 'send_for_approval', 'approved', 'resolved'],
+      user_dependency: ['open', 'in_progress', 'ops_input_required', 'ops_user_dependency', 'send_for_approval', 'approved', 'resolved'],
+      ops_user_dependency: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'send_for_approval', 'approved', 'resolved'],
+      send_for_approval: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'ops_user_dependency', 'approved', 'resolved'],
+      approved: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'ops_user_dependency', 'send_for_approval', 'resolved'],
+      resolved: ['open', 'in_progress', 'ops_input_required', 'user_dependency', 'ops_user_dependency', 'send_for_approval', 'approved'],
     };
     switch (role) {
       case 'approver':
@@ -423,6 +426,45 @@ export class TicketService {
       if (error) throw error;
       // Skip logging to avoid function signature issues
       console.log('Status updated from', oldStatus, 'to', newStatus);
+
+      // Automatically assign SUMANT OPS when ticket moves to Ops Dependency or Ops + User Dependency
+      if (newStatus === 'ops_input_required' || newStatus === 'ops_user_dependency') {
+        try {
+          const SUMANT_OPS_ID = '297af7f9-4532-4cd5-b2c4-418e3015dc6e';
+          
+          // Check if SUMANT OPS is already assigned
+          const { data: existingAssignments } = await supabase
+            .from('ticket_assignees')
+            .select('*')
+            .eq('ticket_id', ticketId)
+            .eq('user_id', SUMANT_OPS_ID)
+            .eq('role', 'ops');
+          
+          if (!existingAssignments || existingAssignments.length === 0) {
+            // Assign SUMANT OPS
+            const { error: assignError } = await supabase
+              .from('ticket_assignees')
+              .insert({
+                ticket_id: ticketId,
+                user_id: SUMANT_OPS_ID,
+                role: 'ops',
+                assigned_at: new Date().toISOString(),
+                assigned_by: userId
+              });
+            
+            if (assignError) {
+              console.error('Failed to assign SUMANT OPS:', assignError);
+            } else {
+              console.log('✅ SUMANT OPS automatically assigned to ticket:', ticketId);
+            }
+          } else {
+            console.log('ℹ️ SUMANT OPS already assigned to ticket:', ticketId);
+          }
+        } catch (assignError) {
+          console.error('Error in automatic SUMANT OPS assignment:', assignError);
+          // Don't fail the status update if assignment fails
+        }
+      }
 
       // Send email notification for status change
       try {
@@ -766,6 +808,26 @@ export class TicketService {
         performedByRole: performedByRole,
         details: { action: 'added', user_id: userId, role },
       });
+
+      // Auto-move to in_progress when a resolver is assigned
+      try {
+        if (role === 'resolver') {
+          const { data: ticket } = await supabase
+            .from('tickets')
+            .select('status')
+            .eq('id', ticketId)
+            .single();
+          const currentStatus = ticket?.status as Issue['status'];
+          if (currentStatus && currentStatus !== 'in_progress') {
+            await supabase
+              .from('tickets')
+              .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+              .eq('id', ticketId);
+          }
+        }
+      } catch (autoErr) {
+        console.error('Auto-move to in_progress failed:', autoErr);
+      }
     }
     return { error };
   }

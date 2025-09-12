@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatRole, getTimelineDescription, formatEventType } from '@/utils/timelineUtils';
+import { getStatusLabel } from '@/utils/status';
 
 interface TicketDetailsModalProps {
   isOpen: boolean;
@@ -439,7 +440,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               <span>Ticket Details - {ticket?.ticketNumber}</span>
               {ticket && (
                 <Badge variant={getStatusColor(ticket.status)}>
-                  {ticket.status.replace('_', ' ')}
+                  {getStatusLabel(ticket.status)}
                 </Badge>
               )}
             </DialogTitle>
@@ -483,7 +484,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                 </Badge>
               )}
               <Badge className={getStatusColor(ticket.status)}>
-                {ticket.status.replace('_', ' ').toUpperCase()}
+                {getStatusLabel(ticket.status)}
               </Badge>
               <Badge className={getSeverityColor(ticket.severity)}>
                 {ticket.severity.toUpperCase()}
@@ -851,7 +852,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       <label className="text-sm font-medium">Current Status</label>
                       <div className="mt-1">
                         <Badge className={getStatusColor(ticket.status)}>
-                          {ticket.status.replace('_', ' ').toUpperCase()}
+                          {getStatusLabel(ticket.status)}
                         </Badge>
                       </div>
                     </div>
@@ -864,7 +865,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         <SelectContent>
                           {availableTransitions.map(status => (
                             <SelectItem key={status} value={status}>
-                              {status.replace('_', ' ').toUpperCase()}
+                              {getStatusLabel(status)}
                             </SelectItem>
                           ))}
                         </SelectContent>

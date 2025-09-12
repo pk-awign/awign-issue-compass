@@ -154,7 +154,7 @@ export const UserTicketTracker: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-semibold">{ticket.ticket_number}</span>
                     <Badge className={getStatusColor(ticket.status)}>
-                      {ticket.status.replace('_', ' ')}
+                      {getStatusLabel(ticket.status as any)}
                     </Badge>
                     <Badge className={getSeverityColor(ticket.severity)}>
                       {ticket.severity.toUpperCase()}

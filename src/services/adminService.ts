@@ -11,6 +11,7 @@ export interface TicketAnalytics {
   closedTickets: number;
   userDependencyTickets: number;
   opsInputRequiredTickets: number;
+  opsUserDependencyTickets: number;
   approvedTickets: number;
   sendForApprovalTickets: number;
   sev1Tickets: number;
@@ -43,6 +44,11 @@ export interface TicketFilters {
     from: Date;
     to?: Date;
   };
+  startDate?: Date;
+  endDate?: Date;
+  showDeleted?: boolean;
+  lastStatusFilter?: string;
+  lastCommentByInvigilator?: boolean;
   // Show only tickets that are NOT assigned to any resolver
   onlyUnassignedResolver?: boolean;
 }
@@ -471,6 +477,113 @@ export class AdminService {
     return allTickets;
   }
 
+  static async getFilteredTicketsUnpaginated(filters: TicketFilters): Promise<Issue[]> {
+    const allTickets: Issue[] = [];
+    let page = 1;
+    const BATCH_SIZE = 1000;
+    
+    while (true) {
+      let query = supabase
+        .from('tickets')
+        .select(`*`)
+        .order('submitted_at', { ascending: false })
+        .range((page - 1) * BATCH_SIZE, page * BATCH_SIZE - 1);
+      
+      // Apply filters
+      if (filters.searchQuery) {
+        const searchTerms = filters.searchQuery.split(',').map(term => term.trim()).filter(term => term.length > 0);
+        
+        if (searchTerms.length > 0) {
+          const orConditions = searchTerms.map(term => 
+            `ticket_number.ilike.%${term}%,issue_description.ilike.%${term}%,city.ilike.%${term}%,centre_code.ilike.%${term}%`
+          );
+          const combinedOrCondition = orConditions.join(',');
+          query = query.or(combinedOrCondition);
+        }
+      }
+      if (filters.statusFilter && filters.statusFilter !== 'all') {
+        query = query.eq('status', filters.statusFilter as any);
+      }
+      if (filters.severityFilter && filters.severityFilter !== 'all') {
+        query = query.eq('severity', filters.severityFilter);
+      }
+      if (filters.categoryFilter && filters.categoryFilter !== 'all') {
+        query = query.eq('issue_category', filters.categoryFilter);
+      }
+      if (filters.cityFilter && filters.cityFilter !== 'all') {
+        query = query.eq('city', filters.cityFilter);
+      }
+      if (filters.startDate) {
+        query = query.gte('submitted_at', filters.startDate.toISOString());
+      }
+      if (filters.endDate) {
+        const adjustedEndDate = new Date(filters.endDate);
+        adjustedEndDate.setDate(adjustedEndDate.getDate() + 1);
+        query = query.lt('submitted_at', adjustedEndDate.toISOString());
+      }
+      if (filters.showDeleted === false) {
+        query = query.eq('deleted', false);
+      }
+      if (filters.lastStatusFilter && filters.lastStatusFilter !== 'all') {
+        query = query.eq('status', filters.lastStatusFilter as any);
+      }
+      // Note: lastCommentByInvigilator filter will be applied after fetching data
+      // since it requires checking comments which are not in the main tickets table
+
+      const { data, error } = await query as { data: any[], error: any };
+
+      if (error) {
+        console.error('Error fetching filtered tickets unpaginated:', error);
+        break;
+      }
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      const tickets: Issue[] = data.map((t: any) => ({
+        id: t.id,
+        ticketNumber: t.ticket_number,
+        centreCode: t.centre_code,
+        city: t.city,
+        resourceId: t.resource_id,
+        awignAppTicketId: t.awign_app_ticket_id,
+        issueCategory: t.issue_category,
+        issueDescription: t.issue_description,
+        issueDate: t.issue_date,
+        severity: t.severity,
+        status: t.status,
+        submittedBy: t.submitted_by,
+        submittedAt: new Date(t.submitted_at),
+        resolvedAt: t.resolved_at ? new Date(t.resolved_at) : undefined,
+        resolutionNotes: t.resolution_notes,
+        deleted: t.deleted,
+        isAnonymous: t.is_anonymous || false,
+        attachments: t.attachments || [],
+        comments: t.comments || [],
+        assignees: t.assignees || []
+      }));
+
+      allTickets.push(...tickets);
+      
+      if (data.length < BATCH_SIZE) {
+        break; // No more data
+      }
+      
+      page++;
+    }
+    
+    // Apply lastCommentByInvigilator filter if needed
+    let finalTickets = allTickets;
+    if (filters.lastCommentByInvigilator) {
+      finalTickets = allTickets.filter(ticket => {
+        return ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator;
+      });
+    }
+    
+    console.log(`🔍 getFilteredTicketsUnpaginated completed: ${finalTickets.length} tickets fetched`);
+    return finalTickets;
+  }
+
   static async getFilteredTickets(
     includeDeleted: boolean = false,
     page: number = 1,
@@ -501,7 +614,7 @@ export class AdminService {
       }
       if (filters.statusFilter && filters.statusFilter !== 'all') {
         console.log('🔍 [FILTER DEBUG] Status filter applied:', filters.statusFilter);
-        query = query.eq('status', filters.statusFilter);
+        query = query.eq('status', filters.statusFilter as any);
       }
       if (filters.severityFilter && filters.severityFilter !== 'all') {
         query = query.eq('severity', filters.severityFilter);
@@ -585,7 +698,7 @@ export class AdminService {
         }
       }
       if (filters.statusFilter && filters.statusFilter !== 'all') {
-        countQuery = countQuery.eq('status', filters.statusFilter);
+        countQuery = countQuery.eq('status', filters.statusFilter as any);
       }
       if (filters.severityFilter && filters.severityFilter !== 'all') {
         countQuery = countQuery.eq('severity', filters.severityFilter);
@@ -771,7 +884,7 @@ export class AdminService {
             q = q.or(orConditions.join(','));
           }
         }
-        if (filters.statusFilter && filters.statusFilter !== 'all') q = q.eq('status', filters.statusFilter);
+        if (filters.statusFilter && filters.statusFilter !== 'all') q = q.eq('status', filters.statusFilter as any);
         if (filters.severityFilter && filters.severityFilter !== 'all') q = q.eq('severity', filters.severityFilter);
         if (filters.categoryFilter && filters.categoryFilter !== 'all') q = q.eq('issue_category', filters.categoryFilter);
         if (filters.cityFilter && filters.cityFilter !== 'all') q = q.eq('city', filters.cityFilter);
@@ -1294,6 +1407,7 @@ export class AdminService {
       const closedTickets = tickets.filter(t => (t as any).status === 'closed').length;
       const userDependencyTickets = tickets.filter(t => t.status === 'user_dependency').length;
       const opsInputRequiredTickets = tickets.filter(t => t.status === 'ops_input_required').length;
+      const opsUserDependencyTickets = tickets.filter(t => t.status === 'ops_user_dependency').length;
       const approvedTickets = tickets.filter(t => t.status === 'approved').length;
       const sendForApprovalTickets = tickets.filter(t => t.status === 'send_for_approval').length;
 
@@ -1426,6 +1540,7 @@ export class AdminService {
         closedTickets,
         userDependencyTickets,
         opsInputRequiredTickets,
+        opsUserDependencyTickets,
         approvedTickets,
         sendForApprovalTickets,
         sev1Tickets,
@@ -1469,6 +1584,7 @@ export class AdminService {
       const closedTickets = assignedTickets.filter(t => (t as any).status === 'closed').length;
       const userDependencyTickets = assignedTickets.filter(t => t.status === 'user_dependency').length;
       const opsInputRequiredTickets = assignedTickets.filter(t => t.status === 'ops_input_required').length;
+      const opsUserDependencyTickets = assignedTickets.filter(t => t.status === 'ops_user_dependency').length;
       const approvedTickets = assignedTickets.filter(t => t.status === 'approved').length;
       const sendForApprovalTickets = assignedTickets.filter(t => t.status === 'send_for_approval').length;
       
@@ -1544,6 +1660,7 @@ export class AdminService {
         closedTickets,
         userDependencyTickets,
         opsInputRequiredTickets,
+        opsUserDependencyTickets,
         approvedTickets,
         sendForApprovalTickets,
         sev1Tickets,
@@ -1576,6 +1693,7 @@ export class AdminService {
       closedTickets: 0,
       userDependencyTickets: 0,
       opsInputRequiredTickets: 0,
+      opsUserDependencyTickets: 0,
       approvedTickets: 0,
       sendForApprovalTickets: 0,
       sev1Tickets: 0,

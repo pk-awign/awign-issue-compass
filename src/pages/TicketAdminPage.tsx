@@ -640,11 +640,12 @@ export const TicketAdminPage: React.FC = () => {
                                 ticket.status === 'in_progress' ? 'default' :
                                 ticket.status === 'ops_input_required' ? 'secondary' :
                                 ticket.status === 'user_dependency' ? 'default' :
+                                ticket.status === 'ops_user_dependency' ? 'default' :
                                 ticket.status === 'send_for_approval' ? 'default' :
                                 ticket.status === 'approved' ? 'secondary' :
                                 ticket.status === 'resolved' ? 'secondary' : 'outline'
                               }>
-                                {ticket.status.replace('_', ' ')}
+                                {getStatusLabel(ticket.status as any)}
                               </Badge>
                             </TableCell>
                             <TableCell>

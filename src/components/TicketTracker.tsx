@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Search, Clock, CheckCircle, AlertCircle, MessageSquare, ChevronLeft, User, Loader2, Paperclip, Download, Ticket, Calendar, MapPin, FileText, Send, X, HelpCircle, UserX } from 'lucide-react';
 import { Issue, Comment } from '@/types/issue';
+import { getStatusLabel } from '@/utils/status';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIssues } from '@/contexts/IssueContext';
@@ -378,7 +379,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                         <span className="font-mono text-xs font-medium">{issue.ticketNumber}</span>
                       </div>
                       <Badge className={`${getStatusColor(issue.status)} text-xs`}>
-                        {issue.status.replace('_', ' ').toUpperCase()}
+                        {getStatusLabel(issue.status)}
                       </Badge>
                     </div>
                     <p className="text-sm font-medium mb-1">{getCategoryLabel(issue.issueCategory)}</p>
@@ -410,7 +411,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                   <div className="flex items-center justify-between">
                     <h3 className="text-base font-semibold">{selectedTicket.ticketNumber}</h3>
                     <Badge className={getStatusColor(selectedTicket.status)}>
-                      {selectedTicket.status.replace('_', ' ').toUpperCase()}
+                      {getStatusLabel(selectedTicket.status)}
                     </Badge>
                   </div>
 
@@ -792,7 +793,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">{selectedTicket.ticketNumber}</h3>
                   <Badge className={getStatusColor(selectedTicket.status)}>
-                    {selectedTicket.status.replace('_', ' ').toUpperCase()}
+                    {getStatusLabel(selectedTicket.status)}
                   </Badge>
                 </div>
 

@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Issue, Comment } from '@/types/issue';
+import { getStatusLabel } from '@/utils/status';
 import { useIssues } from '@/contexts/IssueContext';
 import { format } from 'date-fns';
 import { Clock, User, MapPin, FileText, MessageSquare, History, AlertTriangle, Paperclip, Download, X } from 'lucide-react';
@@ -163,7 +164,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       {ticket.severity.toUpperCase()}
                     </Badge>
                     <Badge className={getStatusColor(ticket.status)}>
-                      {ticket.status.replace('_', ' ').toUpperCase()}
+                      {getStatusLabel(ticket.status)}
                     </Badge>
                     {ticket.resolvedAt && (
                       <Badge variant="outline">
@@ -323,7 +324,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       <SelectContent>
                         {availableTransitions.map(status => (
                           <SelectItem key={status} value={status}>
-                            {status.replace('_', ' ').toUpperCase()}
+                            {getStatusLabel(status)}
                           </SelectItem>
                         ))}
                       </SelectContent>

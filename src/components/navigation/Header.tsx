@@ -101,7 +101,6 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
                   <RoleIcon className="h-4 w-4" />
                   <span className="text-sm font-medium">{user.name}</span>
                   <Badge variant={isSuperAdmin ? "default" : isResolver ? "secondary" : isApprover ? "destructive" : isTicketAdmin ? "default" : "outline"}>
-                    <Shield className="h-3 w-3 mr-1" />
                     {getRoleDisplayName()}
                   </Badge>
                 </div>

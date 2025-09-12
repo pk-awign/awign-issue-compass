@@ -4,7 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Filter, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Search, Filter, X, Calendar as CalendarIcon, Download } from 'lucide-react';
 import { Issue } from '@/types/issue';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -27,12 +28,18 @@ interface TicketFiltersProps {
   setResourceIdFilter?: (resourceIds: string[]) => void;
   dateRange?: DateRange | undefined;
   setDateRange?: (range: DateRange | undefined) => void;
+  lastStatusFilter?: string;
+  setLastStatusFilter?: (status: string) => void;
+  lastCommentByInvigilator?: boolean;
+  setLastCommentByInvigilator?: (enabled: boolean) => void;
   onClearFilters: () => void;
   activeFiltersCount: number;
   uniqueCities?: string[];
   uniqueResourceIds?: { value: string; label: string }[];
   uniqueSeverities?: string[];
   uniqueCategories?: string[];
+  onExportTickets?: () => void;
+  isExporting?: boolean;
 }
 
 export const TicketFilters: React.FC<TicketFiltersProps> = ({
@@ -50,12 +57,18 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   setResourceIdFilter,
   dateRange,
   setDateRange,
+  lastStatusFilter = 'all',
+  setLastStatusFilter,
+  lastCommentByInvigilator = false,
+  setLastCommentByInvigilator,
   onClearFilters,
   activeFiltersCount,
   uniqueCities = [],
   uniqueResourceIds = [],
   uniqueSeverities = [],
-  uniqueCategories = []
+  uniqueCategories = [],
+  onExportTickets,
+  isExporting = false
 }) => {
   return (
     <Card>
@@ -65,38 +78,125 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
             <Filter className="h-4 w-4" />
             Filters
           </CardTitle>
-          {activeFiltersCount > 0 && (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">
-                {activeFiltersCount} active
-              </Badge>
+          <div className="flex items-center gap-2">
+            {onExportTickets && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={onClearFilters}
+                onClick={onExportTickets}
+                disabled={isExporting}
                 className="h-8"
               >
-                <X className="h-3 w-3 mr-1" />
-                Clear
+                <Download className="h-3 w-3 mr-1" />
+                {isExporting ? 'Exporting...' : 'Export Tickets'}
               </Button>
-            </div>
-          )}
+            )}
+            {activeFiltersCount > 0 && (
+              <>
+                <Badge variant="secondary">
+                  {activeFiltersCount} active
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onClearFilters}
+                  className="h-8"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Clear
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search tickets by number (comma-separated), description..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+        {/* First row: Search, Resource ID, Date Range */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Search */}
+          <div className="relative">
+          <label className="text-sm font-medium mb-1 block">Search</label>
+            <Search className="absolute left-3 top-11 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search tickets by number (comma-separated), description..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Resource ID */}
+          {setResourceIdFilter ? (
+            <div>
+              <label className="text-sm font-medium mb-1 block">Resource ID</label>
+              <Select value={resourceIdFilter.length > 0 ? resourceIdFilter[0] : 'all'} onValueChange={(value) => {
+                if (value === 'all') {
+                  setResourceIdFilter([]);
+                } else {
+                  setResourceIdFilter([value]);
+                }
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Resource IDs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Resource IDs</SelectItem>
+                  {uniqueResourceIds.map(resourceId => (
+                    <SelectItem key={resourceId.value} value={resourceId.value}>{resourceId.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="hidden md:block" />
+          )}
+
+          {/* Date Range */}
+          {setDateRange ? (
+            <div>
+              <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          ) : (
+            <div className="hidden md:block" />
+          )}
         </div>
 
-        {/* Filter Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Second row: Status, Severity, Category, City */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="text-sm font-medium mb-1 block">Status</label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -105,13 +205,14 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="open">Open</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="ops_input_required">Ops Input Required</SelectItem>
-                <SelectItem value="user_dependency">User Dependency</SelectItem>
-                <SelectItem value="send_for_approval">Send for Approval</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
+                <SelectItem value="open">OPEN</SelectItem>
+                <SelectItem value="in_progress">PENDING ON CX</SelectItem>
+                <SelectItem value="ops_input_required">OPS DEPENDENCY</SelectItem>
+                <SelectItem value="user_dependency">USER DEPENDENCY</SelectItem>
+                <SelectItem value="ops_user_dependency">OPS + USER DEPENDENCY</SelectItem>
+                <SelectItem value="send_for_approval">SEND FOR APPROVAL</SelectItem>
+                <SelectItem value="approved">APPROVED</SelectItem>
+                <SelectItem value="resolved">CLOSED</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -176,78 +277,47 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
           </div>
         </div>
 
-        {/* Resource ID and Date Range Filters - Side by Side */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Resource ID Filter */}
-          {setResourceIdFilter && (
+        {/* Third row: Last Status, Last Comment by Invigilator */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Last Status Filter */}
+          {setLastStatusFilter ? (
             <div>
-              <label className="text-sm font-medium mb-1 block">Resource ID</label>
-              <Select value={resourceIdFilter.length > 0 ? resourceIdFilter[0] : 'all'} onValueChange={(value) => {
-                if (value === 'all') {
-                  setResourceIdFilter([]);
-                } else {
-                  setResourceIdFilter([value]);
-                }
-              }}>
+              <label className="text-sm font-medium mb-1 block">Last Status</label>
+              <Select value={lastStatusFilter} onValueChange={setLastStatusFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All Resource IDs" />
+                  <SelectValue placeholder="All Last Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Resource IDs</SelectItem>
-                  {uniqueResourceIds.map(resourceId => (
-                    <SelectItem key={resourceId.value} value={resourceId.value}>{resourceId.label}</SelectItem>
-                  ))}
+                  <SelectItem value="all">All Last Status</SelectItem>
+                  <SelectItem value="open">OPEN</SelectItem>
+                  <SelectItem value="in_progress">PENDING ON CX</SelectItem>
+                  <SelectItem value="ops_input_required">OPS DEPENDENCY</SelectItem>
+                  <SelectItem value="user_dependency">USER DEPENDENCY</SelectItem>
+                  <SelectItem value="ops_user_dependency">OPS + USER DEPENDENCY</SelectItem>
+                  <SelectItem value="send_for_approval">SEND FOR APPROVAL</SelectItem>
+                  <SelectItem value="approved">APPROVED</SelectItem>
+                  <SelectItem value="resolved">CLOSED</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+          ) : (
+            <div className="hidden sm:block" />
           )}
 
-          {/* Date Range Filter */}
-          {setDateRange && (
-            <div>
-              <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dateRange && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "LLL dd, y")} -{" "}
-                          {format(dateRange.to, "LLL dd, y")}
-                        </>
-                      ) : (
-                        format(dateRange.from, "LLL dd, y")
-                      )
-                    ) : (
-                      <span>Pick a date range</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
-              {dateRange && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Filtering tickets created between {dateRange.from && format(dateRange.from, "MMM dd, yyyy")} 
-                  {dateRange.to && ` and ${format(dateRange.to, "MMM dd, yyyy")}`}
-                </p>
-              )}
+          {/* Last Comment by Invigilator Toggle */}
+          {setLastCommentByInvigilator ? (
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="last-comment-invigilator"
+                checked={lastCommentByInvigilator}
+                onCheckedChange={setLastCommentByInvigilator}
+              />
+              <label htmlFor="last-comment-invigilator" className="text-sm font-medium">
+                Last comment by Invigilator
+              </label>
             </div>
+          ) : (
+            <div className="hidden sm:block" />
           )}
         </div>
       </CardContent>

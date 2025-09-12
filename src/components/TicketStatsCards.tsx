@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Clock, CheckCircle, XCircle, TrendingUp, Timer } from 'lucide-react';
 import { Issue } from '@/types/issue';
+import { getStatusLabel } from '@/utils/status';
 
 interface TicketStatsCardsProps {
   tickets: Issue[];
@@ -20,7 +21,7 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
     let pending = 0;
     let inProgress = 0;
     if (userRole === 'approver') {
-      pending = tickets.filter(t => ['in_progress', 'ops_input_required', 'send_for_approval', 'approved'].includes(t.status)).length;
+      pending = tickets.filter(t => ['in_progress', 'ops_input_required', 'ops_user_dependency', 'user_dependency'].includes(t.status)).length;
     } else {
       inProgress = tickets.filter(t => t.status === 'in_progress').length;
     }
@@ -54,14 +55,14 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
 
   const statCards = [
     {
-      title: 'Total Tickets',
+      title: 'TOTAL TICKETS',
       value: stats.total,
       icon: <TrendingUp className="h-4 w-4" />,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50'
     },
     {
-      title: 'Open',
+      title: 'OPEN',
       value: stats.open,
       icon: <AlertTriangle className="h-4 w-4" />,
       color: 'text-red-600',
@@ -69,21 +70,21 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
     },
     userRole === 'approver'
       ? {
-          title: 'Pending',
+          title: 'PENDING',
           value: stats.pending,
           icon: <Clock className="h-4 w-4" />,
           color: 'text-yellow-600',
           bgColor: 'bg-yellow-50'
         }
       : {
-          title: 'In Progress',
+          title: 'PENDING ON CX',
           value: stats.inProgress,
           icon: <Clock className="h-4 w-4" />,
           color: 'text-yellow-600',
           bgColor: 'bg-yellow-50'
         },
     {
-      title: 'Resolved',
+      title: 'CLOSED',
       value: stats.resolved,
       icon: <CheckCircle className="h-4 w-4" />,
       color: 'text-green-600',
