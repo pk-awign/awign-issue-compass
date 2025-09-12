@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2, MessageSquare, User, CheckCircle2, Send, Download } from 'lucide-react';
+import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2, MessageSquare, User, CheckCircle2, Send, Download, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -56,6 +56,7 @@ export const AdminPage: React.FC = () => {
   // State management
   const [tickets, setTickets] = useState<Issue[]>([]);
   const [filteredTickets, setFilteredTickets] = useState<Issue[]>([]);
+  const [allFilteredTickets, setAllFilteredTickets] = useState<Issue[]>([]); // Store all filtered tickets for dropdown calculations
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -64,7 +65,6 @@ export const AdminPage: React.FC = () => {
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(defaultTab);
-  const [activeStatusTab, setActiveStatusTab] = useState('all');
   const [analytics, setAnalytics] = useState<any>(null);
   const [resolverFilterSingle, setResolverFilterSingle] = useState<string>('all');
   const [resolverFilter, setResolverFilter] = useState<string[]>([]);
@@ -160,53 +160,7 @@ export const AdminPage: React.FC = () => {
     return ids;
   }, [filteredTickets]);
 
-  // Categorize tickets by status for tabs - use analytics data for counts
-  const ticketsByStatus = useMemo(() => {
-    if (!analytics) {
-      return {
-        all: filteredTickets,
-        open: filteredTickets.filter(t => t.status === 'open'),
-        in_progress: filteredTickets.filter(t => t.status === 'in_progress'),
-        ops_input_required: filteredTickets.filter(t => t.status === 'ops_input_required'),
-        user_dependency: filteredTickets.filter(t => t.status === 'user_dependency'),
-        ops_user_dependency: filteredTickets.filter(t => t.status === 'ops_user_dependency'),
-        send_for_approval: filteredTickets.filter(t => t.status === 'send_for_approval'),
-        approved: filteredTickets.filter(t => t.status === 'approved'),
-        resolved: filteredTickets.filter(t => t.status === 'resolved'),
-      } as const;
-    }
 
-    // Use analytics data for actual counts
-    return {
-      all: filteredTickets, // Still use filtered tickets for display
-      open: filteredTickets.filter(t => t.status === 'open'),
-      in_progress: filteredTickets.filter(t => t.status === 'in_progress'),
-      ops_input_required: filteredTickets.filter(t => t.status === 'ops_input_required'),
-      user_dependency: filteredTickets.filter(t => t.status === 'user_dependency'),
-      ops_user_dependency: filteredTickets.filter(t => t.status === 'ops_user_dependency'),
-      send_for_approval: filteredTickets.filter(t => t.status === 'send_for_approval'),
-      approved: filteredTickets.filter(t => t.status === 'approved'),
-      resolved: filteredTickets.filter(t => t.status === 'resolved'),
-    } as const;
-  }, [filteredTickets, analytics]);
-
-  // Get actual counts from analytics for tab badges
-  const getStatusCount = (status: string): number => {
-    if (!analytics) return 0;
-    
-    switch (status) {
-      case 'all': return analytics.totalTickets;
-      case 'open': return analytics.openTickets;
-      case 'in_progress': return analytics.inProgressTickets;
-      case 'ops_input_required': return analytics.opsInputRequiredTickets;
-      case 'user_dependency': return analytics.userDependencyTickets;
-      case 'ops_user_dependency': return analytics.opsUserDependencyTickets;
-      case 'send_for_approval': return analytics.sendForApprovalTickets;
-      case 'approved': return analytics.approvedTickets;
-      case 'resolved': return analytics.resolvedTickets;
-      default: return 0;
-    }
-  };
 
   const initializeSystem = async () => {
     console.log('🚀 Initializing admin system...');
@@ -239,11 +193,11 @@ export const AdminPage: React.FC = () => {
         };
       } else {
         // For super admin, load all tickets with filters
-        const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter.length > 0 || approverFilter.length > 0 || resourceIdFilter.length > 0 || filterDateRange?.from;
+        const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter.length > 0 || approverFilter.length > 0 || resourceIdFilter.length > 0 || filterDateRange?.from || lastStatusFilter !== 'all' || lastCommentByInvigilator;
         
         if (hasFilters || onlyUnassignedResolver) {
-          // Use filtered method when filters are applied
-          result = await AdminService.getFilteredTickets(showDeleted, reset ? 1 : page, limit, {
+          // Use unpaginated method when filters are applied to get ALL matching tickets
+          const allFilteredTickets = await AdminService.getFilteredTicketsUnpaginated({
             searchQuery,
             statusFilter,
             severityFilter,
@@ -253,11 +207,34 @@ export const AdminPage: React.FC = () => {
             approverFilter,
             resourceIdFilter,
             dateRange: filterDateRange,
-            onlyUnassignedResolver
+            onlyUnassignedResolver,
+            lastStatusFilter,
+            lastCommentByInvigilator,
+            showDeleted
           });
+          
+          // Store all filtered tickets for dropdown calculations
+          setAllFilteredTickets(allFilteredTickets);
+          
+          // Apply client-side pagination
+          const startIndex = (reset ? 0 : (page - 1) * limit);
+          const endIndex = startIndex + limit;
+          const paginatedTickets = allFilteredTickets.slice(startIndex, endIndex);
+          
+          result = {
+            tickets: paginatedTickets,
+            total: allFilteredTickets.length,
+            hasMore: endIndex < allFilteredTickets.length
+          };
         } else {
           // Use regular method when no filters
           result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit);
+          
+          // For no filters, we need to get all tickets for dropdown calculations
+          if (reset) {
+            const allTickets = await AdminService.getAllTicketsUnpaginated({ showDeleted });
+            setAllFilteredTickets(allTickets);
+          }
         }
       }
       
@@ -288,7 +265,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, isTicketAdmin, user?.id]);
+  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, isTicketAdmin, user?.id]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   useEffect(() => {
@@ -298,7 +275,7 @@ export const AdminPage: React.FC = () => {
     setFilteredTickets([]);
     loadTickets(true);
     // eslint-disable-next-line
-  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver]);
+  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator]);
 
   // Fetch resolvers/approvers for filter dropdowns
   useEffect(() => {
@@ -334,7 +311,32 @@ export const AdminPage: React.FC = () => {
     setOnlyUnassignedResolver(false);
     setLastStatusFilter('all');
     setLastCommentByInvigilator(false);
+    setAllFilteredTickets([]); // Clear all filtered tickets
   };
+
+  // Client-side filtering for new filters that require comment data
+  const finalFilteredTickets = useMemo(() => {
+    let filtered = [...tickets];
+
+    // Apply lastStatusFilter
+    if (lastStatusFilter !== 'all') {
+      filtered = filtered.filter(ticket => ticket.status === lastStatusFilter);
+    }
+
+    // Apply lastCommentByInvigilator filter
+    if (lastCommentByInvigilator) {
+      filtered = filtered.filter(ticket => {
+        return ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator;
+      });
+    }
+
+    return filtered;
+  }, [tickets, lastStatusFilter, lastCommentByInvigilator]);
+
+  // Update filteredTickets whenever finalFilteredTickets changes
+  useEffect(() => {
+    setFilteredTickets(finalFilteredTickets);
+  }, [finalFilteredTickets]);
 
   // Check if there are active filters
   const hasActiveFilters = searchQuery || 
@@ -439,21 +441,21 @@ export const AdminPage: React.FC = () => {
     });
   };
 
-  // Get unique cities for filter
-  const uniqueCities = Array.from(new Set(tickets.map(ticket => ticket.city)));
+  // Get unique cities for filter - use all available data, not just current page
+  const uniqueCities = Array.from(new Set(allFilteredTickets.map(ticket => ticket.city)));
 
-  // Get unique values for dynamic filters
-  const uniqueSeverities = Array.from(new Set(tickets.map(ticket => ticket.severity))).filter(Boolean);
-  const uniqueCategories = Array.from(new Set(tickets.map(ticket => ticket.issueCategory))).filter(Boolean);
+  // Get unique values for dynamic filters - use all available data, not just current page
+  const uniqueSeverities = Array.from(new Set(allFilteredTickets.map(ticket => ticket.severity))).filter(Boolean);
+  const uniqueCategories = Array.from(new Set(allFilteredTickets.map(ticket => ticket.issueCategory))).filter(Boolean);
 
-  // Get unique resource IDs for filter
+  // Get unique resource IDs for filter - use all available data, not just current page
   useEffect(() => {
-    const uniqueResourceIds = Array.from(new Set(tickets.map(ticket => ticket.resourceId)))
+    const uniqueResourceIds = Array.from(new Set(allFilteredTickets.map(ticket => ticket.resourceId)))
       .filter(id => id && id.trim() !== '')
       .sort();
     
     setResourceIds(uniqueResourceIds.map(id => ({ value: id, label: id })));
-  }, [tickets]);
+  }, [allFilteredTickets]);
 
   // Calculate System Health metrics
   const calculateSLACompliance = () => {
@@ -1039,96 +1041,31 @@ export const AdminPage: React.FC = () => {
               </div>
             </TabsContent>
 
-            <TabsContent value="tickets" className="space-y-4">
-              {/* Filters and Search */}
-              <Card>
+            <TabsContent value="tickets" className="space-y-6">
+              {/* Consolidated Filters */}
+              <Card className="border-l-4 border-l-blue-500">
+                
                 <CardContent className="p-4">
-                  <div className="space-y-4">
-                    {/* Search Bar - Full Width */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search tickets by number (comma-separated), description..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    
-                    {/* Row 1: Status, Severity, Category, City */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="open">OPEN</SelectItem>
-                          <SelectItem value="in_progress">PENDING ON CX</SelectItem>
-                          <SelectItem value="ops_input_required">OPS DEPENDENCY</SelectItem>
-                          <SelectItem value="user_dependency">USER DEPENDENCY</SelectItem>
-                          <SelectItem value="ops_user_dependency">OPS + USER DEPENDENCY</SelectItem>
-                          <SelectItem value="send_for_approval">SEND FOR APPROVAL</SelectItem>
-                          <SelectItem value="approved">APPROVED</SelectItem>
-                          <SelectItem value="resolved">CLOSED</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <div className="space-y-6">
+                    {/* Row 1: Search, Resource ID, Date Range, Severity */}
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                      {/* Search Bar */}
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Search</label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Search tickets by number (comma-separated), description..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10 h-11"
+                          />
+                        </div>
+                      </div>
 
-                      <Select value={severityFilter} onValueChange={setSeverityFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Severity" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Severity</SelectItem>
-                          {uniqueSeverities.map(severity => (
-                            <SelectItem key={severity} value={severity}>
-                              {severity === 'sev1' ? 'SEV1' :
-                               severity === 'sev2' ? 'SEV2' :
-                               severity === 'sev3' ? 'SEV3' :
-                               (severity as string).charAt(0).toUpperCase() + (severity as string).slice(1)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Categories</SelectItem>
-                          {uniqueCategories.map(category => (
-                            <SelectItem key={category} value={category}>
-                              {category === 'payment_delay' ? 'Payment Delay' :
-                               category === 'partial_payment' ? 'Partial Payment' :
-                               category === 'behavioral_complaint' ? 'Behavioral Complaint' :
-                               category === 'improvement_request' ? 'Improvement Request' :
-                               category === 'facility_issue' ? 'Facility Issue' :
-                               category === 'penalty_issue' ? 'Penalty Issue' :
-                               category === 'app_issue' ? 'App Issue' :
-                               category.charAt(0).toUpperCase() + category.slice(1)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <Select value={cityFilter} onValueChange={setCityFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="City" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Cities</SelectItem>
-                          {uniqueCities.map(city => (
-                            <SelectItem key={city} value={city}>{city}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Row 2: Resource ID, Date Range, Approvers */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
-                      <div className="lg:col-span-1">
-                        <label className="text-sm font-medium mb-1 block">
+                      {/* Resource ID */}
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
                           Resource ID {resourceIdFilter.length > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">
                               {resourceIdFilter.length} selected
@@ -1148,14 +1085,15 @@ export const AdminPage: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="lg:col-span-1">
-                        <label className="text-sm font-medium mb-1 block">Ticket Created Date Range</label>
+                      {/* Date Range */}
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Ticket Created Date Range</label>
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
                               className={cn(
-                                "w-full justify-start text-left font-normal",
+                                "w-full justify-start text-left font-normal h-11",
                                 !filterDateRange && "text-muted-foreground"
                               )}
                             >
@@ -1169,7 +1107,7 @@ export const AdminPage: React.FC = () => {
                                   format(filterDateRange.from, "LLL dd, y")
                                 )
                               ) : (
-                                <span>Pick a date range</span>
+                                "Pick a date range"
                               )}
                             </Button>
                           </PopoverTrigger>
@@ -1191,138 +1129,248 @@ export const AdminPage: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="lg:col-span-1">
-                        <label className="text-sm font-medium mb-1 block">
-                          Approvers {approverFilter.length > 0 && (
+                      {/* Severity */}
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Severity</label>
+                        <Select value={severityFilter} onValueChange={setSeverityFilter}>
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Severity" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Severity</SelectItem>
+                            {uniqueSeverities.map(severity => (
+                              <SelectItem key={severity} value={severity}>
+                                {severity === 'sev1' ? 'SEV1' :
+                                 severity === 'sev2' ? 'SEV2' :
+                                 severity === 'sev3' ? 'SEV3' :
+                                 (severity as string).charAt(0).toUpperCase() + (severity as string).slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    {/* Row 2: Status, Category, City, Approver */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Status</label>
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="open">OPEN</SelectItem>
+                            <SelectItem value="in_progress">PENDING ON CX</SelectItem>
+                            <SelectItem value="ops_input_required">OPS DEPENDENCY</SelectItem>
+                            <SelectItem value="user_dependency">USER DEPENDENCY</SelectItem>
+                            <SelectItem value="ops_user_dependency">OPS + USER DEPENDENCY</SelectItem>
+                            <SelectItem value="send_for_approval">SEND FOR APPROVAL</SelectItem>
+                            <SelectItem value="approved">APPROVED</SelectItem>
+                            <SelectItem value="resolved">CLOSED</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Category</label>
+                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            {uniqueCategories.map(category => (
+                              <SelectItem key={category} value={category}>
+                                {category === 'payment_delay' ? 'Payment Delay' :
+                                 category === 'partial_payment' ? 'Partial Payment' :
+                                 category === 'behavioral_complaint' ? 'Behavioral Complaint' :
+                                 category === 'improvement_request' ? 'Improvement Request' :
+                                 category === 'facility_issue' ? 'Facility Issue' :
+                                 category === 'penalty_issue' ? 'Penalty Issue' :
+                                 category === 'app_issue' ? 'App Issue' :
+                                 category.charAt(0).toUpperCase() + category.slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">City</label>
+                        <Select value={cityFilter} onValueChange={setCityFilter}>
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="City" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Cities</SelectItem>
+                            {uniqueCities.map(city => (
+                              <SelectItem key={city} value={city}>{city}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Approver {approverFilter.length > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">
                               {approverFilter.length} selected
                             </Badge>
                           )}
                         </label>
                         <MultiSelect
-                          options={approvers
-                            .filter(a => availableApproverIds.size === 0 || availableApproverIds.has(a.id))
-                            .map(a => ({ value: a.id, label: a.name }))}
                           selected={approverFilter}
                           onChange={setApproverFilter}
                           placeholder="Select approvers..."
                           className="w-full"
+                          options={approvers.map(a => ({ value: a.id, label: a.name }))}
                         />
                       </div>
                     </div>
 
-                    {/* Row 3: Resolvers */}
-                    <div className="grid grid-cols-1 gap-3 mt-3">
+                    {/* Row 3: Resolver */}
+                    <div className="grid grid-cols-1 lg:grid-cols-1 gap-4">
                       <div>
-                        <label className="text-sm font-medium mb-1 block">
-                          Resolvers {resolverFilter.length > 0 && (
+                        <label className="text-sm font-medium mb-2 block">
+                          Resolver {resolverFilter.length > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">
                               {resolverFilter.length} selected
                             </Badge>
                           )}
                         </label>
                         <MultiSelect
-                          options={resolvers
-                            .filter(r => availableResolverIds.size === 0 || availableResolverIds.has(r.id))
-                            .map(r => ({ value: r.id, label: r.name }))}
                           selected={resolverFilter}
                           onChange={setResolverFilter}
                           placeholder="Select resolvers..."
                           className="w-full"
+                          options={resolvers.map(r => ({ value: r.id, label: r.name }))}
                         />
+                      </div>
+                    </div>
+
+                    {/* Row 4: Actions & Settings */}
+                    <div className="flex flex-wrap items-center gap-4 pt-2 border-t">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="only-unassigned-resolver"
+                          checked={onlyUnassignedResolver}
+                          onCheckedChange={(checked) => setOnlyUnassignedResolver(checked)}
+                        />
+                        <label htmlFor="only-unassigned-resolver" className="text-sm font-medium">
+                          Unassigned Tickets
+                        </label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="show-deleted"
+                          checked={showDeleted}
+                          onCheckedChange={(checked) => setShowDeleted(checked)}
+                        />
+                        <label htmlFor="show-deleted" className="text-sm font-medium">
+                          {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          onClick={handleExportTickets}
+                          disabled={isExporting}
+                          className="flex items-center gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          {isExporting ? 'Exporting...' : 'Export Filtered Tickets'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => openDownloadDialog('all')}
+                          disabled={isDownloading}
+                        >
+                          {isDownloading && downloadType === 'all' ? 'Downloading...' : 'Download All Tickets'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => openDownloadDialog('detailed')}
+                          disabled={isDownloading}
+                        >
+                          {isDownloading && downloadType === 'detailed' ? 'Downloading...' : 'Download Detailed Tickets'}
+                        </Button>
+                        {hasActiveFilters && (
+                          <Button 
+                            variant="outline" 
+                            onClick={clearFilters}
+                            className="flex items-center gap-2"
+                          >
+                            <X className="h-4 w-4" />
+                            Clear Filters
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Show Deleted Tickets Toggle and Download Button */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center flex-wrap gap-3 sm:gap-4 mb-4">
-                <Switch
-                  id="show-deleted"
-                  checked={showDeleted}
-                  onCheckedChange={(checked) => setShowDeleted(checked)}
-                />
-                <label htmlFor="show-deleted" className="text-sm font-medium">
-                  {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
-                </label>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="only-unassigned-resolver"
-                    checked={onlyUnassignedResolver}
-                    onCheckedChange={(checked) => setOnlyUnassignedResolver(checked)}
-                  />
-                  <label htmlFor="only-unassigned-resolver" className="text-sm font-medium">
-                    Unassigned Tickets
-                  </label>
-                </div>
+              {/* Status Count Cards - Update based on filters */}
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+                <Card className="text-center">
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-blue-600">{allFilteredTickets.filter(t => t.status === 'open').length}</div>
+                    <div className="text-sm text-muted-foreground">Open</div>
+                  </CardContent>
+                </Card>
                 
-                {/* Row 3: Last Status, Last Comment by Invigilator */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Last Status</label>
-                    <Select value={lastStatusFilter} onValueChange={setLastStatusFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Last Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Last Status</SelectItem>
-                        <SelectItem value="open">OPEN</SelectItem>
-                        <SelectItem value="in_progress">PENDING ON CX</SelectItem>
-                        <SelectItem value="ops_input_required">OPS DEPENDENCY</SelectItem>
-                        <SelectItem value="user_dependency">USER DEPENDENCY</SelectItem>
-                        <SelectItem value="ops_user_dependency">OPS + USER DEPENDENCY</SelectItem>
-                        <SelectItem value="send_for_approval">SEND FOR APPROVAL</SelectItem>
-                        <SelectItem value="approved">APPROVED</SelectItem>
-                        <SelectItem value="resolved">CLOSED</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="last-comment-invigilator"
-                      checked={lastCommentByInvigilator}
-                      onCheckedChange={setLastCommentByInvigilator}
-                    />
-                    <label htmlFor="last-comment-invigilator" className="text-sm font-medium">
-                      Last comment by Invigilator
-                    </label>
-                  </div>
-                </div>
+                <Card className="text-center">
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-yellow-600">{allFilteredTickets.filter(t => t.status === 'in_progress').length}</div>
+                    <div className="text-sm text-muted-foreground">Pending on CX</div>
+                  </CardContent>
+                </Card>
                 
-                <div className="flex flex-wrap gap-2">
-                    <Button 
-                        variant="outline" 
-                        onClick={handleExportTickets}
-                        disabled={isExporting}
-                        className="flex items-center gap-2"
-                    >
-                        <Download className="h-4 w-4" />
-                        {isExporting ? 'Exporting...' : 'Export Filtered Tickets'}
-                    </Button>
-                    <Button 
-                        variant="outline" 
-                        onClick={() => openDownloadDialog('all')}
-                        disabled={isDownloading}
-                    >
-                        {isDownloading && downloadType === 'all' ? 'Downloading...' : 'Download All Tickets'}
-                    </Button>
-                    <Button 
-                        variant="outline" 
-                        onClick={() => openDownloadDialog('detailed')}
-                        disabled={isDownloading}
-                    >
-                        {isDownloading && downloadType === 'detailed' ? 'Downloading...' : 'Download Detailed Tickets'}
-                    </Button>
-                    <Button 
-                        variant="outline" 
-                        onClick={clearFilters}
-                        disabled={!hasActiveFilters}
-                    >
-                        Clear Filters
-                    </Button>
-                </div>
+                <Card className="text-center">
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-orange-600">{allFilteredTickets.filter(t => t.status === 'user_dependency').length}</div>
+                    <div className="text-sm text-muted-foreground">User Dependency</div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="text-center">
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-purple-600">{allFilteredTickets.filter(t => t.status === 'ops_input_required').length}</div>
+                    <div className="text-sm text-muted-foreground">Ops Dependency</div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="text-center">
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-indigo-600">{allFilteredTickets.filter(t => t.status === 'ops_user_dependency').length}</div>
+                    <div className="text-sm text-muted-foreground">Ops + User</div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="text-center">
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-cyan-600">{allFilteredTickets.filter(t => t.status === 'send_for_approval').length}</div>
+                    <div className="text-sm text-muted-foreground">Send for Approval</div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="text-center">
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-green-600">{allFilteredTickets.filter(t => t.status === 'approved').length}</div>
+                    <div className="text-sm text-muted-foreground">Approved</div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="text-center">
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-gray-600">{allFilteredTickets.filter(t => t.status === 'resolved').length}</div>
+                    <div className="text-sm text-muted-foreground">Closed</div>
+                  </CardContent>
+                </Card>
               </div>
 
               {/* Enhanced User Assignment */}
@@ -1423,70 +1471,10 @@ export const AdminPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Status Tabs */}
-              <Tabs value={activeStatusTab} onValueChange={setActiveStatusTab}>
-                <TabsList className="grid grid-cols-2 sm:flex sm:flex-row w-full gap-3 sm:gap-0 bg-white p-2 rounded-xl border shadow-md my-4 z-10">
-                  <TabsTrigger value="all" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    All
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('all')}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="open" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    Open
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('open')}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="in_progress" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    Pending on CX
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('in_progress')}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="user_dependency" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    User Dependency
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('user_dependency')}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="ops_input_required" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    Ops Dependency
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('ops_input_required')}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="ops_user_dependency" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    Ops + User Dependency
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('ops_user_dependency')}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="send_for_approval" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    Send for Approval
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('send_for_approval')}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="approved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    Approved
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('approved')}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="resolved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                    Closed
-                    <Badge variant="secondary" className="ml-2">
-                      {getStatusCount('resolved')}
-                    </Badge>
-                  </TabsTrigger>
-                </TabsList>
 
-                {/* Tab contents for each status */}
-                <TabsContent value="all" className="mt-6">
-                  {/* Desktop Table */}
-                  <div className="hidden md:block">
-                    <Card>
+              {/* Desktop Table */}
+              <div className="hidden md:block">
+                <Card>
                   <CardHeader className="p-4 pb-0">
                     <CardTitle className="flex items-center justify-between">
                       <span>Tickets ({totalTickets})</span>
@@ -1638,112 +1626,6 @@ export const AdminPage: React.FC = () => {
                   </CardContent>
                 </Card>
               </div>
-                </TabsContent>
-
-                {/* Other status tab contents */}
-                {Object.entries(ticketsByStatus).filter(([key]) => key !== 'all').map(([status, tickets]) => (
-                  <TabsContent key={status} value={status} className="mt-6">
-                    <div className="hidden md:block">
-                      <Card>
-                        <CardHeader className="p-4 pb-0">
-                          <CardTitle className="flex items-center justify-between">
-                            <span>{status === 'in_progress' ? 'Pending on CX' : 
-                                   status === 'ops_input_required' ? 'Ops Dependency' :
-                                   status === 'ops_user_dependency' ? 'Ops + User Dependency' :
-                                   status === 'send_for_approval' ? 'Send for Approval' :
-                                   status === 'resolved' ? 'Closed' :
-                                   status.charAt(0).toUpperCase() + status.slice(1)} Tickets ({getStatusCount(status)})</span>
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                          {isLoading ? (
-                            <div className="p-8 text-center">
-                              <div className="flex items-center justify-center space-x-2">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                                <span>Loading tickets...</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Ticket #</TableHead>
-                                  <TableHead>Issue Type</TableHead>
-                                  <TableHead>Description</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead>Severity</TableHead>
-                                  <TableHead>City</TableHead>
-                                  <TableHead>Created</TableHead>
-                                  <TableHead>Actions</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {tickets.length === 0 ? (
-                                  <TableRow>
-                                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                      No tickets found
-                                    </TableCell>
-                                  </TableRow>
-                                ) : (
-                                  tickets.map((ticket) => (
-                                    <TableRow key={ticket.id}>
-                                      <TableCell className="font-mono">{ticket.ticketNumber}</TableCell>
-                                      <TableCell>{ticket.issueCategory}</TableCell>
-                                      <TableCell className="max-w-xs truncate">{ticket.issueDescription}</TableCell>
-                                      <TableCell>
-                                        <Badge className={getStatusColor(ticket.status)}>
-                                          {getStatusLabel(ticket.status)}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Badge className={getSeverityColor(ticket.severity)}>
-                                          {ticket.severity.toUpperCase()}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell>{ticket.city}</TableCell>
-                                      <TableCell>{format(new Date(ticket.submittedAt), 'dd MMM yyyy')}</TableCell>
-                                      <TableCell>
-                                        <div className="flex items-center gap-2">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleViewTicket(ticket)}
-                                          >
-                                            <Eye className="h-4 w-4" />
-                                          </Button>
-                                          {!ticket.deleted && (
-                                            <Button
-                                              variant="destructive"
-                                              size="sm"
-                                              onClick={() => handleDeleteTicket(ticket)}
-                                              disabled={deletingTicketId === ticket.id}
-                                            >
-                                              {deletingTicketId === ticket.id ? (
-                                                <>
-                                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                  Deleting...
-                                                </>
-                                              ) : (
-                                                <>
-                                                  <Trash2 className="h-4 w-4" />
-                                                </>
-                                              )}
-                                            </Button>
-                                          )}
-                                        </div>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))
-                                )}
-                              </TableBody>
-                            </Table>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </TabsContent>
-                ))}
-              </Tabs>
               
               {/* Pagination Controls */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 my-4">

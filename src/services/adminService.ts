@@ -513,6 +513,22 @@ export class AdminService {
       if (filters.cityFilter && filters.cityFilter !== 'all') {
         query = query.eq('city', filters.cityFilter);
       }
+      
+      // Handle resource ID filter
+      if (filters.resourceIdFilter && filters.resourceIdFilter.length > 0) {
+        query = query.in('resource_id', filters.resourceIdFilter);
+      }
+      
+      // Handle date range filter
+      if (filters.dateRange?.from) {
+        query = query.gte('created_at', filters.dateRange.from.toISOString());
+      }
+      if (filters.dateRange?.to) {
+        const adjustedEndDate = new Date(filters.dateRange.to);
+        adjustedEndDate.setDate(adjustedEndDate.getDate() + 1);
+        query = query.lt('created_at', adjustedEndDate.toISOString());
+      }
+      
       if (filters.startDate) {
         query = query.gte('submitted_at', filters.startDate.toISOString());
       }
@@ -524,11 +540,9 @@ export class AdminService {
       if (filters.showDeleted === false) {
         query = query.eq('deleted', false);
       }
-      if (filters.lastStatusFilter && filters.lastStatusFilter !== 'all') {
-        query = query.eq('status', filters.lastStatusFilter as any);
-      }
-      // Note: lastCommentByInvigilator filter will be applied after fetching data
-      // since it requires checking comments which are not in the main tickets table
+      
+      // Note: lastStatusFilter, lastCommentByInvigilator, resolverFilter, approverFilter, and onlyUnassignedResolver
+      // will be applied after fetching data since they require checking related tables
 
       const { data, error } = await query as { data: any[], error: any };
 
@@ -540,28 +554,18 @@ export class AdminService {
         break;
       }
 
-      const tickets: Issue[] = data.map((t: any) => ({
-        id: t.id,
-        ticketNumber: t.ticket_number,
-        centreCode: t.centre_code,
-        city: t.city,
-        resourceId: t.resource_id,
-        awignAppTicketId: t.awign_app_ticket_id,
-        issueCategory: t.issue_category,
-        issueDescription: t.issue_description,
-        issueDate: t.issue_date,
-        severity: t.severity,
-        status: t.status,
-        submittedBy: t.submitted_by,
-        submittedAt: new Date(t.submitted_at),
-        resolvedAt: t.resolved_at ? new Date(t.resolved_at) : undefined,
-        resolutionNotes: t.resolution_notes,
-        deleted: t.deleted,
-        isAnonymous: t.is_anonymous || false,
-        attachments: t.attachments || [],
-        comments: t.comments || [],
-        assignees: t.assignees || []
-      }));
+      // Fetch full ticket data using TicketService for each ticket
+      const ticketPromises = data.map(async (t: any) => {
+        try {
+          return await TicketService.getTicketByNumber(t.ticket_number);
+        } catch (error) {
+          console.error(`Error fetching ticket ${t.ticket_number}:`, error);
+          return null;
+        }
+      });
+      
+      const resolvedTickets = await Promise.all(ticketPromises);
+      const tickets: Issue[] = resolvedTickets.filter(ticket => ticket !== null) as Issue[];
 
       allTickets.push(...tickets);
       
@@ -572,12 +576,146 @@ export class AdminService {
       page++;
     }
     
-    // Apply lastCommentByInvigilator filter if needed
+    // Apply post-processing filters that require related table data
     let finalTickets = allTickets;
+    
+    // Apply resolver filter
+    if (filters.resolverFilter && filters.resolverFilter.length > 0) {
+      const { data: resolverAssignments, error: resolverError } = await supabase
+        .from('ticket_assignees')
+        .select('ticket_id')
+        .eq('role', 'resolver')
+        .in('user_id', filters.resolverFilter);
+      
+      if (!resolverError && resolverAssignments) {
+        const resolverTicketIds = new Set(resolverAssignments.map(a => a.ticket_id));
+        finalTickets = finalTickets.filter(ticket => resolverTicketIds.has(ticket.id));
+      } else {
+        finalTickets = []; // No tickets match the resolver filter
+      }
+    }
+    
+    // Apply approver filter
+    if (filters.approverFilter && filters.approverFilter.length > 0) {
+      const { data: approverAssignments, error: approverError } = await supabase
+        .from('ticket_assignees')
+        .select('ticket_id')
+        .eq('role', 'approver')
+        .in('user_id', filters.approverFilter);
+      
+      if (!approverError && approverAssignments) {
+        const approverTicketIds = new Set(approverAssignments.map(a => a.ticket_id));
+        finalTickets = finalTickets.filter(ticket => approverTicketIds.has(ticket.id));
+      } else {
+        finalTickets = []; // No tickets match the approver filter
+      }
+    }
+    
+    // Apply onlyUnassignedResolver filter - exclude tickets assigned to resolvers
+    if (filters.onlyUnassignedResolver) {
+      console.log('🔍 Fetching all resolver assignments for filtering...');
+      const resolverAssignedSet = new Set<string>();
+      let resolverPage = 1;
+      const BATCH_SIZE = 1000;
+      
+      while (true) {
+        const { data: resolverAssignments, error: resolverError } = await supabase
+          .from('ticket_assignees')
+          .select('ticket_id')
+          .eq('role', 'resolver')
+          .range((resolverPage - 1) * BATCH_SIZE, resolverPage * BATCH_SIZE - 1);
+          
+        if (resolverError) {
+          console.error('❌ Error fetching resolver assignments:', resolverError);
+          break;
+        }
+        
+        if (!resolverAssignments || resolverAssignments.length === 0) break;
+        
+        resolverAssignments.forEach(assignment => {
+          resolverAssignedSet.add(assignment.ticket_id);
+        });
+        
+        if (resolverAssignments.length < BATCH_SIZE) break;
+        resolverPage += 1;
+      }
+      
+      console.log(`✅ Fetched ${resolverAssignedSet.size} resolver assignments`);
+      finalTickets = finalTickets.filter(ticket => !resolverAssignedSet.has(ticket.id));
+    }
+    
+    // Apply lastStatusFilter - check ticket_history for previous status before current status
+    if (filters.lastStatusFilter && filters.lastStatusFilter !== 'all') {
+      const { data: statusHistory, error: statusError } = await supabase
+        .from('ticket_history')
+        .select('ticket_id, old_value, new_value, performed_at')
+        .eq('action_type', 'status_change')
+        .order('performed_at', { ascending: false });
+      
+      if (!statusError && statusHistory) {
+        // Group by ticket_id and find the status change that happened before the current status
+        const lastStatusByTicket = new Map<string, string>();
+        
+        // Process status history to find the previous status for each ticket
+        const ticketStatusChanges = new Map<string, Array<{old_value: string, new_value: string, performed_at: string}>>();
+        
+        statusHistory.forEach(entry => {
+          if (!ticketStatusChanges.has(entry.ticket_id)) {
+            ticketStatusChanges.set(entry.ticket_id, []);
+          }
+          ticketStatusChanges.get(entry.ticket_id)!.push({
+            old_value: entry.old_value,
+            new_value: entry.new_value,
+            performed_at: entry.performed_at
+          });
+        });
+        
+        // For each ticket, find the status change where new_value is the current status
+        // and get the old_value (which is the previous status)
+        ticketStatusChanges.forEach((changes, ticketId) => {
+          // Sort by performed_at descending to get most recent first
+          changes.sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime());
+          
+          // Find the most recent change where new_value matches current status
+          const currentTicket = allTickets.find(t => t.id === ticketId);
+          if (currentTicket) {
+            const relevantChange = changes.find(change => change.new_value === currentTicket.status);
+            if (relevantChange) {
+              lastStatusByTicket.set(ticketId, relevantChange.old_value);
+            }
+          }
+        });
+        
+        finalTickets = finalTickets.filter(ticket => {
+          const lastStatus = lastStatusByTicket.get(ticket.id);
+          return lastStatus === filters.lastStatusFilter;
+        });
+      }
+    }
+    
+    // Apply lastCommentByInvigilator filter - check if last comment is from invigilator or anonymous
     if (filters.lastCommentByInvigilator) {
-      finalTickets = allTickets.filter(ticket => {
-        return ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator;
-      });
+      const { data: comments, error: commentsError } = await supabase
+        .from('comments')
+        .select('ticket_id, author_role, created_at')
+        .in('author_role', ['invigilator', 'anonymous'])
+        .order('created_at', { ascending: false });
+      
+      if (!commentsError && comments) {
+        // Group by ticket_id and get the most recent comment for each ticket
+        const lastCommentByTicket = new Map<string, string>();
+        
+        comments.forEach(comment => {
+          if (!lastCommentByTicket.has(comment.ticket_id)) {
+            lastCommentByTicket.set(comment.ticket_id, comment.author_role);
+          }
+        });
+        
+        finalTickets = finalTickets.filter(ticket => {
+          const lastCommentRole = lastCommentByTicket.get(ticket.id);
+          return lastCommentRole === 'invigilator' || lastCommentRole === 'anonymous';
+        });
+      }
     }
     
     console.log(`🔍 getFilteredTicketsUnpaginated completed: ${finalTickets.length} tickets fetched`);

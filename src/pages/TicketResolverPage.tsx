@@ -53,6 +53,7 @@ export const TicketResolverPage: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [lastStatusFilter, setLastStatusFilter] = useState('all');
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
+  const [lastStatusMap, setLastStatusMap] = useState<Map<string, string>>(new Map());
 
   const handleCloseTicket = async (ticketId: string) => {
     if (!user) return;
@@ -203,6 +204,19 @@ export const TicketResolverPage: React.FC = () => {
     return filtered;
   }, [issues, user]);
 
+  // Fetch last status data when tickets change
+  useEffect(() => {
+    const fetchLastStatus = async () => {
+      if (assignedTickets.length > 0) {
+        const ticketIds = assignedTickets.map(t => t.id);
+        const lastStatusData = await TicketService.getLastStatusForTickets(ticketIds);
+        setLastStatusMap(lastStatusData);
+      }
+    };
+    
+    fetchLastStatus();
+  }, [assignedTickets]);
+
   // Apply filters
   const filteredTickets = useMemo(() => {
     let filtered = assignedTickets;
@@ -272,12 +286,11 @@ export const TicketResolverPage: React.FC = () => {
       });
     }
 
-    // Last Status filter - filter by the last status change
+    // Last Status filter - filter by the last status change from ticket history
     if (lastStatusFilter !== 'all') {
       filtered = filtered.filter(ticket => {
-        // For now, we'll use the current status as the "last status"
-        // In a real implementation, you might want to check ticket history
-        return ticket.status === lastStatusFilter;
+        const lastStatus = lastStatusMap.get(ticket.id);
+        return lastStatus === lastStatusFilter;
       });
     }
 
@@ -299,7 +312,7 @@ export const TicketResolverPage: React.FC = () => {
       const bU = getLastUpdatedAt(b)?.getTime() || 0;
       return bU - aU;
     });
-  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator]);
+  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastStatusMap]);
 
   // Categorize tickets by status
   const ticketsByStatus = useMemo(() => {

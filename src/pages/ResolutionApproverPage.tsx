@@ -69,6 +69,7 @@ export const ResolutionApproverPage: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [lastStatusFilter, setLastStatusFilter] = useState('all');
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
+  const [lastStatusMap, setLastStatusMap] = useState<Map<string, string>>(new Map());
 
   // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
   const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
@@ -236,6 +237,19 @@ export const ResolutionApproverPage: React.FC = () => {
     return filtered;
   }, [issues, user]);
 
+  // Fetch last status data when tickets change
+  useEffect(() => {
+    const fetchLastStatus = async () => {
+      if (approverTickets.length > 0) {
+        const ticketIds = approverTickets.map(t => t.id);
+        const lastStatusData = await TicketService.getLastStatusForTickets(ticketIds);
+        setLastStatusMap(lastStatusData);
+      }
+    };
+    
+    fetchLastStatus();
+  }, [approverTickets]);
+
   // Apply filters
   const filteredTickets = useMemo(() => {
     let filtered = approverTickets;
@@ -305,12 +319,11 @@ export const ResolutionApproverPage: React.FC = () => {
       });
     }
 
-    // Last Status filter - filter by the last status change
+    // Last Status filter - filter by the last status change from ticket history
     if (lastStatusFilter !== 'all') {
       filtered = filtered.filter(ticket => {
-        // For now, we'll use the current status as the "last status"
-        // In a real implementation, you might want to check ticket history
-        return ticket.status === lastStatusFilter;
+        const lastStatus = lastStatusMap.get(ticket.id);
+        return lastStatus === lastStatusFilter;
       });
     }
 
@@ -322,7 +335,7 @@ export const ResolutionApproverPage: React.FC = () => {
     }
 
     return filtered;
-  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, user]);
+  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastStatusMap, user]);
 
   // Categorize tickets by approval status
   const ticketsByStatus = useMemo(() => {

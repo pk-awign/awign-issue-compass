@@ -1242,18 +1242,54 @@ export class TicketService {
     };
   }
 
-  static async getTicketHistory(ticketId: string): Promise<any[]> {
+  // Get last status for multiple tickets (for filtering purposes)
+  static async getLastStatusForTickets(ticketIds: string[]): Promise<Map<string, string>> {
     try {
+      if (ticketIds.length === 0) return new Map();
+      
       const { data, error } = await supabase
         .from('ticket_history')
-        .select('*')
-        .eq('ticket_id', ticketId)
+        .select('ticket_id, old_value, new_value, performed_at')
+        .eq('action_type', 'status_change')
+        .in('ticket_id', ticketIds)
         .order('performed_at', { ascending: false });
+      
       if (error) throw error;
-      return data || [];
+      
+      const lastStatusByTicket = new Map<string, string>();
+      
+      if (data && data.length > 0) {
+        // Group by ticket_id and find the most recent status change
+        const ticketStatusChanges = new Map<string, Array<{old_value: string, new_value: string, performed_at: string}>>();
+        
+        data.forEach(entry => {
+          if (!ticketStatusChanges.has(entry.ticket_id)) {
+            ticketStatusChanges.set(entry.ticket_id, []);
+          }
+          ticketStatusChanges.get(entry.ticket_id)!.push({
+            old_value: entry.old_value,
+            new_value: entry.new_value,
+            performed_at: entry.performed_at
+          });
+        });
+        
+        // For each ticket, find the most recent status change and get the old_value (previous status)
+        ticketStatusChanges.forEach((changes, ticketId) => {
+          if (changes.length > 0) {
+            // Sort by performed_at descending to get most recent first
+            changes.sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime());
+            
+            // Get the old_value from the most recent change (which is the previous status)
+            const mostRecentChange = changes[0];
+            lastStatusByTicket.set(ticketId, mostRecentChange.old_value);
+          }
+        });
+      }
+      
+      return lastStatusByTicket;
     } catch (error) {
-      console.error('Error fetching ticket history:', error);
-      return [];
+      console.error('Error getting last status for tickets:', error);
+      return new Map();
     }
   }
 
