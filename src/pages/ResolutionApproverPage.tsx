@@ -929,8 +929,8 @@ export const ResolutionApproverPage: React.FC = () => {
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
         <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
-          <p>© 2024 Awign Technologies. Escalation Management System for TCS Examination Operations.</p>
-          <p className="mt-1">For technical support, contact: support@awign.com</p>
+          <p>© 2025 Awign Enterprises Pvt. Ltd.</p>
+          <p className="mt-1">Escalation Management System for TCS Examination Operations.</p>
         </div>
       </footer>
     </div>

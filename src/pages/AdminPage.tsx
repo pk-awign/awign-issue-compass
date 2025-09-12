@@ -846,8 +846,8 @@ export const AdminPage: React.FC = () => {
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-4 md:space-y-6">
           <div className="text-center space-y-2 md:space-y-4">
-            <h2 className="text-2xl md:text-3xl font-bold">Super Admin Dashboard</h2>
-            <p className="text-muted-foreground">Complete system management and analytics</p>
+            <h2 className="text-2xl md:text-3xl font-bold"></h2>
+            <p className="text-muted-foreground"></p>
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
@@ -1759,8 +1759,8 @@ export const AdminPage: React.FC = () => {
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
         <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
-          <p>© 2024 Awign Technologies. Escalation Management System for TCS Examination Operations.</p>
-          <p className="mt-1">For technical support, contact: support@awign.com</p>
+          <p>© 2025 Awign Enterprises Pvt. Ltd.</p>
+          <p className="mt-1">Escalation Management System for TCS Examination Operations.</p>
         </div>
       </footer>
     </div>
