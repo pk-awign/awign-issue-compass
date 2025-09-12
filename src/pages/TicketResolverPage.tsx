@@ -503,7 +503,7 @@ export const TicketResolverPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onLogout={handleLogout} onTicketClick={handleTicketClick} />
+      <Header onLogout={handleLogout} onTicketClick={handleTicketClick} panelName="Resolver Panel" />
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-6">

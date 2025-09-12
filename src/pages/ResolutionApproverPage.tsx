@@ -11,6 +11,7 @@ import { useIssues } from '@/contexts/IssueContext';
 import { TicketDetailsModal } from '@/components/TicketDetailsModal';
 import { TicketFilters } from '@/components/TicketFilters';
 import { TicketStatsCards } from '@/components/TicketStatsCards';
+import { Header } from '@/components/navigation/Header';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Issue } from '@/types/issue';
@@ -417,17 +418,6 @@ export const ResolutionApproverPage: React.FC = () => {
     return hours;
   };
 
-  const getRoleDisplayName = () => {
-    if (!user) return '';
-    switch (user.role) {
-      case 'super_admin': return 'Super Admin';
-      case 'resolver': return 'Resolver';
-      case 'approver': return 'Approver';
-      case 'invigilator': return 'Invigilator';
-      default: return user.role;
-    }
-  };
-
   const renderApprovalCard = (ticket: Issue) => {
     const resolutionTime = getResolutionTime(ticket);
     
@@ -730,44 +720,7 @@ export const ResolutionApproverPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-white border-b shadow-sm">
-        <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col items-start">
-              <div className="bg-gray-800 p-1 rounded">
-                <img 
-                  src="/awign-logo.svg" 
-                  alt="Awign Logo" 
-                  className="w-8 h-8 object-contain"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col items-start flex-1 ml-4">
-              <span className="text-base sm:text-xl font-semibold text-gray-900">AWIGN ESCALATION MANAGEMENT</span>
-              <span className="text-xs sm:text-sm text-gray-600 mt-1">Approver Panel</span>
-            </div>
-            <div className="hidden sm:flex items-center gap-2 ml-4">
-              {user && (
-                <>
-                  <Users className="h-5 w-5" />
-                  <span className="text-sm font-medium">{user.name}</span>
-                  <span className="px-2 py-0.5 rounded bg-gray-100 text-xs font-semibold text-gray-700 ml-1">{getRoleDisplayName()}</span>
-                  <button onClick={handleLogout} className="ml-2">
-                    <LogOut className="h-5 w-5" />
-                  </button>
-                </>
-              )}
-            </div>
-            <div className="flex sm:hidden items-center gap-2 ml-auto justify-end">
-              {user && (
-                <button onClick={handleLogout} className="ml-2">
-                  <LogOut className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header onLogout={handleLogout} panelName="Approver Panel" />
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-6">

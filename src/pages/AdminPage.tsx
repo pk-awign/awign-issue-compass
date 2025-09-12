@@ -841,7 +841,7 @@ export const AdminPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onLogout={handleLogout} />
+      <Header onLogout={handleLogout} panelName="Admin Panel" />
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-4 md:space-y-6">

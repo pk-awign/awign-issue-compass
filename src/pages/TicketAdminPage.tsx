@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Issue } from '@/types/issue';
+import { getStatusLabel } from '@/utils/status';
 import { AdminService } from '@/services/adminService';
 import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
 import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
@@ -456,7 +457,7 @@ export const TicketAdminPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onLogout={handleLogout} />
+      <Header onLogout={handleLogout} panelName="Ticket Admin Panel" />
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-4 md:space-y-6">
