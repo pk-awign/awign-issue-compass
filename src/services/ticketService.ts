@@ -809,7 +809,7 @@ export class TicketService {
         details: { action: 'added', user_id: userId, role },
       });
 
-      // Auto-move to in_progress when a resolver is assigned
+      // Auto-move to in_progress when a resolver is assigned (only if ticket is in OPEN status)
       try {
         if (role === 'resolver') {
           const { data: ticket } = await supabase
@@ -818,7 +818,8 @@ export class TicketService {
             .eq('id', ticketId)
             .single();
           const currentStatus = ticket?.status as Issue['status'];
-          if (currentStatus && currentStatus !== 'in_progress') {
+          // Only move to in_progress if the ticket is currently in OPEN status
+          if (currentStatus === 'open') {
             await supabase
               .from('tickets')
               .update({ status: 'in_progress', updated_at: new Date().toISOString() })
