@@ -97,7 +97,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   useEffect(() => {
     if (activeTab === 'timeline' && ticket) {
       setIsTimelineLoading(true);
-      TicketService.getTicketHistory(ticket.id)
+      TicketService.getTicketTimeline(ticket.id)
         .then(events => {
           console.log('DEBUG: ticket_history events fetched:', events);
           setTimeline(events);

@@ -1052,16 +1052,16 @@ export const AdminPage: React.FC = () => {
                       {/* Search Bar */}
                       <div>
                         <label className="text-sm font-medium mb-2 block">Search</label>
-                        <div className="relative">
-                          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Search tickets by number (comma-separated), description..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search tickets by number (comma-separated), description..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                             className="pl-10 h-11"
-                          />
-                        </div>
-                      </div>
+                      />
+                    </div>
+                    </div>
 
                       {/* Resource ID */}
                       <div>
@@ -1261,18 +1261,18 @@ export const AdminPage: React.FC = () => {
                         <label htmlFor="only-unassigned-resolver" className="text-sm font-medium">
                           Unassigned Tickets
                         </label>
-                      </div>
+                  </div>
 
                       <div className="flex items-center space-x-2">
-                        <Switch
-                          id="show-deleted"
-                          checked={showDeleted}
-                          onCheckedChange={(checked) => setShowDeleted(checked)}
-                        />
-                        <label htmlFor="show-deleted" className="text-sm font-medium">
-                          {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
-                        </label>
-                      </div>
+                <Switch
+                  id="show-deleted"
+                  checked={showDeleted}
+                  onCheckedChange={(checked) => setShowDeleted(checked)}
+                />
+                <label htmlFor="show-deleted" className="text-sm font-medium">
+                  {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
+                  </label>
+                </div>
 
                       <div className="flex items-center gap-2">
                         <Button 
@@ -1284,31 +1284,31 @@ export const AdminPage: React.FC = () => {
                           <Download className="h-4 w-4" />
                           {isExporting ? 'Exporting...' : 'Export Filtered Tickets'}
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => openDownloadDialog('all')}
-                          disabled={isDownloading}
-                        >
-                          {isDownloading && downloadType === 'all' ? 'Downloading...' : 'Download All Tickets'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => openDownloadDialog('detailed')}
-                          disabled={isDownloading}
-                        >
-                          {isDownloading && downloadType === 'detailed' ? 'Downloading...' : 'Download Detailed Tickets'}
-                        </Button>
+                    <Button 
+                        variant="outline" 
+                        onClick={() => openDownloadDialog('all')}
+                        disabled={isDownloading}
+                    >
+                        {isDownloading && downloadType === 'all' ? 'Downloading...' : 'Download All Tickets'}
+                    </Button>
+                    <Button 
+                        variant="outline" 
+                        onClick={() => openDownloadDialog('detailed')}
+                        disabled={isDownloading}
+                    >
+                        {isDownloading && downloadType === 'detailed' ? 'Downloading...' : 'Download Detailed Tickets'}
+                    </Button>
                         {hasActiveFilters && (
-                          <Button 
-                            variant="outline" 
-                            onClick={clearFilters}
+                    <Button 
+                        variant="outline" 
+                        onClick={clearFilters}
                             className="flex items-center gap-2"
-                          >
+                    >
                             <X className="h-4 w-4" />
-                            Clear Filters
-                          </Button>
+                        Clear Filters
+                    </Button>
                         )}
-                      </div>
+                </div>
                     </div>
                   </div>
                 </CardContent>

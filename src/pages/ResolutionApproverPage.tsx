@@ -55,9 +55,6 @@ export const ResolutionApproverPage: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [availableTransitions, setAvailableTransitions] = useState<Issue['status'][]>([]);
   
-  // Per-ticket status change states
-  const [ticketStatuses, setTicketStatuses] = useState<Record<string, Issue['status']>>({});
-  const [ticketNotes, setTicketNotes] = useState<Record<string, string>>({});
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,6 +68,10 @@ export const ResolutionApproverPage: React.FC = () => {
   const [lastStatusFilter, setLastStatusFilter] = useState('all');
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
   const [lastStatusMap, setLastStatusMap] = useState<Map<string, string>>(new Map());
+  const [recentlySentForApproval, setRecentlySentForApproval] = useState(false);
+  const [recentlySentRange, setRecentlySentRange] = useState<DateRange | undefined>();
+  const [recentlySentTicketIds, setRecentlySentTicketIds] = useState<Set<string>>(new Set());
+  const [approvedDates, setApprovedDates] = useState<Map<string, Date>>(new Map());
 
   // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
   const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
@@ -152,9 +153,7 @@ export const ResolutionApproverPage: React.FC = () => {
       if (success) {
         toast.success(`Ticket status updated to ${newStatus}`);
         refreshIssues(); // Refresh to get latest data
-        // Reset form for this specific ticket
-        setTicketStatuses(prev => ({ ...prev, [ticketId]: 'open' }));
-        setTicketNotes(prev => ({ ...prev, [ticketId]: '' }));
+        // No per-ticket form state to reset on approver page
       } else {
         toast.error('Failed to update ticket status');
       }
@@ -166,21 +165,6 @@ export const ResolutionApproverPage: React.FC = () => {
     }
   };
 
-  const updateTicketStatus = (ticketId: string, status: Issue['status']) => {
-    setTicketStatuses(prev => ({ ...prev, [ticketId]: status }));
-  };
-
-  const updateTicketNotes = (ticketId: string, notes: string) => {
-    setTicketNotes(prev => ({ ...prev, [ticketId]: notes }));
-  };
-
-  const getTicketStatus = (ticketId: string) => {
-    return ticketStatuses[ticketId] || 'open';
-  };
-
-  const getTicketNotes = (ticketId: string) => {
-    return ticketNotes[ticketId] || '';
-  };
 
   const handleViewTicket = (ticket: Issue) => {
     setSelectedTicket(ticket);
@@ -189,10 +173,6 @@ export const ResolutionApproverPage: React.FC = () => {
     if (user) {
       TicketService.getStatusTransitions(user.role, ticket.status).then(transitions => {
         setAvailableTransitions(transitions);
-        // Initialize ticket status to current status if not already set
-        if (!ticketStatuses[ticket.id]) {
-          updateTicketStatus(ticket.id, ticket.status);
-        }
       });
     }
   };
@@ -249,6 +229,41 @@ export const ResolutionApproverPage: React.FC = () => {
     };
     
     fetchLastStatus();
+  }, [approverTickets]);
+
+  // Fetch recently sent for approval tickets for selected date range
+  useEffect(() => {
+    const fetchRecentlySentTickets = async () => {
+      if (recentlySentForApproval && recentlySentRange?.from) {
+        const from = recentlySentRange.from;
+        const to = recentlySentRange.to || recentlySentRange.from;
+        const ticketIds = await TicketService.getTicketsSentForApprovalInRange(from, to);
+        setRecentlySentTicketIds(new Set(ticketIds));
+      } else {
+        setRecentlySentTicketIds(new Set());
+      }
+    };
+    
+    fetchRecentlySentTickets();
+  }, [recentlySentForApproval, recentlySentRange]);
+
+  // Fetch approved dates for approved tickets
+  useEffect(() => {
+    const fetchApprovedDates = async () => {
+      const approvedTickets = approverTickets.filter(ticket => ticket.status === 'approved');
+      const approvedDatesMap = new Map<string, Date>();
+      
+      for (const ticket of approvedTickets) {
+        const approvedDate = await TicketService.getApprovedDate(ticket.id);
+        if (approvedDate) {
+          approvedDatesMap.set(ticket.id, approvedDate);
+        }
+      }
+      
+      setApprovedDates(approvedDatesMap);
+    };
+    
+    fetchApprovedDates();
   }, [approverTickets]);
 
   // Apply filters
@@ -335,8 +350,22 @@ export const ResolutionApproverPage: React.FC = () => {
       });
     }
 
+    // Recently Sent for Approval filter
+    if (recentlySentForApproval) {
+      filtered = filtered.filter(ticket => {
+        const isSFA = ticket.status === 'send_for_approval';
+        if (!isSFA) return false;
+        // Apply date-range restriction only if a range is selected
+        if (recentlySentRange?.from) {
+          return recentlySentTicketIds.has(ticket.id);
+        }
+        // No range selected: include all SFA tickets
+        return true;
+      });
+    }
+
     return filtered;
-  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastStatusMap, user]);
+  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastStatusMap, recentlySentForApproval, recentlySentTicketIds, user]);
 
   // Categorize tickets by approval status
   const ticketsByStatus = useMemo(() => {
@@ -357,7 +386,11 @@ export const ResolutionApproverPage: React.FC = () => {
   }, [filteredTickets]);
 
   const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, lastStatusFilter]
-    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0) + (lastCommentByInvigilator ? 1 : 0);
+    .filter(filter => filter && filter !== 'all').length +
+    resourceIdFilter.length +
+    (dateRange ? 1 : 0) +
+    (lastCommentByInvigilator ? 1 : 0) +
+    (recentlySentForApproval ? 1 : 0);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -369,6 +402,8 @@ export const ResolutionApproverPage: React.FC = () => {
     setDateRange(undefined);
     setLastStatusFilter('all');
     setLastCommentByInvigilator(false);
+    setRecentlySentForApproval(false);
+    setRecentlySentRange(undefined);
   };
 
   // Get unique cities for filter
@@ -416,6 +451,30 @@ export const ResolutionApproverPage: React.FC = () => {
     if (!ticket.resolvedAt) return null;
     const hours = Math.round((ticket.resolvedAt.getTime() - ticket.submittedAt.getTime()) / (1000 * 60 * 60));
     return hours;
+  };
+
+  const getApprovedDate = (ticket: Issue) => {
+    // For approved tickets, first try to get from fetched approved dates
+    if (ticket.status === 'approved') {
+      const fetchedDate = approvedDates.get(ticket.id);
+      if (fetchedDate) {
+        return fetchedDate;
+      }
+      
+      // Fallback to statusChangedAt if available
+      if (ticket.statusChangedAt) {
+        return ticket.statusChangedAt;
+      }
+    }
+    return null;
+  };
+
+  const getClosedDate = (ticket: Issue) => {
+    // For resolved/closed tickets, use resolvedAt
+    if (ticket.status === 'resolved' && ticket.resolvedAt) {
+      return ticket.resolvedAt;
+    }
+    return null;
   };
 
   const renderApprovalCard = (ticket: Issue) => {
@@ -493,51 +552,10 @@ export const ResolutionApproverPage: React.FC = () => {
               </div>
             )}
 
-            {/* Status Change Actions for Approvers */}
+            {/* Action Buttons for Approvers */}
             {user?.role === 'approver' && (
-              <div className="space-y-3 border-t pt-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Change Status:</span>
-                  <Select 
-                    value={getTicketStatus(ticket.id)} 
-                    onValueChange={(value: Issue['status']) => updateTicketStatus(ticket.id, value)}
-                  >
-                    <SelectTrigger className="w-32 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TicketService.getAllowedStatusTransitions(user!.role, ticket.status).map(status => (
-                        <SelectItem key={status} value={status} className="text-xs">
-                          {getStatusLabel(status)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {/* Approver cannot resolve; no resolution notes here */}
-                {false && (
-                  <div className="space-y-2">
-                    <Textarea
-                      placeholder="Enter resolution details..."
-                      value={getTicketNotes(ticket.id)}
-                      onChange={(e) => updateTicketNotes(ticket.id, e.target.value)}
-                      className="min-h-[60px] text-xs"
-                    />
-                  </div>
-                )}
-                
-                {/* Action Buttons */}
+              <div className="border-t pt-3">
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleStatusChange(ticket.id, getTicketStatus(ticket.id), getTicketNotes(ticket.id))}
-                    disabled={isUpdating || getTicketStatus(ticket.id) === ticket.status}
-                    className="flex-1 text-xs"
-                  >
-                    {isUpdating ? 'Updating...' : 'Update Status'}
-                  </Button>
-                  
                   {/* Quick Action Buttons */}
                   {ticket.status === 'send_for_approval' && (
                     <Button
@@ -545,7 +563,7 @@ export const ResolutionApproverPage: React.FC = () => {
                       variant="default"
                       onClick={() => handleStatusChange(ticket.id, 'approved')}
                       disabled={isUpdating}
-                      className="text-xs"
+                      className="text-xs flex-1"
                     >
                       <ThumbsUp className="h-3 w-3 mr-1" />
                       Approve
@@ -557,14 +575,12 @@ export const ResolutionApproverPage: React.FC = () => {
                       variant="secondary"
                       onClick={() => handleStatusChange(ticket.id, 'in_progress')}
                       disabled={isUpdating}
-                      className="text-xs"
+                      className="text-xs flex-1"
                     >
                       <ThumbsDown className="h-3 w-3 mr-1" />
                       Send back to CX
                     </Button>
                   )}
-                  
-                  {/* Approver cannot close tickets */}
                 </div>
               </div>
             )}
@@ -582,7 +598,13 @@ export const ResolutionApproverPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  Resolved: {ticket.resolvedAt ? format(ticket.resolvedAt, 'MMM dd, HH:mm') : 'N/A'}
+                  {ticket.status === 'approved' && getApprovedDate(ticket) ? (
+                    <>Approved: {format(getApprovedDate(ticket)!, 'MMM dd, HH:mm')}</>
+                  ) : ticket.status === 'resolved' && getClosedDate(ticket) ? (
+                    <>Closed: {format(getClosedDate(ticket)!, 'MMM dd, HH:mm')}</>
+                  ) : (
+                    <>Resolved: {ticket.resolvedAt ? format(ticket.resolvedAt, 'MMM dd, HH:mm') : 'N/A'}</>
+                  )}
                 </div>
               </div>
               {ticket.comments.length > 0 && (
@@ -662,7 +684,13 @@ export const ResolutionApproverPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                {format(ticket.submittedAt, 'MMM dd')}
+                {ticket.status === 'approved' && getApprovedDate(ticket) ? (
+                  <>Approved: {format(getApprovedDate(ticket)!, 'MMM dd')}</>
+                ) : ticket.status === 'resolved' && getClosedDate(ticket) ? (
+                  <>Closed: {format(getClosedDate(ticket)!, 'MMM dd')}</>
+                ) : (
+                  format(ticket.submittedAt, 'MMM dd')
+                )}
               </div>
             </div>
             {ticket.comments.length > 0 && (
@@ -751,6 +779,10 @@ export const ResolutionApproverPage: React.FC = () => {
             setLastStatusFilter={setLastStatusFilter}
             lastCommentByInvigilator={lastCommentByInvigilator}
             setLastCommentByInvigilator={setLastCommentByInvigilator}
+            recentlySentForApproval={recentlySentForApproval}
+            setRecentlySentForApproval={setRecentlySentForApproval}
+            recentlySentRange={recentlySentRange}
+            setRecentlySentRange={setRecentlySentRange}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
             uniqueCities={uniqueCities}

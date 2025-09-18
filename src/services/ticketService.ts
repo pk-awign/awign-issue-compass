@@ -264,23 +264,61 @@ export class TicketService {
 
   static async getTicketTimeline(ticketId: string): Promise<TimelineEvent[]> {
     try {
-      const { data, error } = await supabase
+      // First try to get from ticket_timeline table
+      const { data: timelineData, error: timelineError } = await supabase
         .from('ticket_timeline')
         .select('*')
         .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data || []).map((event: any) => ({
+        .order('created_at', { ascending: false });
+      
+      if (timelineError) {
+        console.error('Error fetching from ticket_timeline:', timelineError);
+      }
+      
+      // If we have timeline data, return it
+      if (timelineData && timelineData.length > 0) {
+        return timelineData.map((event: any) => ({
+          id: event.id,
+          eventType: event.event_type,
+          oldValue: event.old_value,
+          newValue: event.new_value,
+          performedBy: event.performed_by,
+          performedByName: event.performed_by_name,
+          performedByRole: event.performed_by_role,
+          details: event.details,
+          createdAt: new Date(event.created_at),
+        }));
+      }
+      
+      // Fallback: Get from ticket_history table and convert to TimelineEvent format
+      console.log('No data in ticket_timeline, falling back to ticket_history');
+      const { data: historyData, error: historyError } = await supabase
+        .from('ticket_history')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('performed_at', { ascending: false });
+      
+      if (historyError) {
+        console.error('Error fetching from ticket_history:', historyError);
+        return [];
+      }
+      
+      // Convert ticket_history format to TimelineEvent format
+      return (historyData || []).map((event: any) => ({
         id: event.id,
-        eventType: event.event_type,
+        eventType: event.action_type === 'status_change' ? 'status_changed' : 
+                  event.action_type === 'assignment' ? 'assigned' :
+                  event.action_type === 'comment_added' ? 'comment_added' :
+                  event.action_type === 'created' ? 'created' : 'status_changed',
         oldValue: event.old_value,
         newValue: event.new_value,
         performedBy: event.performed_by,
-        performedByName: event.performed_by_name,
+        performedByName: event.performed_by,
         performedByRole: event.performed_by_role,
         details: event.details,
-        createdAt: new Date(event.created_at),
+        createdAt: new Date(event.performed_at),
       }));
+      
     } catch (error) {
       console.error('Error fetching ticket timeline:', error);
       return [];
@@ -1241,6 +1279,78 @@ export class TicketService {
         role: data.status_changed_by_role || 'system'
       } : undefined,
     };
+  }
+
+  // Get tickets that moved to "send for approval" in the last X days
+  static async getTicketsRecentlySentForApproval(days: number): Promise<string[]> {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      
+      const { data, error } = await supabase
+        .from('ticket_history')
+        .select('ticket_id')
+        .eq('action_type', 'status_change')
+        .eq('new_value', 'send_for_approval')
+        .gte('performed_at', cutoffDate.toISOString())
+        .order('performed_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      return (data || []).map(entry => entry.ticket_id);
+    } catch (error) {
+      console.error('Error getting tickets recently sent for approval:', error);
+      return [];
+    }
+  }
+
+  // Get tickets that moved to "send for approval" within a specific date range
+  static async getTicketsSentForApprovalInRange(from: Date, to: Date): Promise<string[]> {
+    try {
+      const start = from.toISOString();
+      const end = to.toISOString();
+
+      const { data, error } = await supabase
+        .from('ticket_history')
+        .select('ticket_id')
+        .eq('action_type', 'status_change')
+        .eq('new_value', 'send_for_approval')
+        .gte('performed_at', start)
+        .lte('performed_at', end)
+        .order('performed_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(entry => entry.ticket_id);
+    } catch (error) {
+      console.error('Error getting tickets sent for approval in range:', error);
+      return [];
+    }
+  }
+
+  // Get approved date for a ticket from ticket history
+  static async getApprovedDate(ticketId: string): Promise<Date | null> {
+    try {
+      const { data, error } = await supabase
+        .from('ticket_history')
+        .select('performed_at')
+        .eq('ticket_id', ticketId)
+        .eq('action_type', 'status_change')
+        .eq('new_value', 'approved')
+        .order('performed_at', { ascending: false })
+        .limit(1);
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        return new Date(data[0].performed_at);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting approved date:', error);
+      return null;
+    }
   }
 
   // Get last status for multiple tickets (for filtering purposes)

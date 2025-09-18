@@ -32,6 +32,10 @@ interface TicketFiltersProps {
   setLastStatusFilter?: (status: string) => void;
   lastCommentByInvigilator?: boolean;
   setLastCommentByInvigilator?: (enabled: boolean) => void;
+  recentlySentForApproval?: boolean;
+  setRecentlySentForApproval?: (enabled: boolean) => void;
+  recentlySentRange?: DateRange | undefined;
+  setRecentlySentRange?: (range: DateRange | undefined) => void;
   onClearFilters: () => void;
   activeFiltersCount: number;
   uniqueCities?: string[];
@@ -61,6 +65,10 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   setLastStatusFilter,
   lastCommentByInvigilator = false,
   setLastCommentByInvigilator,
+  recentlySentForApproval = false,
+  setRecentlySentForApproval,
+  recentlySentRange,
+  setRecentlySentRange,
   onClearFilters,
   activeFiltersCount,
   uniqueCities = [],
@@ -277,8 +285,8 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
           </div>
         </div>
 
-        {/* Third row: Last Status, Last Comment by Invigilator */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Third row: Last Status, Last Comment by Invigilator, Recently Sent for Approval */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Last Status Filter */}
           {setLastStatusFilter ? (
             <div>
@@ -315,6 +323,65 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
               <label htmlFor="last-comment-invigilator" className="text-sm font-medium">
                 Last comment by Invigilator
               </label>
+            </div>
+          ) : (
+            <div className="hidden sm:block" />
+          )}
+
+          {/* Recently Sent for Approval Toggle */}
+          {setRecentlySentForApproval ? (
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="recently-sent-for-approval"
+                checked={recentlySentForApproval}
+                onCheckedChange={setRecentlySentForApproval}
+              />
+              <label htmlFor="recently-sent-for-approval" className="text-sm font-medium">
+                Recently sent for approval
+              </label>
+            </div>
+          ) : (
+            <div className="hidden sm:block" />
+          )}
+
+          {/* Sent for Approval Date Range */}
+          {recentlySentForApproval && setRecentlySentRange ? (
+            <div>
+              <label className="text-sm font-medium mb-1 block">Sent for Approval Date Range</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !recentlySentRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {recentlySentRange?.from ? (
+                      recentlySentRange.to ? (
+                        <>
+                          {format(recentlySentRange.from, "LLL dd, y")} - {format(recentlySentRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(recentlySentRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={recentlySentRange?.from}
+                    selected={recentlySentRange}
+                    onSelect={setRecentlySentRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           ) : (
             <div className="hidden sm:block" />
