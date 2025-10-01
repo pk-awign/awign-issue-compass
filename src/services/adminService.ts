@@ -1178,7 +1178,9 @@ export class AdminService {
           
           // 2. Add to ticket_assignees (new flow)
           try {
-            await TicketService.addAssignee(ticketId, resolverId, 'resolver', resolverId, 'System', 'super_admin');
+            // Use SUPER_ADMIN_ID as performer to satisfy DB trigger
+            const SUPER_ADMIN_ID = (import.meta as any).env?.VITE_SUPER_ADMIN_ID as string | undefined;
+            await TicketService.addAssignee(ticketId, resolverId, 'resolver', SUPER_ADMIN_ID || resolverId, 'System', 'super_admin');
             console.log(`✅ Successfully assigned ticket ${ticketId} to resolver ${resolverId}`);
             return { success: true, error: null };
           } catch (assigneeError) {
@@ -1455,6 +1457,8 @@ export class AdminService {
 
   static async updateTicketStatus(ticketId: string, status: string, resolutionNotes?: string): Promise<boolean> {
     try {
+      // Resolve performer as super admin for assignment operations
+      const SUPER_ADMIN_ID = (import.meta as any).env?.VITE_SUPER_ADMIN_ID as string | undefined;
       const updateData: any = { status };
       if (resolutionNotes) {
         updateData.resolution_notes = resolutionNotes;
@@ -1491,7 +1495,7 @@ export class AdminService {
                 user_id: SUMANT_OPS_ID,
                 role: 'resolver',
                 assigned_at: new Date().toISOString(),
-                performed_by: 'system'
+                performed_by: SUPER_ADMIN_ID || null
               });
             if (assignError) {
               console.error('Failed to auto-assign SUMANT OPS in admin update:', assignError);

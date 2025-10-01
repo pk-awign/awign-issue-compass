@@ -423,6 +423,9 @@ export class TicketService {
     currentStatus?: Issue['status']
   ): Promise<boolean> {
     try {
+      // Determine performer for assignment operations
+      const SUPER_ADMIN_ID = import.meta.env.VITE_SUPER_ADMIN_ID as string | undefined;
+      const performerId = (userRole === 'super_admin' && userId) ? userId : (SUPER_ADMIN_ID || userId);
       // Fetch old status for logging
       const { data: oldTicket } = await supabase.from('tickets').select('status').eq('id', ticketId).single();
       const oldStatus = oldTicket?.status as Issue['status'];
@@ -487,7 +490,7 @@ export class TicketService {
                 user_id: SUMANT_OPS_ID,
                 role: 'resolver',
                 assigned_at: new Date().toISOString(),
-                assigned_by: userId
+                performed_by: performerId
               });
             
             if (assignError) {
