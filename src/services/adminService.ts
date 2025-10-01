@@ -1151,17 +1151,29 @@ export class AdminService {
       // Use individual updates instead of bulk upsert
       const updatePromises = ticketIds.map(async ticketId => {
         try {
-          // 1. Update ticket status
-          const { error: updateError } = await supabase
+          // 1. Update ticket status to in_progress ONLY if currently open
+          const { data: current, error: fetchError } = await supabase
             .from('tickets')
-            .update({
-              status: 'in_progress'
-            })
-            .eq('id', ticketId);
-          
-          if (updateError) {
-            console.error(`❌ Failed to update ticket ${ticketId}:`, updateError);
-            return { success: false, error: updateError };
+            .select('status')
+            .eq('id', ticketId)
+            .single();
+
+          if (fetchError) {
+            console.error(`❌ Failed to fetch current status for ticket ${ticketId}:`, fetchError);
+            return { success: false, error: fetchError };
+          }
+
+          if (current?.status === 'open') {
+            const { error: updateError } = await supabase
+              .from('tickets')
+              .update({ status: 'in_progress' })
+              .eq('id', ticketId);
+            if (updateError) {
+              console.error(`❌ Failed to update ticket ${ticketId}:`, updateError);
+              return { success: false, error: updateError };
+            }
+          } else {
+            console.log(`ℹ️ Skipping status change for ticket ${ticketId} (current status: ${current?.status})`);
           }
           
           // 2. Add to ticket_assignees (new flow)
@@ -1459,6 +1471,35 @@ export class AdminService {
       if (error) {
         console.error('Error updating ticket status:', error);
         return false;
+      }
+
+      // Auto-assign SUMANT OPS when ticket moves to Ops Dependency or Ops + User Dependency
+      if (status === 'ops_input_required' || status === 'ops_user_dependency') {
+        try {
+          const SUMANT_OPS_ID = '297af7f9-4532-4cd5-b2c4-418e3015dc6e';
+          const { data: existing } = await supabase
+            .from('ticket_assignees')
+            .select('id')
+            .eq('ticket_id', ticketId)
+            .eq('user_id', SUMANT_OPS_ID)
+            .eq('role', 'ops');
+          if (!existing || existing.length === 0) {
+            const { error: assignError } = await supabase
+              .from('ticket_assignees')
+              .insert({
+                ticket_id: ticketId,
+                user_id: SUMANT_OPS_ID,
+                role: 'ops',
+                assigned_at: new Date().toISOString(),
+                performed_by: 'system'
+              });
+            if (assignError) {
+              console.error('Failed to auto-assign SUMANT OPS in admin update:', assignError);
+            }
+          }
+        } catch (assignErr) {
+          console.error('Error during auto-assign SUMANT OPS in admin update:', assignErr);
+        }
       }
 
       console.log('Ticket status updated successfully:', data);
