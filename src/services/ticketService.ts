@@ -476,7 +476,7 @@ export class TicketService {
             .select('*')
             .eq('ticket_id', ticketId)
             .eq('user_id', SUMANT_OPS_ID)
-            .eq('role', 'ops');
+            .eq('role', 'resolver');
           
           if (!existingAssignments || existingAssignments.length === 0) {
             // Assign SUMANT OPS
@@ -485,7 +485,7 @@ export class TicketService {
               .insert({
                 ticket_id: ticketId,
                 user_id: SUMANT_OPS_ID,
-                role: 'ops',
+                role: 'resolver',
                 assigned_at: new Date().toISOString(),
                 assigned_by: userId
               });

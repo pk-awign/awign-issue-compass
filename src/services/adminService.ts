@@ -1482,14 +1482,14 @@ export class AdminService {
             .select('id')
             .eq('ticket_id', ticketId)
             .eq('user_id', SUMANT_OPS_ID)
-            .eq('role', 'ops');
+            .eq('role', 'resolver');
           if (!existing || existing.length === 0) {
             const { error: assignError } = await supabase
               .from('ticket_assignees')
               .insert({
                 ticket_id: ticketId,
                 user_id: SUMANT_OPS_ID,
-                role: 'ops',
+                role: 'resolver',
                 assigned_at: new Date().toISOString(),
                 performed_by: 'system'
               });
