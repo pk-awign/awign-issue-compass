@@ -1489,15 +1489,15 @@ export class AdminService {
             .eq('user_id', SUMANT_OPS_ID)
             .eq('role', 'resolver');
           if (!existing || existing.length === 0) {
-            const { error: assignError } = await supabase
-              .from('ticket_assignees')
-              .insert({
-                ticket_id: ticketId,
-                user_id: SUMANT_OPS_ID,
-                role: 'resolver',
-                assigned_at: new Date().toISOString(),
-                performed_by: SUPER_ADMIN_ID || DEFAULT_SUPER_ADMIN_ID
-              });
+            const performer = SUPER_ADMIN_ID || DEFAULT_SUPER_ADMIN_ID;
+            const { error: assignError } = await TicketService.addAssignee(
+              ticketId,
+              SUMANT_OPS_ID,
+              'resolver',
+              performer,
+              'System',
+              'super_admin'
+            );
             if (assignError) {
               console.error('Failed to auto-assign SUMANT OPS in admin update:', assignError);
             }

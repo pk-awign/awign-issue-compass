@@ -54,8 +54,25 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       )
       .subscribe();
 
+    // Subscribe to ticket_assignees changes for real-time assignment updates
+    const assignmentsChannel = supabase
+      .channel('ticket-assignees-changes')
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ticket_assignees'
+        },
+        (payload) => {
+          console.log('Real-time assignment update:', payload);
+          refreshIssues();
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(assignmentsChannel);
     };
   }, []);
 
@@ -286,6 +303,7 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const ticketAssigns = assigneesByTicket[ticket.id] || [];
         const resolverAssignment = ticketAssigns.find((a: any) => a.role === 'resolver');
         const approverAssignment = ticketAssigns.find((a: any) => a.role === 'approver');
+        const normalizedAssignees = ticketAssigns.map((a: any) => ({ user_id: a.user_id, role: a.role, id: a.user_id }));
 
         // Map attachments with download URLs via Supabase helper
         const attachments = Array.isArray(ticket.attachments) ? ticket.attachments.map((att: any) => {
@@ -338,7 +356,7 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           submittedBy: ticket.submitted_by,
           submittedByUserId: ticket.submitted_by_user_id,
           submittedAt: new Date(ticket.submitted_at),
-          // Use only new assignment system
+          // Use new assignment system, keep compatibility single fields
           assignedResolver: resolverAssignment?.user_id || null,
           assignedApprover: approverAssignment?.user_id || null,
           resolutionNotes: ticket.resolution_notes,
@@ -346,18 +364,8 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           comments: sortedComments,
           attachments,
           issueEvidence: [],
-          assignees: {
-            resolver: resolverAssignment ? { 
-              name: resolverAssignment.name || 'Unknown', 
-              role: 'resolver', 
-              id: resolverAssignment.user_id 
-            } : undefined,
-            approver: approverAssignment ? { 
-              name: approverAssignment.name || 'Unknown', 
-              role: 'approver', 
-              id: approverAssignment.user_id 
-            } : undefined
-          },
+          // Expose full list so multiple resolvers are visible to dashboards
+          assignees: normalizedAssignees,
         };
       });
 

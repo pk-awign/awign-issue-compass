@@ -479,23 +479,21 @@ export class TicketService {
           // Check if SUMANT OPS is already assigned
           const { data: existingAssignments } = await supabase
             .from('ticket_assignees')
-            .select('*')
+            .select('id')
             .eq('ticket_id', ticketId)
             .eq('user_id', SUMANT_OPS_ID)
             .eq('role', 'resolver');
           
           if (!existingAssignments || existingAssignments.length === 0) {
             // Assign SUMANT OPS
-            const { error: assignError } = await supabase
-              .from('ticket_assignees')
-              .insert({
-                ticket_id: ticketId,
-                user_id: SUMANT_OPS_ID,
-                role: 'resolver',
-                assigned_at: new Date().toISOString(),
-                performed_by: performerId
-              });
-            
+            const { error: assignError } = await this.addAssignee(
+              ticketId,
+              SUMANT_OPS_ID,
+              'resolver',
+              performerId || 'system',
+              'System',
+              'super_admin'
+            );
             if (assignError) {
               console.error('Failed to assign SUMANT OPS:', assignError);
             } else {
