@@ -67,6 +67,8 @@ export const ResolutionApproverPage: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [lastStatusFilter, setLastStatusFilter] = useState('all');
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
+  const [lastCommentMode, setLastCommentMode] = useState<'any' | 'by' | 'not_by'>('any');
+  const [lastCommentAuthor, setLastCommentAuthor] = useState<string>('');
   const [lastStatusMap, setLastStatusMap] = useState<Map<string, string>>(new Map());
   const [recentlySentForApproval, setRecentlySentForApproval] = useState(false);
   const [recentlySentRange, setRecentlySentRange] = useState<DateRange | undefined>();
@@ -343,11 +345,19 @@ export const ResolutionApproverPage: React.FC = () => {
       });
     }
 
-    // Last Comment by Invigilator filter
-    if (lastCommentByInvigilator) {
+    // Last Comment filter (advanced)
+    if (lastCommentMode !== 'any') {
       filtered = filtered.filter(ticket => {
-        return ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator;
+        const last = ticket.comments && ticket.comments.length > 0 ? ticket.comments[0] : undefined;
+        if (!last) return lastCommentMode === 'not_by';
+        if (lastCommentAuthor === 'invigilator') {
+          return lastCommentMode === 'by' ? !!last.isFromInvigilator : !last.isFromInvigilator;
+        }
+        return lastCommentMode === 'by' ? last.author === lastCommentAuthor : last.author !== lastCommentAuthor;
       });
+    } else if (lastCommentByInvigilator) {
+      // fallback to legacy toggle
+      filtered = filtered.filter(ticket => ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator);
     }
 
     // Recently Sent for Approval filter
@@ -365,7 +375,7 @@ export const ResolutionApproverPage: React.FC = () => {
     }
 
     return filtered;
-  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastStatusMap, recentlySentForApproval, recentlySentTicketIds, user]);
+  }, [approverTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastCommentMode, lastCommentAuthor, lastStatusMap, recentlySentForApproval, recentlySentTicketIds, user]);
 
   // Categorize tickets by approval status
   const ticketsByStatus = useMemo(() => {
@@ -389,7 +399,7 @@ export const ResolutionApproverPage: React.FC = () => {
     .filter(filter => filter && filter !== 'all').length +
     resourceIdFilter.length +
     (dateRange ? 1 : 0) +
-    (lastCommentByInvigilator ? 1 : 0) +
+    ((lastCommentMode !== 'any' || lastCommentByInvigilator) ? 1 : 0) +
     (recentlySentForApproval ? 1 : 0);
 
   const clearFilters = () => {
@@ -402,6 +412,8 @@ export const ResolutionApproverPage: React.FC = () => {
     setDateRange(undefined);
     setLastStatusFilter('all');
     setLastCommentByInvigilator(false);
+    setLastCommentMode('any');
+    setLastCommentAuthor('');
     setRecentlySentForApproval(false);
     setRecentlySentRange(undefined);
   };
@@ -779,6 +791,14 @@ export const ResolutionApproverPage: React.FC = () => {
             setLastStatusFilter={setLastStatusFilter}
             lastCommentByInvigilator={lastCommentByInvigilator}
             setLastCommentByInvigilator={setLastCommentByInvigilator}
+            advancedLastCommentFilter={true}
+            lastCommentMode={lastCommentMode}
+            setLastCommentMode={setLastCommentMode}
+            lastCommentAuthor={lastCommentAuthor}
+            setLastCommentAuthor={setLastCommentAuthor}
+            uniqueCommentAuthors={[...new Set(approverTickets
+              .map(t => t.comments?.[0]?.author)
+              .filter((a): a is string => typeof a === 'string' && a.trim() !== '' && a.toLowerCase() !== 'anonymous'))].sort()}
             recentlySentForApproval={recentlySentForApproval}
             setRecentlySentForApproval={setRecentlySentForApproval}
             recentlySentRange={recentlySentRange}

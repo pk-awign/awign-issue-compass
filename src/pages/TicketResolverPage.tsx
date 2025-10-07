@@ -53,6 +53,8 @@ export const TicketResolverPage: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [lastStatusFilter, setLastStatusFilter] = useState('all');
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
+  const [lastCommentMode, setLastCommentMode] = useState<'any' | 'by' | 'not_by'>('any');
+  const [lastCommentAuthor, setLastCommentAuthor] = useState<string>('');
   const [lastStatusMap, setLastStatusMap] = useState<Map<string, string>>(new Map());
 
   const handleCloseTicket = async (ticketId: string) => {
@@ -294,11 +296,19 @@ export const TicketResolverPage: React.FC = () => {
       });
     }
 
-    // Last Comment by Invigilator filter
-    if (lastCommentByInvigilator) {
+    // Last Comment filter (advanced)
+    if (lastCommentMode !== 'any') {
       filtered = filtered.filter(ticket => {
-        return ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator;
+        const last = ticket.comments && ticket.comments.length > 0 ? ticket.comments[0] : undefined;
+        if (!last) return lastCommentMode === 'not_by';
+        if (lastCommentAuthor === 'invigilator') {
+          return lastCommentMode === 'by' ? !!last.isFromInvigilator : !last.isFromInvigilator;
+        }
+        return lastCommentMode === 'by' ? last.author === lastCommentAuthor : last.author !== lastCommentAuthor;
       });
+    } else if (lastCommentByInvigilator) {
+      // fallback to legacy toggle
+      filtered = filtered.filter(ticket => ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator);
     }
 
     // Sort: primary by last comment timestamp, secondary by last updated (statusChangedAt), fallback submittedAt
@@ -312,7 +322,7 @@ export const TicketResolverPage: React.FC = () => {
       const bU = getLastUpdatedAt(b)?.getTime() || 0;
       return bU - aU;
     });
-  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastStatusMap]);
+  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastCommentMode, lastCommentAuthor, lastStatusMap]);
 
   // Categorize tickets by status
   const ticketsByStatus = useMemo(() => {
@@ -330,6 +340,7 @@ export const TicketResolverPage: React.FC = () => {
 
   const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, lastStatusFilter]
     .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0) + (lastCommentByInvigilator ? 1 : 0);
+    
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -341,6 +352,8 @@ export const TicketResolverPage: React.FC = () => {
     setDateRange(undefined);
     setLastStatusFilter('all');
     setLastCommentByInvigilator(false);
+    setLastCommentMode('any');
+    setLastCommentAuthor('');
   };
 
   const getSeverityColor = (severity: Issue['severity']) => {
@@ -533,6 +546,14 @@ export const TicketResolverPage: React.FC = () => {
             setLastStatusFilter={setLastStatusFilter}
             lastCommentByInvigilator={lastCommentByInvigilator}
             setLastCommentByInvigilator={setLastCommentByInvigilator}
+            advancedLastCommentFilter={true}
+            lastCommentMode={lastCommentMode}
+            setLastCommentMode={setLastCommentMode}
+            lastCommentAuthor={lastCommentAuthor}
+            setLastCommentAuthor={setLastCommentAuthor}
+            uniqueCommentAuthors={[...new Set(assignedTickets
+              .map(t => t.comments?.[0]?.author)
+              .filter((a): a is string => typeof a === 'string' && a.trim() !== '' && a.toLowerCase() !== 'anonymous'))].sort()}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
             uniqueCities={uniqueCities}

@@ -32,6 +32,13 @@ interface TicketFiltersProps {
   setLastStatusFilter?: (status: string) => void;
   lastCommentByInvigilator?: boolean;
   setLastCommentByInvigilator?: (enabled: boolean) => void;
+  // Advanced last comment filter
+  advancedLastCommentFilter?: boolean;
+  lastCommentMode?: 'any' | 'by' | 'not_by';
+  setLastCommentMode?: (mode: 'any' | 'by' | 'not_by') => void;
+  lastCommentAuthor?: string; // 'invigilator' or author name
+  setLastCommentAuthor?: (author: string) => void;
+  uniqueCommentAuthors?: string[];
   recentlySentForApproval?: boolean;
   setRecentlySentForApproval?: (enabled: boolean) => void;
   recentlySentRange?: DateRange | undefined;
@@ -65,6 +72,12 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   setLastStatusFilter,
   lastCommentByInvigilator = false,
   setLastCommentByInvigilator,
+  advancedLastCommentFilter = false,
+  lastCommentMode = 'any',
+  setLastCommentMode,
+  lastCommentAuthor = '',
+  setLastCommentAuthor,
+  uniqueCommentAuthors = [],
   recentlySentForApproval = false,
   setRecentlySentForApproval,
   recentlySentRange,
@@ -285,7 +298,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
           </div>
         </div>
 
-        {/* Third row: Last Status, Last Comment by Invigilator, Recently Sent for Approval */}
+        {/* Third row: Last Status, Last Comment Filter, Recently Sent for Approval */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Last Status Filter */}
           {setLastStatusFilter ? (
@@ -312,8 +325,38 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
             <div className="hidden sm:block" />
           )}
 
-          {/* Last Comment by Invigilator Toggle */}
-          {setLastCommentByInvigilator ? (
+          {/* Last Comment Filter */}
+          {advancedLastCommentFilter && setLastCommentMode && setLastCommentAuthor ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Last comment</label>
+                <Select value={lastCommentMode} onValueChange={(v) => setLastCommentMode(v as 'any' | 'by' | 'not_by')}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Any" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any</SelectItem>
+                    <SelectItem value="by">By</SelectItem>
+                    <SelectItem value="not_by">Not by</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Author</label>
+                <Select value={lastCommentAuthor} onValueChange={(v) => setLastCommentAuthor(v)} disabled={lastCommentMode === 'any'}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select author" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="invigilator">Invigilator</SelectItem>
+                    {uniqueCommentAuthors.map(name => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : setLastCommentByInvigilator ? (
             <div className="flex items-center space-x-2">
               <Switch
                 id="last-comment-invigilator"
