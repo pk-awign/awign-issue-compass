@@ -425,7 +425,10 @@ export class TicketService {
     try {
       // Determine performer for assignment operations
       const SUPER_ADMIN_ID = import.meta.env.VITE_SUPER_ADMIN_ID as string | undefined;
-      const performerId = (userRole === 'super_admin' && userId) ? userId : (SUPER_ADMIN_ID || userId);
+      const DEFAULT_SUPER_ADMIN_ID = '33f6f645-55ff-48c5-875a-53b0c8b99cfe';
+      const performerId = (userRole === 'super_admin' && userId)
+        ? userId
+        : (SUPER_ADMIN_ID || DEFAULT_SUPER_ADMIN_ID);
       // Fetch old status for logging
       const { data: oldTicket } = await supabase.from('tickets').select('status').eq('id', ticketId).single();
       const oldStatus = oldTicket?.status as Issue['status'];
