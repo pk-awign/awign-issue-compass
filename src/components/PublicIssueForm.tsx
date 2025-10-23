@@ -81,6 +81,22 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Date selection cutoff: block any date after this cutoff (default: 2025-09-30)
+  const DEFAULT_CUTOFF_ISO = '2025-09-30';
+  const envCutoff = (import.meta as any).env?.VITE_ISSUE_DATE_CUTOFF as string | undefined;
+  const cutoffDateString = (envCutoff && envCutoff.trim() !== '') ? envCutoff : DEFAULT_CUTOFF_ISO;
+  const cutoffY = parseInt(cutoffDateString.slice(0, 4), 10);
+  const cutoffM = parseInt(cutoffDateString.slice(5, 7), 10) - 1;
+  const cutoffD = parseInt(cutoffDateString.slice(8, 10), 10);
+  const cutoffDate = new Date(cutoffY, cutoffM, cutoffD, 23, 59, 59, 999);
+  const isAfterCutoff = (d?: Date) => {
+    if (!d) return false;
+    const dc = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const cc = new Date(cutoffY, cutoffM, cutoffD).getTime();
+    return dc > cc;
+  };
+  const cutoffMessage = `Tickets can only be raised for issues up to ${format(new Date(cutoffY, cutoffM, cutoffD), 'MMM dd, yyyy')}. Please pick a date on or before ${format(new Date(cutoffY, cutoffM, cutoffD), 'MMM dd, yyyy')}.`;
+
   // Pre-fill user data when logged in
   useEffect(() => {
     if (user) {
@@ -193,6 +209,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
   const handleMultipleDateSelect = (date: Date | undefined) => {
     if (!date) return;
+    if (isAfterCutoff(date)) return;
     setFormData(prev => {
       const exists = prev.multipleDates.find(d => d.date.getTime() === date.getTime());
       if (exists) {
@@ -604,13 +621,18 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                             <Calendar
                               mode="single"
                               selected={formData.singleDate}
-                              onSelect={(date) => setFormData(prev => ({ ...prev, singleDate: date }))}
+                              onSelect={(date) => {
+                                if (!date) return;
+                                if (isAfterCutoff(date)) return;
+                                setFormData(prev => ({ ...prev, singleDate: date }));
+                              }}
                               initialFocus
                               className="p-3 pointer-events-auto"
-                              disabled={(date) => date > new Date()}
+                              disabled={(date) => isAfterCutoff(date)}
                             />
                           </PopoverContent>
                         </Popover>
+                        <p className="text-xs text-red-600 mt-2">{cutoffMessage}</p>
                       </div>
                     )}
 
@@ -629,7 +651,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                               onSelect={handleMultipleDateSelect}
                               initialFocus
                               className="p-3 pointer-events-auto"
-                              disabled={(date) => date > new Date()}
+                              disabled={(date) => isAfterCutoff(date)}
                             />
                           </PopoverContent>
                         </Popover>
@@ -662,6 +684,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                             ))}
                           </div>
                         )}
+                        <p className="text-xs text-red-600">{cutoffMessage}</p>
                       </div>
                     )}
                   </div>
