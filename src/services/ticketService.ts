@@ -1386,23 +1386,37 @@ export class TicketService {
   static async getLastStatusForTickets(ticketIds: string[]): Promise<Map<string, string>> {
     try {
       if (ticketIds.length === 0) return new Map();
-      
-      const { data, error } = await supabase
-        .from('ticket_history')
-        .select('ticket_id, old_value, new_value, performed_at')
-        .eq('action_type', 'status_change')
-        .in('ticket_id', ticketIds)
-        .order('performed_at', { ascending: false });
-      
-      if (error) throw error;
-      
+
+      const uniqueIds = Array.from(new Set(ticketIds.filter(Boolean)));
+      if (uniqueIds.length === 0) {
+        return new Map();
+      }
+
+      const PAGE_SIZE = 100;
+      const batchedResults: any[] = [];
+
+      for (let i = 0; i < uniqueIds.length; i += PAGE_SIZE) {
+        const batchIds = uniqueIds.slice(i, i + PAGE_SIZE);
+        const { data, error } = await supabase
+          .from('ticket_history')
+          .select('ticket_id, old_value, new_value, performed_at')
+          .eq('action_type', 'status_change')
+          .in('ticket_id', batchIds)
+          .order('performed_at', { ascending: false });
+
+        if (error) throw error;
+        if (data) {
+          batchedResults.push(...data);
+        }
+      }
+
       const lastStatusByTicket = new Map<string, string>();
       
-      if (data && data.length > 0) {
+      if (batchedResults.length > 0) {
         // Group by ticket_id and find the most recent status change
         const ticketStatusChanges = new Map<string, Array<{old_value: string, new_value: string, performed_at: string}>>();
         
-        data.forEach(entry => {
+        batchedResults.forEach(entry => {
           if (!ticketStatusChanges.has(entry.ticket_id)) {
             ticketStatusChanges.set(entry.ticket_id, []);
           }
