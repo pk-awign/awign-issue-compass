@@ -64,7 +64,7 @@ export class TicketService {
       }
 
       // Skip logging to ticket_history to avoid function errors
-      console.log('Ticket created successfully:', ticketNumber);
+      // console.log('Ticket created successfully:', ticketNumber);
 
       // Send email notification
       try {
@@ -81,7 +81,7 @@ export class TicketService {
           attachments: uploadedAttachments,
           ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
         });
-        console.log('📧 Email notification sent successfully for ticket:', ticketNumber);
+        // console.log('📧 Email notification sent successfully for ticket:', ticketNumber);
       } catch (emailError) {
         console.error('Failed to send email notification:', emailError);
         // Don't fail the ticket creation if email fails
@@ -103,7 +103,7 @@ export class TicketService {
         };
 
         const result = await WhatsAppService.sendCitySpecificNotifications(issueData.city, ticketData);
-        console.log('📱 WhatsApp notifications sent for ticket:', ticketNumber, result);
+        // console.log('📱 WhatsApp notifications sent for ticket:', ticketNumber, result);
       } catch (whatsappError) {
         console.error('Failed to send WhatsApp notification:', whatsappError);
         // Don't fail the ticket creation if WhatsApp fails
@@ -111,8 +111,8 @@ export class TicketService {
 
       // Send WhatsApp notification to ticket raiser by Resource ID (like SMS)
       try {
-        console.log('🔍 [WHATSAPP DEBUG] Starting WhatsApp notification process by Resource ID...');
-        console.log('🔍 [WHATSAPP DEBUG] Resource ID for WhatsApp lookup:', issueData.resourceId);
+        // console.log('🔍 [WHATSAPP DEBUG] Starting WhatsApp notification process by Resource ID...');
+        // console.log('🔍 [WHATSAPP DEBUG] Resource ID for WhatsApp lookup:', issueData.resourceId);
 
         const ticketData = {
           ticketNumber,
@@ -127,12 +127,12 @@ export class TicketService {
           ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
         };
 
-        console.log('📱 [WHATSAPP DEBUG] Preparing to send WhatsApp notification with data:', ticketData);
+        // console.log('📱 [WHATSAPP DEBUG] Preparing to send WhatsApp notification with data:', ticketData);
         
         // Let WhatsApp service do the Resource ID lookup (don't pass phone number)
         const result = await WhatsAppService.sendTicketCreationNotification(ticketData);
-        console.log('📱 [WHATSAPP DEBUG] Ticket creation notification result:', result);
-        console.log('✅ [WHATSAPP DEBUG] WhatsApp notification process completed successfully');
+        // console.log('📱 [WHATSAPP DEBUG] Ticket creation notification result:', result);
+        // console.log('✅ [WHATSAPP DEBUG] WhatsApp notification process completed successfully');
       } catch (whatsappError) {
         console.error('❌ [WHATSAPP DEBUG] Failed to send ticket creation notification:', whatsappError);
         console.error('❌ [WHATSAPP DEBUG] WhatsApp error details:', {
@@ -145,7 +145,7 @@ export class TicketService {
 
       // Send SMS notification to ticket raiser by Resource ID (like WhatsApp)
       try {
-        console.log('📱 [SMS DEBUG] Starting SMS notification process by Resource ID...');
+        // console.log('📱 [SMS DEBUG] Starting SMS notification process by Resource ID...');
         
         if (issueData.resourceId && issueData.resourceId !== 'NOT_SPECIFIED') {
           const smsResult = await SMSService.sendTicketCreationNotificationByResourceId(
@@ -156,9 +156,9 @@ export class TicketService {
               ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketNumber}`
             }
           );
-          console.log('📱 [SMS DEBUG] SMS notification result:', smsResult);
+          // console.log('📱 [SMS DEBUG] SMS notification result:', smsResult);
         } else {
-          console.log('📱 [SMS DEBUG] No Resource ID provided, skipping SMS notification');
+          // console.log('📱 [SMS DEBUG] No Resource ID provided, skipping SMS notification');
         }
       } catch (smsError) {
         console.error('❌ [SMS DEBUG] Failed to send SMS notification:', smsError);
@@ -176,7 +176,7 @@ export class TicketService {
 
   static async getTicketByNumber(ticketNumber: string): Promise<Issue | null> {
     try {
-      console.log('DEBUG: Raw ticket data from Supabase:', { ticketNumber });
+      // console.log('DEBUG: Raw ticket data from Supabase:', { ticketNumber });
       
       // First get the ticket details
       const { data: ticketData, error: ticketError } = await supabase
@@ -198,6 +198,15 @@ export class TicketService {
         (ticketData as any).assigned_approver ? this.getUserDetails((ticketData as any).assigned_approver) : null,
         ticketData.submitted_by_user_id ? this.getUserDetails(ticketData.submitted_by_user_id) : null,
       ]);
+
+      // Get all assignments for this ticket
+      const { data: assignmentData, error: assignmentError } = await supabase
+        .from('ticket_assignees')
+        .select('ticket_id, user_id, role')
+        .eq('ticket_id', ticketData.id);
+      if (assignmentError) {
+        console.error('Error fetching ticket assignments:', assignmentError);
+      }
 
       // Get comments with their attachments
       const { data: commentsData, error: commentsError } = await supabase
@@ -227,7 +236,7 @@ export class TicketService {
 
       if (attachmentsError) throw attachmentsError;
 
-      console.log('DEBUG: Raw ticket data from Supabase:', ticketData);
+      // console.log('DEBUG: Raw ticket data from Supabase:', ticketData);
       
       return this.mapDatabaseToIssue({
         ...ticketData,
@@ -239,6 +248,7 @@ export class TicketService {
         assigned_approver_role: approverDetails?.role,
         submitted_by_name: submittedByDetails?.name,
         submitted_by_role: submittedByDetails?.role,
+        assignments: assignmentData || [],
       });
     } catch (error) {
       console.error('Error fetching ticket:', error);
@@ -291,7 +301,7 @@ export class TicketService {
       }
       
       // Fallback: Get from ticket_history table and convert to TimelineEvent format
-      console.log('No data in ticket_timeline, falling back to ticket_history');
+      // console.log('No data in ticket_timeline, falling back to ticket_history');
       const { data: historyData, error: historyError } = await supabase
         .from('ticket_history')
         .select('*')
@@ -436,19 +446,19 @@ export class TicketService {
       const role = userRole || 'resolver';
       const allowed = this.getAllowedStatusTransitions(role, oldStatus);
       // DEBUG LOG
-      console.log('[DEBUG] updateTicketStatus:', {
-        ticketId,
-        oldStatus,
-        newStatus,
-        userRole: role,
-        allowedTransitions: allowed
-      });
+      // console.log('[DEBUG] updateTicketStatus:', {
+      //   ticketId,
+      //   oldStatus,
+      //   newStatus,
+      //   userRole: role,
+      //   allowedTransitions: allowed
+      // });
       
       // Super admin bypass - they can move to any status
       if (role === 'super_admin') {
-        console.log('[DEBUG] Super admin bypass - allowing transition');
+        // console.log('[DEBUG] Super admin bypass - allowing transition');
       } else if (!allowed.includes(newStatus)) {
-        console.log('[DEBUG] Transition not allowed for role:', role, 'from', oldStatus, 'to', newStatus);
+        // console.log('[DEBUG] Transition not allowed for role:', role, 'from', oldStatus, 'to', newStatus);
         toast.error('Status transition not allowed.');
         return false;
       }
@@ -469,7 +479,7 @@ export class TicketService {
         .eq('id', ticketId);
       if (error) throw error;
       // Skip logging to avoid function signature issues
-      console.log('Status updated from', oldStatus, 'to', newStatus);
+      // console.log('Status updated from', oldStatus, 'to', newStatus);
 
       // Automatically assign SUMANT OPS when ticket moves to Ops Dependency or Ops + User Dependency
       if (newStatus === 'ops_input_required' || newStatus === 'ops_user_dependency') {
@@ -497,10 +507,10 @@ export class TicketService {
             if (assignError) {
               console.error('Failed to assign SUMANT OPS:', assignError);
             } else {
-              console.log('✅ SUMANT OPS automatically assigned to ticket:', ticketId);
+              // console.log('✅ SUMANT OPS automatically assigned to ticket:', ticketId);
             }
           } else {
-            console.log('ℹ️ SUMANT OPS already assigned to ticket:', ticketId);
+            // console.log('ℹ️ SUMANT OPS already assigned to ticket:', ticketId);
           }
         } catch (assignError) {
           console.error('Error in automatic SUMANT OPS assignment:', assignError);
@@ -529,7 +539,7 @@ export class TicketService {
             changedBy,
             resolutionNotes
           );
-          console.log('📧 Status change email notification sent for ticket:', ticketData.ticket_number);
+          // console.log('📧 Status change email notification sent for ticket:', ticketData.ticket_number);
         }
       } catch (emailError) {
         console.error('Failed to send status change email notification:', emailError);
@@ -547,7 +557,7 @@ export class TicketService {
             .single();
 
           if (!ticketError && ticketData) {
-            console.log('🎉 [RESOLUTION NOTIFICATION] Ticket resolved, sending notifications to ticket raiser');
+            // console.log('🎉 [RESOLUTION NOTIFICATION] Ticket resolved, sending notifications to ticket raiser');
 
             // Send WhatsApp notification for resolution
             try {
@@ -558,9 +568,9 @@ export class TicketService {
                 ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
               };
 
-              console.log('📱 [RESOLUTION WHATSAPP] Sending resolution notification with data:', resolutionNotificationData);
+              // console.log('📱 [RESOLUTION WHATSAPP] Sending resolution notification with data:', resolutionNotificationData);
               const whatsappResult = await WhatsAppService.sendCommentNotification(resolutionNotificationData);
-              console.log('📱 [RESOLUTION WHATSAPP] Resolution notification result:', whatsappResult);
+              // console.log('📱 [RESOLUTION WHATSAPP] Resolution notification result:', whatsappResult);
             } catch (whatsappError) {
               console.error('❌ [RESOLUTION WHATSAPP] Failed to send resolution notification:', whatsappError);
             }
@@ -581,17 +591,17 @@ export class TicketService {
                       ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
                     };
 
-                    console.log('📱 [RESOLUTION SMS] Sending resolution SMS notification with data:', smsData);
+                    // console.log('📱 [RESOLUTION SMS] Sending resolution SMS notification with data:', smsData);
                     const smsResult = await SMSService.sendTicketUpdateNotification(smsData);
-                    console.log('📱 [RESOLUTION SMS] Resolution SMS notification result:', smsResult);
+                    // console.log('📱 [RESOLUTION SMS] Resolution SMS notification result:', smsResult);
                   } else {
-                    console.log('📱 [RESOLUTION SMS] Invalid phone number for contact:', contact.contactNumber);
+                    // console.log('📱 [RESOLUTION SMS] Invalid phone number for contact:', contact.contactNumber);
                   }
                 } else {
-                  console.log('📱 [RESOLUTION SMS] No contact found with Resource ID:', ticketData.resource_id);
+                  // console.log('📱 [RESOLUTION SMS] No contact found with Resource ID:', ticketData.resource_id);
                 }
               } else {
-                console.log('📱 [RESOLUTION SMS] No Resource ID provided, skipping resolution SMS notification');
+                // console.log('📱 [RESOLUTION SMS] No Resource ID provided, skipping resolution SMS notification');
               }
             } catch (smsError) {
               console.error('❌ [RESOLUTION SMS] Failed to send resolution SMS notification:', smsError);
@@ -795,14 +805,14 @@ export class TicketService {
 
   // --- Log assignment add ---
   static async addAssignee(ticketId: string, userId: string, role: string, performedBy: string, performedByName: string, performedByRole: string) {
-    console.log('🔍 [ASSIGNMENT DEBUG] addAssignee called with:', {
-      ticketId,
-      userId,
-      role,
-      performedBy,
-      performedByName,
-      performedByRole
-    });
+    // console.log('🔍 [ASSIGNMENT DEBUG] addAssignee called with:', {
+    //   ticketId,
+    //   userId,
+    //   role,
+    //   performedBy,
+    //   performedByName,
+    //   performedByRole
+    // });
     
     // Role validation: Allow super_admin and ticket_admin to assign
     const allowedAssignRoles = ['super_admin', 'ticket_admin'];
@@ -815,7 +825,7 @@ export class TicketService {
       throw new Error('Only super admins or ticket admins can assign');
     }
     
-    console.log('✅ [ASSIGNMENT DEBUG] Role validation passed, proceeding with assignment');
+    // console.log('✅ [ASSIGNMENT DEBUG] Role validation passed, proceeding with assignment');
 
     const { error } = await supabase.from('ticket_assignees').insert([{
       ticket_id: ticketId,
@@ -828,7 +838,7 @@ export class TicketService {
     if (error) {
       console.error('❌ [ASSIGNMENT DEBUG] Database insert error:', error);
     } else {
-      console.log('✅ [ASSIGNMENT DEBUG] Assignment inserted successfully');
+      // console.log('✅ [ASSIGNMENT DEBUG] Assignment inserted successfully');
     }
     
     if (!error) {
@@ -948,14 +958,14 @@ export class TicketService {
    */
   static async addComment(ticketId: string, commentData: Omit<Comment, 'id' | 'timestamp'> & { attachments?: File[] }): Promise<void> {
     try {
-      console.log('Adding comment with data:', {
-        ticketId,
-        content: commentData.content,
-        author: commentData.author,
-        authorRole: commentData.authorRole,
-        isInternal: commentData.isInternal,
-        attachments: commentData.attachments?.length || 0
-      });
+      // console.log('Adding comment with data:', {
+      //   ticketId,
+      //   content: commentData.content,
+      //   author: commentData.author,
+      //   authorRole: commentData.authorRole,
+      //   isInternal: commentData.isInternal,
+      //   attachments: commentData.attachments?.length || 0
+      // });
 
       const { data, error } = await supabase
         .from('comments')
@@ -979,7 +989,7 @@ export class TicketService {
         await this.uploadCommentAttachments(commentId, commentData.attachments);
       }
 
-      console.log('Comment added successfully:', data);
+      // console.log('Comment added successfully:', data);
       toast.success('Comment added successfully');
       
       // Log to ticket_history
@@ -1012,9 +1022,9 @@ export class TicketService {
             const isCommentFromAnonymous = commentData.author === 'anonymous' || commentData.author === 'Anonymous';
             
             if (isCommentFromTicketRaiser || isCommentFromAnonymous) {
-              console.log('📱 [WHATSAPP DEBUG] Comment is from ticket raiser or anonymous, skipping WhatsApp notification');
+              // console.log('📱 [WHATSAPP DEBUG] Comment is from ticket raiser or anonymous, skipping WhatsApp notification');
             } else {
-              console.log('📱 [WHATSAPP DEBUG] Comment is from someone else, proceeding with WhatsApp notification');
+              // console.log('📱 [WHATSAPP DEBUG] Comment is from someone else, proceeding with WhatsApp notification');
               const commentNotificationData = {
                 ticketNumber: ticketData.ticket_number,
                 resourceId: ticketData.resource_id || 'NOT_SPECIFIED',
@@ -1022,9 +1032,9 @@ export class TicketService {
                 ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
               };
 
-              console.log('📱 [WHATSAPP DEBUG] Sending comment notification with data:', commentNotificationData);
+              // console.log('📱 [WHATSAPP DEBUG] Sending comment notification with data:', commentNotificationData);
               const result = await WhatsAppService.sendCommentNotification(commentNotificationData);
-              console.log('📱 [WHATSAPP DEBUG] Comment notification result:', result);
+              // console.log('📱 [WHATSAPP DEBUG] Comment notification result:', result);
             }
           }
         } catch (whatsappError) {
@@ -1047,10 +1057,10 @@ export class TicketService {
             const isCommentFromAnonymous = commentData.author === 'anonymous' || commentData.author === 'Anonymous';
 
             if (isCommentFromTicketRaiser || isCommentFromAnonymous) {
-              console.log('📱 [SMS DEBUG] Comment is from ticket raiser or anonymous, skipping SMS notification');
+              // console.log('📱 [SMS DEBUG] Comment is from ticket raiser or anonymous, skipping SMS notification');
             } else {
-              console.log('📱 [SMS DEBUG] Comment is from someone else, proceeding with SMS notification');
-              console.log('📱 [SMS DEBUG] Resource ID for comment SMS lookup:', ticketData.resource_id);
+              // console.log('📱 [SMS DEBUG] Comment is from someone else, proceeding with SMS notification');
+              // console.log('📱 [SMS DEBUG] Resource ID for comment SMS lookup:', ticketData.resource_id);
               
               if (ticketData.resource_id && ticketData.resource_id !== 'NOT_SPECIFIED') {
                 // Use shared contact service to avoid duplicate parsing
@@ -1066,17 +1076,17 @@ export class TicketService {
                       ticketLink: `https://awign-invigilation-escalation.netlify.app/track?id=${ticketData.ticket_number}`
                     };
                     
-                    console.log('📱 [SMS DEBUG] Sending comment update SMS notification with data:', smsData);
+                    // console.log('📱 [SMS DEBUG] Sending comment update SMS notification with data:', smsData);
                     const smsResult = await SMSService.sendTicketUpdateNotification(smsData);
-                    console.log('📱 [SMS DEBUG] Comment SMS notification result:', smsResult);
+                    // console.log('📱 [SMS DEBUG] Comment SMS notification result:', smsResult);
                   } else {
-                    console.log('📱 [SMS DEBUG] Invalid phone number for contact:', contact.contactNumber);
+                    // console.log('📱 [SMS DEBUG] Invalid phone number for contact:', contact.contactNumber);
                   }
                 } else {
-                  console.log('📱 [SMS DEBUG] No contact found with Resource ID:', ticketData.resource_id);
+                  // console.log('📱 [SMS DEBUG] No contact found with Resource ID:', ticketData.resource_id);
                 }
               } else {
-                console.log('📱 [SMS DEBUG] No Resource ID provided, skipping comment SMS notification');
+                // console.log('📱 [SMS DEBUG] No Resource ID provided, skipping comment SMS notification');
               }
             }
           }
@@ -1195,6 +1205,16 @@ export class TicketService {
       };
     }) : [];
 
+    const assignments = Array.isArray(data.assignments) ? data.assignments : [];
+    const normalizedAssignments = assignments.map((assignment: any) => ({
+      id: assignment.user_id,
+      user_id: assignment.user_id,
+      role: assignment.role,
+    }));
+
+    const firstResolverAssignment = normalizedAssignments.find(a => a.role === 'resolver');
+    const firstApproverAssignment = normalizedAssignments.find(a => a.role === 'approver');
+
     return {
       id: data.id,
       ticketNumber: data.ticket_number,
@@ -1232,6 +1252,11 @@ export class TicketService {
         name: data.assigned_approver_name,
         role: data.assigned_approver_role || 'approver'
       } : undefined,
+      // Expose assignments for multi-assignee support
+      assignees: normalizedAssignments,
+      // Fallback: if legacy columns missing, use first assignment
+      ...(data.assigned_resolver ? {} : { assignedResolver: firstResolverAssignment?.user_id || null }),
+      ...(data.assigned_approver ? {} : { assignedApprover: firstApproverAssignment?.user_id || null }),
       resolutionNotes: data.resolution_notes,
       resolvedAt: data.resolved_at ? new Date(data.resolved_at) : undefined,
       comments: data.comments?.map((comment: any) => {

@@ -99,7 +99,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
       setIsTimelineLoading(true);
       TicketService.getTicketTimeline(ticket.id)
         .then(events => {
-          console.log('DEBUG: ticket_history events fetched:', events);
+          // console.log('DEBUG: ticket_history events fetched:', events);
           setTimeline(events);
         })
         .finally(() => setIsTimelineLoading(false));
@@ -319,26 +319,26 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   const handleAddAssignee = async () => {
     if (!ticket?.id || !newAssignee || !user) return;
     
-    console.log('🔍 [UI ASSIGNMENT DEBUG] handleAddAssignee called:', {
-      ticketId: ticket.id,
-      newAssignee,
-      assigneeRole,
-      user: {
-        id: user.id,
-        name: user.name,
-        role: user.role
-      }
-    });
+    // console.log('🔍 [UI ASSIGNMENT DEBUG] handleAddAssignee called:', {
+    //   ticketId: ticket.id,
+    //   newAssignee,
+    //   assigneeRole,
+    //   user: {
+    //     id: user.id,
+    //     name: user.name,
+    //     role: user.role
+    //   }
+    // });
     
     setIsAssigneeLoading(true);
     const selectedUser = allUsers.find(u => u.id === newAssignee);
     if (!selectedUser) {
-      console.error('❌ [UI ASSIGNMENT DEBUG] Selected user not found:', newAssignee);
+      // console.error('❌ [UI ASSIGNMENT DEBUG] Selected user not found:', newAssignee);
       setIsAssigneeLoading(false);
       return;
     }
     
-    console.log('🔍 [UI ASSIGNMENT DEBUG] Selected user:', selectedUser);
+    // console.log('🔍 [UI ASSIGNMENT DEBUG] Selected user:', selectedUser);
     
     try {
       // Use AdminService methods which update both legacy and new fields
@@ -355,7 +355,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
       setNewAssignee('');
       await loadAssignees();
       await loadTimeline();
-      console.log('✅ [UI ASSIGNMENT DEBUG] Assignment completed successfully');
+      // console.log('✅ [UI ASSIGNMENT DEBUG] Assignment completed successfully');
     } catch (error) {
       console.error('❌ [UI ASSIGNMENT DEBUG] Assignment failed:', error);
       toast.error('Failed to assign user: ' + (error as Error).message);

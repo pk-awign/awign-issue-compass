@@ -130,7 +130,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
   useEffect(() => {
     async function fetchCentreCodes() {
       const codes = await AdminService.getAllCentreCodesFromTestCenterDetails();
-      console.log('Fetched centre codes:', codes.length, codes);
+      // console.log('Fetched centre codes:', codes.length, codes);
       setCentreCodes(codes);
     }
     fetchCentreCodes();

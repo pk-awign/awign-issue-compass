@@ -121,7 +121,7 @@ export const AdminPage: React.FC = () => {
     const newTabParam = searchParams.get('tab');
     const newDefaultTab = newTabParam === 'tickets' ? 'tickets' : 'overview';
     setActiveTab(newDefaultTab);
-    console.log('🔄 URL changed, setting active tab to:', newDefaultTab);
+    // console.log('🔄 URL changed, setting active tab to:', newDefaultTab);
   }, [searchParams]);
 
   // Handle tab changes and update URL
@@ -163,12 +163,12 @@ export const AdminPage: React.FC = () => {
 
 
   const initializeSystem = async () => {
-    console.log('🚀 Initializing admin system...');
+    // console.log('🚀 Initializing admin system...');
     
     // Initialize sample users first
     try {
       await AdminService.initializeSampleUsers();
-      console.log('✅ Sample users initialized');
+      // console.log('✅ Sample users initialized');
     } catch (error) {
       console.error('❌ Error initializing sample users:', error);
     }
@@ -371,7 +371,7 @@ export const AdminPage: React.FC = () => {
         data = await AdminService.getTicketAnalytics();
       }
       setAnalytics(data);
-      console.log('📊 Analytics refreshed:', data);
+      // console.log('📊 Analytics refreshed:', data);
     } catch (err) {
       console.error('Error loading analytics:', err);
     }
@@ -801,6 +801,10 @@ export const AdminPage: React.FC = () => {
           if (cleanFilters.lastStatusFilter && typeof cleanFilters.lastStatusFilter === 'string' && ticket.status !== cleanFilters.lastStatusFilter) return false;
           if (cleanFilters.lastCommentByInvigilator && typeof cleanFilters.lastCommentByInvigilator === 'boolean' && cleanFilters.lastCommentByInvigilator && (!ticket.comments || ticket.comments.length === 0 || !ticket.comments[0].isFromInvigilator)) return false;
           if (cleanFilters.onlyUnassignedResolver && typeof cleanFilters.onlyUnassignedResolver === 'boolean' && cleanFilters.onlyUnassignedResolver && getAllAssignees(ticket).some(a => a.role === 'resolver')) return false;
+          if (cleanFilters.resolverFilter && Array.isArray(cleanFilters.resolverFilter) && cleanFilters.resolverFilter.length > 0) {
+            const ticketResolverIds = getAllAssignees(ticket).filter(a => a.role === 'resolver').map(a => a.user_id);
+            if (!ticketResolverIds.some(id => cleanFilters.resolverFilter.includes(id))) return false;
+          }
           return true;
         });
       } else {

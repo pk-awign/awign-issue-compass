@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, AlertCircle, CheckCircle } from 'lucide-react';
+import { Users, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 import { AdminService } from '@/services/adminService';
 import { toast } from 'sonner';
 import { User } from '@/types/issue';
@@ -32,33 +32,32 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
 
   const loadUsers = async () => {
     try {
-      console.log('🔄 Loading users for assignment...');
+      // console.log('🔄 Loading users for assignment...');
       setLoading(true);
 
       // Initialize sample users if needed
       if (!isInitialized) {
-        console.log('🚀 Initializing sample users...');
+        // console.log('🚀 Initializing sample users...');
         await AdminService.initializeSampleUsers();
         setIsInitialized(true);
       }
 
       // Load resolvers and filter by role
-      console.log('🔄 Loading resolvers...');
+      // console.log('🔄 Loading resolvers...');
       const resolverData = await AdminService.getUsersByRole('resolver');
       const validResolvers = resolverData.filter(user => user.role === 'resolver');
-      console.log('✅ Loaded resolvers:', validResolvers.length, validResolvers.map(r => r.name));
+      // console.log('✅ Loaded resolvers:', validResolvers.length, validResolvers.map(r => r.name));
 
       // Load approvers and filter by role
-      console.log('🔄 Loading approvers...');
+      // console.log('🔄 Loading approvers...');
       const approverData = await AdminService.getUsersByRole('approver');
       const validApprovers = approverData.filter(user => user.role === 'approver');
-      console.log('✅ Loaded approvers:', validApprovers.length, validApprovers.map(a => a.name));
+      // console.log('✅ Loaded approvers:', validApprovers.length, validApprovers.map(a => a.name));
 
       setResolvers(validResolvers);
       setApprovers(validApprovers);
 
       if (validResolvers.length === 0 && validApprovers.length === 0) {
-        console.warn('⚠️ No users available for assignment');
         toast.error('No users available for assignment. Please create users first.');
       }
     } catch (error) {
@@ -75,9 +74,7 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
       return;
     }
     
-    console.log(`🔄 Starting bulk assignment for ${ticketIds.length} tickets`);
-    console.log('Selected resolver:', selectedResolver);
-    console.log('Selected approver:', selectedApprover);
+    // console.log(`🔄 Starting bulk assignment for ${ticketIds.length} tickets`);
     
     setLoading(true);
     try {
@@ -86,18 +83,18 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
       
       // If resolver is selected, assign resolver
       if (selectedResolver) {
-        console.log(`🔄 Assigning ${ticketIds.length} tickets to resolver ${selectedResolver}`);
+        // console.log(`🔄 Assigning ${ticketIds.length} tickets to resolver ${selectedResolver}`);
         resolverSuccess = await AdminService.bulkAssignTickets(ticketIds, selectedResolver);
-        console.log(`Resolver assignment result: ${resolverSuccess ? 'SUCCESS' : 'FAILED'}`);
+        // console.log(`Resolver assignment result: ${resolverSuccess ? 'SUCCESS' : 'FAILED'}`);
       }
       
       // If approver is selected, assign approver
       if (selectedApprover) {
-        console.log(`🔄 Assigning ${ticketIds.length} tickets to approver ${selectedApprover}`);
+        // console.log(`🔄 Assigning ${ticketIds.length} tickets to approver ${selectedApprover}`);
         const promises = ticketIds.map(ticketId => AdminService.assignToApprover(ticketId, selectedApprover));
         const results = await Promise.all(promises);
         approverSuccess = results.every(r => r);
-        console.log(`Approver assignment results: ${results.filter(r => r).length}/${results.length} successful`);
+        // console.log(`Approver assignment results: ${results.filter(r => r).length}/${results.length} successful`);
       }
       
       if (resolverSuccess && approverSuccess) {
@@ -115,6 +112,72 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
     } catch (error) {
       console.error('❌ Error saving assignments:', error);
       toast.error('Failed to assign tickets');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkDeallocateResolver = async () => {
+    if (ticketIds.length === 0) {
+      toast.info('No tickets selected');
+      return;
+    }
+
+    if (!selectedResolver) {
+      toast.error('Select a resolver to remove');
+      return;
+    }
+
+    if (!window.confirm(`Remove resolver assignment (${selectedResolver}) from ${ticketIds.length} ticket(s)?`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const success = await AdminService.bulkRemoveResolverAssignments(ticketIds, selectedResolver);
+      if (success) {
+        toast.success('Resolver assignment removed successfully');
+        setSelectedResolver('');
+        onAssignmentComplete();
+      } else {
+        toast.error('Failed to remove resolver assignment for some tickets');
+      }
+    } catch (error) {
+      console.error('❌ Error removing resolver assignments:', error);
+      toast.error('Failed to remove resolver assignments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkDeallocateApprover = async () => {
+    if (ticketIds.length === 0) {
+      toast.info('No tickets selected');
+      return;
+    }
+
+    if (!selectedApprover) {
+      toast.error('Select an approver to remove');
+      return;
+    }
+
+    if (!window.confirm(`Remove approver assignment (${selectedApprover}) from ${ticketIds.length} ticket(s)?`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const success = await AdminService.bulkRemoveApproverAssignments(ticketIds, selectedApprover);
+      if (success) {
+        toast.success('Approver assignment removed successfully');
+        setSelectedApprover('');
+        onAssignmentComplete();
+      } else {
+        toast.error('Failed to remove approver assignment for some tickets');
+      }
+    } catch (error) {
+      console.error('❌ Error removing approver assignments:', error);
+      toast.error('Failed to remove approver assignments');
     } finally {
       setLoading(false);
     }
@@ -258,6 +321,33 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
             className="w-full"
           >
             {loading ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
+
+        {/* Deallocate Resolver Button */}
+        <div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleBulkDeallocateResolver}
+            disabled={loading}
+            className="w-full flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Remove Resolver
+          </Button>
+        </div>
+
+        <div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleBulkDeallocateApprover}
+            disabled={loading}
+            className="w-full flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Remove Approver
           </Button>
         </div>
 

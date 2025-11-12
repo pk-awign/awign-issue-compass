@@ -68,7 +68,7 @@ export class AdminService {
       }
 
       if (existingUsers && existingUsers.length > 0) {
-        console.log('Sample users already exist. Skipping initialization.');
+        // console.log('Sample users already exist. Skipping initialization.');
         return true; // Sample users already exist
       }
 
@@ -194,7 +194,7 @@ export class AdminService {
         throw error;
       }
 
-      console.log('Sample users initialized successfully:', data);
+      // console.log('Sample users initialized successfully:', data);
       return true;
     } catch (error) {
       console.error('Error in initializeSampleUsers:', error);
@@ -231,7 +231,7 @@ export class AdminService {
         return false;
       }
 
-      console.log('User created successfully:', data);
+      // console.log('User created successfully:', data);
       return true;
     } catch (error) {
       console.error('Error in createUser:', error);
@@ -265,7 +265,7 @@ export class AdminService {
         return false;
       }
 
-      console.log('User updated successfully:', data);
+      // console.log('User updated successfully:', data);
       return true;
     } catch (error) {
       console.error('Error in updateUser:', error);
@@ -285,7 +285,7 @@ export class AdminService {
         return false;
       }
 
-      console.log('User status updated successfully:', data);
+      // console.log('User status updated successfully:', data);
       return true;
     } catch (error) {
       console.error('Error in toggleUserStatus:', error);
@@ -318,7 +318,7 @@ export class AdminService {
         }
       }
 
-      console.log('Permissions updated successfully');
+      // console.log('Permissions updated successfully');
       return true;
     } catch (error) {
       console.error('Error in grantUserPermissions:', error);
@@ -412,7 +412,7 @@ export class AdminService {
       }
       
       // Debug logging for ticket fetching
-      console.log(`🔍 Fetching tickets batch ${page}, showDeleted: ${showDeleted}`);
+      // console.log(`🔍 Fetching tickets batch ${page}, showDeleted: ${showDeleted}`);
       
       // Also check total count for debugging
       if (page === 1) {
@@ -420,7 +420,7 @@ export class AdminService {
           .from('tickets')
           .select('*', { count: 'exact', head: true })
           .eq('deleted', false);
-        console.log(`🔍 Total non-deleted tickets in DB: ${count}`);
+        // console.log(`🔍 Total non-deleted tickets in DB: ${count}`);
       }
 
       if (startDate) {
@@ -473,7 +473,7 @@ export class AdminService {
       page++;
     }
     
-    console.log(`🔍 getAllTicketsUnpaginated completed: ${allTickets.length} tickets fetched`);
+    // console.log(`🔍 getAllTicketsUnpaginated completed: ${allTickets.length} tickets fetched`);
     return allTickets;
   }
 
@@ -613,7 +613,7 @@ export class AdminService {
     
     // Apply onlyUnassignedResolver filter - exclude tickets assigned to resolvers
     if (filters.onlyUnassignedResolver) {
-      console.log('🔍 Fetching all resolver assignments for filtering...');
+      // console.log('🔍 Fetching all resolver assignments for filtering...');
       const resolverAssignedSet = new Set<string>();
       let resolverPage = 1;
       const BATCH_SIZE = 1000;
@@ -640,7 +640,7 @@ export class AdminService {
         resolverPage += 1;
       }
       
-      console.log(`✅ Fetched ${resolverAssignedSet.size} resolver assignments`);
+      // console.log(`✅ Fetched ${resolverAssignedSet.size} resolver assignments`);
       finalTickets = finalTickets.filter(ticket => !resolverAssignedSet.has(ticket.id));
     }
     
@@ -718,7 +718,7 @@ export class AdminService {
       }
     }
     
-    console.log(`🔍 getFilteredTicketsUnpaginated completed: ${finalTickets.length} tickets fetched`);
+    // console.log(`🔍 getFilteredTicketsUnpaginated completed: ${finalTickets.length} tickets fetched`);
     return finalTickets;
   }
 
@@ -751,7 +751,7 @@ export class AdminService {
         }
       }
       if (filters.statusFilter && filters.statusFilter !== 'all') {
-        console.log('🔍 [FILTER DEBUG] Status filter applied:', filters.statusFilter);
+        // console.log('🔍 [FILTER DEBUG] Status filter applied:', filters.statusFilter);
         query = query.eq('status', filters.statusFilter as any);
       }
       if (filters.severityFilter && filters.severityFilter !== 'all') {
@@ -765,7 +765,7 @@ export class AdminService {
       }
       // Handle resolver filter using ticket_assignees table
       if (filters.resolverFilter && filters.resolverFilter.length > 0) {
-        console.log('🔍 [FILTER DEBUG] Resolver filter applied:', filters.resolverFilter);
+        // console.log('🔍 [FILTER DEBUG] Resolver filter applied:', filters.resolverFilter);
         const { data: resolverAssignedTickets, error: resolverError } = await supabase
           .from('ticket_assignees')
           .select('ticket_id')
@@ -774,15 +774,15 @@ export class AdminService {
         
         if (resolverError) throw resolverError;
         
-        console.log('🔍 [FILTER DEBUG] Resolver assignments found:', resolverAssignedTickets?.length || 0);
+        // console.log('🔍 [FILTER DEBUG] Resolver assignments found:', resolverAssignedTickets?.length || 0);
         
         if (resolverAssignedTickets && resolverAssignedTickets.length > 0) {
           const ticketIds = resolverAssignedTickets.map(t => t.ticket_id);
-          console.log('🔍 [FILTER DEBUG] Filtering tickets by IDs:', ticketIds.slice(0, 5), '...');
+          // console.log('🔍 [FILTER DEBUG] Filtering tickets by IDs:', ticketIds.slice(0, 5), '...');
           query = query.in('id', ticketIds);
         } else {
           // No tickets match the resolver filter, return empty result
-          console.log('🔍 [FILTER DEBUG] No resolver assignments found, returning empty result');
+          // console.log('🔍 [FILTER DEBUG] No resolver assignments found, returning empty result');
           query = query.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
         }
       }
@@ -916,7 +916,7 @@ export class AdminService {
         totalCount = count;
       }
       
-      console.log('🔍 [FILTER DEBUG] Total count after filters:', totalCount);
+      // console.log('🔍 [FILTER DEBUG] Total count after filters:', totalCount);
 
       // Get paginated ticket numbers (with optional unassigned-to-resolver filter)
       let tickets: any[] | null = null;
@@ -978,7 +978,7 @@ export class AdminService {
     try {
       // If filtering for unassigned resolver, fetch all resolver assignments first
       if (filters.onlyUnassignedResolver) {
-        console.log('🔍 Fetching all resolver assignments for filtering...');
+      // console.log('🔍 Fetching all resolver assignments for filtering...');
         resolverAssignedSet = new Set<string>();
         let resolverPage = 1;
         
@@ -1004,7 +1004,7 @@ export class AdminService {
           resolverPage += 1;
         }
         
-        console.log(`✅ Fetched ${resolverAssignedSet.size} resolver assignments`);
+      // console.log(`✅ Fetched ${resolverAssignedSet.size} resolver assignments`);
       }
       
       while (true) {
@@ -1100,11 +1100,11 @@ export class AdminService {
 
   static async getUsersByRole(role: 'resolver' | 'approver' | 'ticket_admin'): Promise<User[]> {
     try {
-      console.log(`🔄 Getting users by role: ${role}`);
+      // console.log(`🔄 Getting users by role: ${role}`);
       
       // Map the new role names to database role names
       const dbRole = this.mapUserRoleToDatabaseRole(role);
-      console.log(`📋 Mapped role '${role}' to database role '${dbRole}'`);
+      // console.log(`📋 Mapped role '${role}' to database role '${dbRole}'`);
       
       const { data, error } = await supabase
         .from('users')
@@ -1118,9 +1118,10 @@ export class AdminService {
         throw error;
       }
 
-      console.log(`📊 Found ${data?.length || 0} users with role '${dbRole}'`);
+      // console.log(`📊 Found ${data?.length || 0} users with role '${dbRole}'`);
+      // console.log(`✅ Returning ${mappedUsers.length} mapped users for role '${role}'`);
       if (data && data.length > 0) {
-        console.log('👥 Users found:', data.map(u => ({ id: u.id, name: u.name, role: u.role, is_active: u.is_active })));
+        // console.log('👥 Users found:', data.map(u => ({ id: u.id, name: u.name, role: u.role, is_active: u.is_active })));
       }
 
       // Map the database users to our User type
@@ -1136,7 +1137,7 @@ export class AdminService {
         lastLogin: user.last_login_at ? new Date(user.last_login_at) : undefined
       }));
 
-      console.log(`✅ Returning ${mappedUsers.length} mapped users for role '${role}'`);
+      // console.log(`✅ Returning ${mappedUsers.length} mapped users for role '${role}'`);
       return mappedUsers;
     } catch (error) {
       console.error('❌ Error in getUsersByRole:', error);
@@ -1146,7 +1147,7 @@ export class AdminService {
 
   static async bulkAssignTickets(ticketIds: string[], resolverId: string): Promise<boolean> {
     try {
-      console.log(`🔄 Starting bulk assignment for ${ticketIds.length} tickets to resolver ${resolverId}`);
+      // console.log(`🔄 Starting bulk assignment for ${ticketIds.length} tickets to resolver ${resolverId}`);
       
       // Use individual updates instead of bulk upsert
       const updatePromises = ticketIds.map(async ticketId => {
@@ -1173,7 +1174,7 @@ export class AdminService {
               return { success: false, error: updateError };
             }
           } else {
-            console.log(`ℹ️ Skipping status change for ticket ${ticketId} (current status: ${current?.status})`);
+            // console.log(`ℹ️ Skipping status change for ticket ${ticketId} (current status: ${current?.status})`);
           }
           
           // 2. Add to ticket_assignees (new flow)
@@ -1181,7 +1182,7 @@ export class AdminService {
             const SUPER_ADMIN_ID = (import.meta as any).env?.VITE_SUPER_ADMIN_ID as string | undefined;
             const DEFAULT_SUPER_ADMIN_ID = '33f6f645-55ff-48c5-875a-53b0c8b99cfe';
             await TicketService.addAssignee(ticketId, resolverId, 'resolver', SUPER_ADMIN_ID || DEFAULT_SUPER_ADMIN_ID, 'System', 'super_admin');
-            console.log(`✅ Successfully assigned ticket ${ticketId} to resolver ${resolverId}`);
+            // console.log(`✅ Successfully assigned ticket ${ticketId} to resolver ${resolverId}`);
             return { success: true, error: null };
           } catch (assigneeError) {
             console.error(`❌ Failed to add assignee for ticket ${ticketId}:`, assigneeError);
@@ -1199,17 +1200,143 @@ export class AdminService {
       const successfulAssignments = results.filter(r => r.success).length;
       const failedAssignments = results.filter(r => !r.success).length;
       
-      console.log(`📊 Bulk assignment results: ${successfulAssignments} successful, ${failedAssignments} failed`);
+      // console.log(`📊 Bulk assignment results: ${successfulAssignments} successful, ${failedAssignments} failed`);
       
       if (failedAssignments > 0) {
-        console.error('❌ Some bulk assignments failed');
+        // console.error('❌ Some bulk assignments failed');
         return false;
       }
 
-      console.log('✅ Bulk assigned tickets successfully');
+      // console.log('✅ Bulk assigned tickets successfully');
       return true;
     } catch (error) {
       console.error('❌ Error in bulkAssignTickets:', error);
+      return false;
+    }
+  }
+
+  static async bulkRemoveResolverAssignments(ticketIds: string[], resolverId?: string): Promise<boolean> {
+    try {
+      const SUPER_ADMIN_ID = (import.meta as any).env?.VITE_SUPER_ADMIN_ID as string | undefined;
+      const DEFAULT_SUPER_ADMIN_ID = '33f6f645-55ff-48c5-875a-53b0c8b99cfe';
+      const performerId = SUPER_ADMIN_ID || DEFAULT_SUPER_ADMIN_ID;
+      // console.log(`🔄 Starting bulk resolver deallocation for ${ticketIds.length} tickets`);
+      const results = await Promise.all(ticketIds.map(async ticketId => {
+        try {
+          let resolverIds: string[] = [];
+
+          if (resolverId) {
+            resolverIds = [resolverId];
+          } else {
+            const { data, error } = await supabase
+              .from('ticket_assignees')
+              .select('user_id')
+              .eq('ticket_id', ticketId)
+              .eq('role', 'resolver');
+
+            if (error) {
+              console.error(`❌ Failed to fetch resolver assignments for ticket ${ticketId}:`, error);
+              return false;
+            }
+
+            resolverIds = (data || []).map(a => a.user_id).filter(Boolean);
+          }
+
+          if (resolverIds.length === 0) {
+            return true;
+          }
+
+          const removalResults = await Promise.all(resolverIds.map(async resolverId => {
+            const { error: removeError } = await TicketService.removeAssignee(
+              ticketId,
+              resolverId,
+              'resolver',
+              performerId,
+              'System',
+              'super_admin'
+            );
+            if (removeError) {
+              console.error(`❌ Failed to remove resolver ${resolverId} for ticket ${ticketId}:`, removeError);
+              return false;
+            }
+            return true;
+          }));
+
+          return removalResults.every(Boolean);
+        } catch (err) {
+          console.error(`❌ Error deallocating resolver for ticket ${ticketId}:`, err);
+          return false;
+        }
+      }));
+
+      const successCount = results.filter(Boolean).length;
+      const failureCount = results.length - successCount;
+
+      // console.log(`📊 Resolver deallocation results: ${successCount} successful, ${failureCount} failed`);
+
+      return failureCount === 0;
+    } catch (error) {
+      console.error('❌ Error in bulkRemoveResolverAssignments:', error);
+      return false;
+    }
+  }
+
+  static async bulkRemoveApproverAssignments(ticketIds: string[], approverId?: string): Promise<boolean> {
+    try {
+      const SUPER_ADMIN_ID = (import.meta as any).env?.VITE_SUPER_ADMIN_ID as string | undefined;
+      const DEFAULT_SUPER_ADMIN_ID = '33f6f645-55ff-48c5-875a-53b0c8b99cfe';
+      const performerId = SUPER_ADMIN_ID || DEFAULT_SUPER_ADMIN_ID;
+      const results = await Promise.all(ticketIds.map(async ticketId => {
+        try {
+          let approverIds: string[] = [];
+
+          if (approverId) {
+            approverIds = [approverId];
+          } else {
+            const { data, error } = await supabase
+              .from('ticket_assignees')
+              .select('user_id')
+              .eq('ticket_id', ticketId)
+              .eq('role', 'approver');
+
+            if (error) {
+              console.error(`❌ Failed to fetch approver assignments for ticket ${ticketId}:`, error);
+              return false;
+            }
+
+            approverIds = (data || []).map(a => a.user_id).filter(Boolean);
+          }
+
+          if (approverIds.length === 0) {
+            return true;
+          }
+
+          const removalResults = await Promise.all(approverIds.map(async approverId => {
+            const { error: removeError } = await TicketService.removeAssignee(
+              ticketId,
+              approverId,
+              'approver',
+              performerId,
+              'System',
+              'super_admin'
+            );
+            if (removeError) {
+              console.error(`❌ Failed to remove approver ${approverId} for ticket ${ticketId}:`, removeError);
+              return false;
+            }
+            return true;
+          }));
+
+          return removalResults.every(Boolean);
+        } catch (err) {
+          console.error(`❌ Error deallocating approver for ticket ${ticketId}:`, err);
+          return false;
+        }
+      }));
+
+      return results.every(Boolean);
+    } catch (error) {
+      console.error('❌ Error in bulkRemoveApproverAssignments:', error);
       return false;
     }
   }
@@ -1248,7 +1375,7 @@ export class AdminService {
         }
       }
 
-      console.log('Ticket assigned successfully');
+      // console.log('Ticket assigned successfully');
       return true;
     } catch (error) {
       console.error('Error in assignTicket:', error);
@@ -1258,7 +1385,7 @@ export class AdminService {
 
   static async assignToApprover(ticketId: string, approverId: string): Promise<boolean> {
     try {
-      console.log(`🔄 Assigning ticket ${ticketId} to approver ${approverId}`);
+      // console.log(`🔄 Assigning ticket ${ticketId} to approver ${approverId}`);
       
       // Check if assignment already exists
       const { data: existing, error: existsError } = await supabase
@@ -1290,7 +1417,7 @@ export class AdminService {
         }
       }
 
-      console.log('✅ Ticket assigned to approver successfully');
+      // console.log('✅ Ticket assigned to approver successfully');
       return true;
     } catch (error) {
       console.error('❌ Error in assignToApprover:', error);
@@ -1300,7 +1427,7 @@ export class AdminService {
 
   static async assignToTicketAdmin(ticketId: string, ticketAdminId: string): Promise<boolean> {
     try {
-      console.log(`🔄 Assigning ticket ${ticketId} to ticket admin ${ticketAdminId}`);
+      // console.log(`🔄 Assigning ticket ${ticketId} to ticket admin ${ticketAdminId}`);
       
       // Add to ticket_assignees table (using new unified system)
       const { data, error } = await supabase
@@ -1318,7 +1445,7 @@ export class AdminService {
         return false;
       }
 
-      console.log('✅ Ticket assigned to ticket admin successfully:', data);
+      // console.log('✅ Ticket assigned to ticket admin successfully:', data);
       return true;
     } catch (error) {
       console.error('❌ Error in assignToTicketAdmin:', error);
@@ -1328,7 +1455,7 @@ export class AdminService {
 
   static async getTicketsAssignedToAdmin(adminId: string): Promise<Issue[]> {
     try {
-      console.log(`🔄 Getting tickets assigned to admin ${adminId}`);
+      // console.log(`🔄 Getting tickets assigned to admin ${adminId}`);
       
       // Get tickets assigned to this ticket admin using new system
       const { data: assignments, error: assignmentsError } = await supabase
@@ -1343,7 +1470,7 @@ export class AdminService {
       }
 
       if (!assignments || assignments.length === 0) {
-        console.log('ℹ️ No tickets assigned to this admin');
+        // console.log('ℹ️ No tickets assigned to this admin');
         return [];
       }
 
@@ -1447,7 +1574,7 @@ export class AdminService {
         deleted: (ticket as any).deleted || false
       }));
 
-      console.log(`✅ Returning ${mappedTickets.length} tickets assigned to admin ${adminId}`);
+      // console.log(`✅ Returning ${mappedTickets.length} tickets assigned to admin ${adminId}`);
       return mappedTickets as unknown as Issue[];
     } catch (error) {
       console.error('❌ Error in getTicketsAssignedToAdmin:', error);
@@ -1507,7 +1634,7 @@ export class AdminService {
         }
       }
 
-      console.log('Ticket status updated successfully:', data);
+      // console.log('Ticket status updated successfully:', data);
       return true;
     } catch (error) {
       console.error('Error in updateTicketStatus:', error);
@@ -1557,10 +1684,10 @@ export class AdminService {
       const assignments = allAssignments;
       
       // Debug: Check if assignments exist
-      console.log('🔍 Assignments debug:', {
-        assignmentsCount: assignments?.length || 0,
-        sampleAssignments: assignments?.slice(0, 3)
-      });
+      // console.log('🔍 Assignments debug:', {
+      //   assignmentsCount: assignments?.length || 0,
+      //   sampleAssignments: assignments?.slice(0, 3)
+      // });
 
       const userMap = new Map();
       if (users) {
@@ -1630,31 +1757,31 @@ export class AdminService {
       const openTicketsUnassignedToResolver = openTickets - openTicketsAssignedToResolver;
       
       // Debug logging
-      console.log('🔍 Analytics Debug:', {
-        totalTickets,
-        assignedTickets,
-        unassignedTickets,
-        unassignedToResolverTickets,
-        openTickets,
-        openTicketsAssignedToResolver,
-        openTicketsUnassignedToResolver,
-        ticketsCount: tickets.length,
-        assignmentsCount: assignments?.length || 0,
-        ticketsSetSize: ticketsSet.size,
-        assignedTicketIdsSize: assignedTicketIds.size,
-        resolverAssignedTicketIdsSize: resolverAssignedTicketIds.size,
-        sampleAssignments: assignments?.slice(0, 5),
-        sampleTicketIds: Array.from(ticketsSet).slice(0, 5)
-      });
+      // console.log('🔍 Analytics Debug:', {
+      //   totalTickets,
+      //   assignedTickets,
+      //   unassignedTickets,
+      //   unassignedToResolverTickets,
+      //   openTickets,
+      //   openTicketsAssignedToResolver,
+      //   openTicketsUnassignedToResolver,
+      //   ticketsCount: tickets.length,
+      //   assignmentsCount: assignments?.length || 0,
+      //   ticketsSetSize: ticketsSet.size,
+      //   assignedTicketIdsSize: assignedTicketIds.size,
+      //   resolverAssignedTicketIdsSize: resolverAssignedTicketIds.size,
+      //   sampleAssignments: assignments?.slice(0, 5),
+      //   sampleTicketIds: Array.from(ticketsSet).slice(0, 5)
+      // });
       
       // Expected numbers based on analysis:
       // Total Tickets: 2,337
       // Tickets with at least 1 Resolver: 1,484
       // Tickets without any Resolver: 853
-      console.log('📊 Expected vs Actual:');
-      console.log(`  Expected Total: 2,337 | Actual: ${totalTickets}`);
-      console.log(`  Expected with Resolver: 1,484 | Actual: ${resolverAssignedTicketIds.size}`);
-      console.log(`  Expected without Resolver: 853 | Actual: ${unassignedToResolverTickets}`);
+      // console.log('📊 Expected vs Actual:');
+      // console.log(`  Expected Total: 2,337 | Actual: ${totalTickets}`);
+      // console.log(`  Expected with Resolver: 1,484 | Actual: ${resolverAssignedTicketIds.size}`);
+      // console.log(`  Expected without Resolver: 853 | Actual: ${unassignedToResolverTickets}`);
       const slaBreachedTickets = tickets.filter(t => (t as any).isSlaBreached).length;
 
       // Calculate average resolution time (hours)
@@ -1750,13 +1877,13 @@ export class AdminService {
 
   static async getTicketAnalyticsForAdmin(adminId: string): Promise<TicketAnalytics> {
     try {
-      console.log(`🔄 Getting ticket analytics for admin ${adminId}...`);
+      // console.log(`🔄 Getting ticket analytics for admin ${adminId}...`);
       
       // Get tickets assigned to this admin
       const assignedTickets = await this.getTicketsAssignedToAdmin(adminId);
       
       if (!assignedTickets || assignedTickets.length === 0) {
-        console.log('ℹ️ No tickets assigned to this admin');
+        // console.log('ℹ️ No tickets assigned to this admin');
         return this.getEmptyAnalytics();
       }
 
@@ -1835,7 +1962,7 @@ export class AdminService {
         .map(([approver, count]) => ({ approver, count }))
         .sort((a, b) => b.count - a.count);
 
-      console.log(`✅ Calculated analytics for ${assignedTickets.length} assigned tickets`);
+      // console.log(`✅ Calculated analytics for ${assignedTickets.length} assigned tickets`);
       return {
         totalTickets,
         openTickets,
@@ -1983,7 +2110,7 @@ export class AdminService {
   // Soft delete a ticket by ID (Super Admin only)
   static async deleteTicket(ticketId: string): Promise<boolean> {
     try {
-      console.log('Soft deleting ticket:', ticketId);
+      // console.log('Soft deleting ticket:', ticketId);
       const { error } = await supabase
         .from('tickets')
         .update({ deleted: true } as any) // Cast to any to avoid type error
@@ -1992,7 +2119,7 @@ export class AdminService {
         console.error('Error soft deleting ticket:', error);
         return false;
       }
-      console.log('Ticket soft deleted successfully:', ticketId);
+      // console.log('Ticket soft deleted successfully:', ticketId);
       return true;
     } catch (error) {
       console.error('Error in deleteTicket:', error);
@@ -2003,7 +2130,7 @@ export class AdminService {
   // Delete a user by ID (Super Admin only)
   static async deleteUser(userId: string): Promise<boolean> {
     try {
-      console.log('Deleting user data for:', userId);
+      // console.log('Deleting user data for:', userId);
       
       // Check if user has any tickets before deleting
       const { data: userTickets, error: ticketsError } = await supabase
@@ -2018,7 +2145,7 @@ export class AdminService {
       
       // Delete all tickets by this user (but keep the user)
       if (userTickets && userTickets.length > 0) {
-        console.log(`User has ${userTickets.length} tickets. Deleting tickets but keeping user.`);
+        // console.log(`User has ${userTickets.length} tickets. Deleting tickets but keeping user.`);
         
         // Delete all tickets by this user
         for (const ticket of userTickets) {
@@ -2033,7 +2160,7 @@ export class AdminService {
       await supabase.from('ticket_assignees').delete().eq('user_id', userId);
       
       // Note: We're NOT deleting the user record - just cleaning up their data
-      console.log('User data cleaned successfully. User record preserved:', userId);
+      // console.log('User data cleaned successfully. User record preserved:', userId);
       return true;
     } catch (error) {
       console.error('Error in deleteUser:', error);
@@ -2074,7 +2201,7 @@ export class AdminService {
 
   static async getTicketsByResolverName(resolverName: string): Promise<Issue[]> {
     try {
-      console.log(`🔍 Getting tickets assigned to resolver: ${resolverName}`);
+      // console.log(`🔍 Getting tickets assigned to resolver: ${resolverName}`);
       
       // First, find the user ID for the resolver name
       const { data: user, error: userError } = await supabase
@@ -2102,7 +2229,7 @@ export class AdminService {
       }
 
       if (!assignments || assignments.length === 0) {
-        console.log('ℹ️ No tickets assigned to this resolver');
+        // console.log('ℹ️ No tickets assigned to this resolver');
         return [];
       }
 
@@ -2173,7 +2300,7 @@ export class AdminService {
         attachments: ticket.attachments || []
       }));
 
-      console.log(`✅ Found ${mappedTickets.length} tickets assigned to resolver: ${resolverName}`);
+      // console.log(`✅ Found ${mappedTickets.length} tickets assigned to resolver: ${resolverName}`);
       return mappedTickets as unknown as Issue[];
     } catch (error) {
       console.error('❌ Error in getTicketsByResolverName:', error);
