@@ -82,7 +82,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Date selection cutoff: block any date after this cutoff (default: 2025-09-30)
-  const DEFAULT_CUTOFF_ISO = '2025-09-30';
+  const DEFAULT_CUTOFF_ISO = '2025-10-15';
   const envCutoff = (import.meta as any).env?.VITE_ISSUE_DATE_CUTOFF as string | undefined;
   const cutoffDateString = (envCutoff && envCutoff.trim() !== '') ? envCutoff : DEFAULT_CUTOFF_ISO;
   const cutoffY = parseInt(cutoffDateString.slice(0, 4), 10);
