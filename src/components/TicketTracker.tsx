@@ -972,92 +972,117 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
                   </>
                 )}
 
-                {/* Add Comment Section - Available to all users */}
+                {/* Add Comment Section - Disabled for users/invigilators on resolved/closed tickets */}
                 <Separator />
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Add Comment</Label>
-                  <Textarea
-                    placeholder="Enter your comment..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    className="min-h-[80px]"
-                  />
-                  
-                  {/* File Attachment Section */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-2"
-                      >
-                        <Paperclip className="h-4 w-4" />
-                        Attach Files
-                      </Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        onChange={handleFileSelect}
-                        className="hidden"
-                        accept="image/*,.pdf,.doc,.docx,.txt"
-                      />
-                      {commentAttachments.length > 0 && (
-                        <span className="text-sm text-muted-foreground">
-                          {commentAttachments.length} file(s) selected
-                        </span>
+                {(() => {
+                  // Check if user is staff (can always comment)
+                  const isStaff = user && ['resolver', 'approver', 'admin', 'super_admin', 'ticket_admin'].includes(user.role);
+                  // Check if ticket is resolved
+                  const isResolvedOrClosed = selectedTicket.status === 'resolved';
+                  // Disable comments for non-staff users on resolved tickets
+                  const canComment = isStaff || !isResolvedOrClosed;
+
+                  return (
+                    <div className="space-y-3">
+                      {!canComment ? (
+                        <div className="p-4 rounded-lg bg-muted border border-muted-foreground/20">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <HelpCircle className="h-4 w-4" />
+                            <p className="text-sm font-medium">Comments are disabled for resolved/closed tickets</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            This ticket has been resolved. If you need to reopen it or have concerns, please raise a new ticket with this ticket's number as reference.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <Label className="text-sm font-medium">Add Comment</Label>
+                          <Textarea
+                            placeholder="Enter your comment..."
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            className="min-h-[80px]"
+                          />
+                          
+                          {/* File Attachment Section */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex items-center gap-2"
+                              >
+                                <Paperclip className="h-4 w-4" />
+                                Attach Files
+                              </Button>
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                onChange={handleFileSelect}
+                                className="hidden"
+                                accept="image/*,.pdf,.doc,.docx,.txt"
+                              />
+                              {commentAttachments.length > 0 && (
+                                <span className="text-sm text-muted-foreground">
+                                  {commentAttachments.length} file(s) selected
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Display selected files */}
+                            {commentAttachments.length > 0 && (
+                              <div className="space-y-2">
+                                {commentAttachments.map((file, index) => (
+                                  <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                                    <div className="flex items-center gap-2">
+                                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                      <div>
+                                        <p className="text-sm font-medium">{file.name}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {(file.size / 1024).toFixed(1)} KB
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => removeAttachment(index)}
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <Button 
+                            onClick={handleAddComment}
+                            disabled={!newComment.trim() || isAddingComment}
+                            size="sm"
+                            className="w-full"
+                          >
+                            {isAddingComment ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Adding...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-4 w-4 mr-2" />
+                                Add Comment
+                              </>
+                            )}
+                          </Button>
+                        </>
                       )}
                     </div>
-                    
-                    {/* Display selected files */}
-                    {commentAttachments.length > 0 && (
-                      <div className="space-y-2">
-                        {commentAttachments.map((file, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                            <div className="flex items-center gap-2">
-                              <Paperclip className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="text-sm font-medium">{file.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {(file.size / 1024).toFixed(1)} KB
-                                </p>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeAttachment(index)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <Button 
-                    onClick={handleAddComment}
-                    disabled={!newComment.trim() || isAddingComment}
-                    size="sm"
-                    className="w-full"
-                  >
-                    {isAddingComment ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Adding...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4 mr-2" />
-                        Add Comment
-                      </>
-                    )}
-                  </Button>
-                </div>
+                  );
+                })()}
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-8">
