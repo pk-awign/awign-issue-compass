@@ -871,6 +871,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      cleanup_past_user_dependency_tickets: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       log_ticket_history: {
         Args: {
           p_action_type: string

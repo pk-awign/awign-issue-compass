@@ -20,6 +20,7 @@ import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
 import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
 import { WhatsAppTestComponent } from '@/components/admin/WhatsAppTestComponent';
+import { ActivityLog } from '@/components/admin/ActivityLog';
 import { addDays, format } from "date-fns";
 import { Switch } from '@/components/ui/switch';
 import { MultiSelect } from '@/components/ui/multi-select';
@@ -93,6 +94,11 @@ export const AdminPage: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [lastStatusFilter, setLastStatusFilter] = useState('all');
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
+  
+  // Track which tabs have been loaded to avoid reloading
+  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
   const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
@@ -134,11 +140,57 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  // Initialize sample users on first load
+  // Initialize sample users only (no data loading)
   useEffect(() => {
-    initializeSystem();
-    loadAnalytics();
+    const initUsers = async () => {
+      try {
+        await AdminService.initializeSampleUsers();
+      } catch (error) {
+        console.error('❌ Error initializing sample users:', error);
+      }
+    };
+    initUsers();
   }, []);
+  
+  // Lazy load data based on active tab
+  useEffect(() => {
+    // Skip if tab already loaded
+    if (loadedTabs.has(activeTab)) {
+      return;
+    }
+    
+    switch (activeTab) {
+      case 'overview':
+        loadAnalytics();
+        setLoadedTabs(prev => new Set(prev).add('overview'));
+        break;
+      case 'tickets':
+        loadTickets(true);
+        setLoadedTabs(prev => new Set(prev).add('tickets'));
+        break;
+      case 'analytics':
+        loadAnalytics();
+        setLoadedTabs(prev => new Set(prev).add('analytics'));
+        break;
+      case 'users':
+        // UserManagementModal handles its own data loading
+        setLoadedTabs(prev => new Set(prev).add('users'));
+        break;
+      case 'whatsapp':
+        // WhatsAppTestComponent handles its own data loading
+        setLoadedTabs(prev => new Set(prev).add('whatsapp'));
+        break;
+      case 'activity':
+        // ActivityLog component handles its own data loading
+        setLoadedTabs(prev => new Set(prev).add('activity'));
+        break;
+      case 'settings':
+        // Settings tab doesn't need data loading
+        setLoadedTabs(prev => new Set(prev).add('settings'));
+        break;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
   // Compute available resolver/approver IDs from the currently visible tickets
   const availableResolverIds = useMemo(() => {
     const ids = new Set<string>();
@@ -162,20 +214,7 @@ export const AdminPage: React.FC = () => {
 
 
 
-  const initializeSystem = async () => {
-    // console.log('🚀 Initializing admin system...');
-    
-    // Initialize sample users first
-    try {
-      await AdminService.initializeSampleUsers();
-      // console.log('✅ Sample users initialized');
-    } catch (error) {
-      console.error('❌ Error initializing sample users:', error);
-    }
-
-    // Then load tickets
-    await loadTickets();
-  };
+  // Removed initializeSystem - data loading is now handled by tab-based lazy loading
 
   // Update loadTickets to support pagination and filtering
   const loadTickets = useCallback(async (reset = false) => {
@@ -268,29 +307,34 @@ export const AdminPage: React.FC = () => {
   }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, isTicketAdmin, user?.id]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
+  // Only reload if tickets tab is active and loaded
   useEffect(() => {
-    // Reset pagination and fetch fresh data when filters change
-    setPage(1);
-    setTickets([]);
-    setFilteredTickets([]);
-    loadTickets(true);
+    if (activeTab === 'tickets' && loadedTabs.has('tickets')) {
+      // Reset pagination and fetch fresh data when filters change
+      setPage(1);
+      setTickets([]);
+      setFilteredTickets([]);
+      loadTickets(true);
+    }
     // eslint-disable-next-line
-  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator]);
+  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, activeTab, loadedTabs]);
 
-  // Fetch resolvers/approvers for filter dropdowns
+  // Fetch resolvers/approvers for filter dropdowns (only when tickets tab is active)
   useEffect(() => {
-    const fetchResolvers = async () => {
-      const users = await AdminService.getUsersByRole('resolver');
-      setResolvers(users.map(u => ({ id: u.id, name: u.name })));
-    };
-    const fetchApprovers = async () => {
-      const users = await AdminService.getUsersByRole('approver');
-      // Show only active approvers in filters
-      setApprovers(users.filter(u => u.isActive).map(u => ({ id: u.id, name: u.name })));
-    };
-    fetchResolvers();
-    fetchApprovers();
-  }, []);
+    if (activeTab === 'tickets' && loadedTabs.has('tickets')) {
+      const fetchResolvers = async () => {
+        const users = await AdminService.getUsersByRole('resolver');
+        setResolvers(users.map(u => ({ id: u.id, name: u.name })));
+      };
+      const fetchApprovers = async () => {
+        const users = await AdminService.getUsersByRole('approver');
+        // Show only active approvers in filters
+        setApprovers(users.filter(u => u.isActive).map(u => ({ id: u.id, name: u.name })));
+      };
+      fetchResolvers();
+      fetchApprovers();
+    }
+  }, [activeTab, loadedTabs]);
 
   // Fix handleLoadMore to be a no-arg function
   const handleLoadMore = useCallback(() => {
@@ -361,6 +405,7 @@ export const AdminPage: React.FC = () => {
   }, [page]);
 
   const loadAnalytics = async () => {
+    setIsLoadingAnalytics(true);
     try {
       let data;
       if (isTicketAdmin && user?.id) {
@@ -374,13 +419,17 @@ export const AdminPage: React.FC = () => {
       // console.log('📊 Analytics refreshed:', data);
     } catch (err) {
       console.error('Error loading analytics:', err);
+    } finally {
+      setIsLoadingAnalytics(false);
     }
   };
 
-  // Refresh analytics when filters change
+  // Refresh analytics when filters change (only if analytics/overview tab is active)
   useEffect(() => {
-    loadAnalytics();
-  }, [statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange]);
+    if ((activeTab === 'analytics' || activeTab === 'overview') && loadedTabs.has(activeTab)) {
+      loadAnalytics();
+    }
+  }, [statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, activeTab, loadedTabs]);
 
   const handleLogout = () => {
     logout();
@@ -856,7 +905,7 @@ export const AdminPage: React.FC = () => {
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className={`flex flex-col items-center gap-2 w-full p-2 bg-muted rounded-xl border shadow-md my-4 md:grid md:gap-0 md:p-1 ${
-              isTicketAdmin ? 'md:grid-cols-3' : 'md:grid-cols-6'
+              isTicketAdmin ? 'md:grid-cols-3' : 'md:grid-cols-7'
             }`}>
               <TabsTrigger value="overview" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Overview</TabsTrigger>
               <TabsTrigger value="tickets" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">
@@ -867,14 +916,22 @@ export const AdminPage: React.FC = () => {
                 <>
                   <TabsTrigger value="users" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">User Management</TabsTrigger>
                   <TabsTrigger value="whatsapp" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">WhatsApp</TabsTrigger>
+                  <TabsTrigger value="activity" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Activity Log</TabsTrigger>
                   <TabsTrigger value="settings" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Settings</TabsTrigger>
                 </>
               )}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {isLoadingAnalytics ? (
+                <div className="text-center py-12">
+                  <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
+                  <p className="text-muted-foreground">Loading analytics...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <Card>
                   <CardContent className="p-4 text-center">
                     <div className="flex items-center justify-center mb-2">
@@ -1043,6 +1100,8 @@ export const AdminPage: React.FC = () => {
                   </CardContent>
                 </Card>
               </div>
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="tickets" className="space-y-6">
@@ -1668,6 +1727,10 @@ export const AdminPage: React.FC = () => {
 
             <TabsContent value="whatsapp">
               <WhatsAppTestComponent />
+            </TabsContent>
+
+            <TabsContent value="activity" className="space-y-6">
+              <ActivityLog />
             </TabsContent>
 
             <TabsContent value="settings">
