@@ -235,7 +235,7 @@ export class ActivityLogService {
     const isBulk = 'count' in activity;
     const ticketRef = isBulk 
       ? `${activity.count} tickets` 
-      : `ticket ${activity.ticketNumber || activity.ticketIds?.[0] || 'N/A'}`;
+      : `ticket ${activity.ticketNumber || activity.ticketId || 'N/A'}`;
 
     switch (activity.actionType) {
       case 'created':

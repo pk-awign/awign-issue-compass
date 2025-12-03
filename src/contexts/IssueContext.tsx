@@ -303,7 +303,12 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const ticketAssigns = assigneesByTicket[ticket.id] || [];
         const resolverAssignment = ticketAssigns.find((a: any) => a.role === 'resolver');
         const approverAssignment = ticketAssigns.find((a: any) => a.role === 'approver');
-        const normalizedAssignees = ticketAssigns.map((a: any) => ({ user_id: a.user_id, role: a.role, id: a.user_id }));
+        const ticketAdminAssignment = ticketAssigns.find((a: any) => a.role === 'ticket_admin');
+        const normalizedAssignees = {
+          resolver: resolverAssignment ? { name: '', role: resolverAssignment.role, id: resolverAssignment.user_id } : undefined,
+          approver: approverAssignment ? { name: '', role: approverAssignment.role, id: approverAssignment.user_id } : undefined,
+          ticketAdmin: ticketAdminAssignment ? { name: '', role: ticketAdminAssignment.role, id: ticketAdminAssignment.user_id } : undefined,
+        };
 
         // Map attachments with download URLs via Supabase helper
         const attachments = Array.isArray(ticket.attachments) ? ticket.attachments.map((att: any) => {
