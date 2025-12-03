@@ -100,18 +100,6 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
             Filters
           </CardTitle>
           <div className="flex items-center gap-2">
-            {onExportTickets && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onExportTickets}
-                disabled={isExporting}
-                className="h-8"
-              >
-                <Download className="h-3 w-3 mr-1" />
-                {isExporting ? 'Exporting...' : 'Export Tickets'}
-              </Button>
-            )}
             {activeFiltersCount > 0 && (
               <>
                 <Badge variant="secondary">
