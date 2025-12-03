@@ -579,6 +579,7 @@ export type Database = {
       }
       tickets: {
         Row: {
+          approved_at: string | null
           awign_app_ticket_id: string | null
           centre_code: string
           city: string
@@ -599,6 +600,7 @@ export type Database = {
           resolution_notes: string | null
           resolution_time_hours: number | null
           resolved_at: string | null
+          resolved_via: Database["public"]["Enums"]["resolution_via"] | null
           resource_id: string
           severity: string
           sla_target_hours: number | null
@@ -613,6 +615,7 @@ export type Database = {
           user_dependency_started_at: string | null
         }
         Insert: {
+          approved_at?: string | null
           awign_app_ticket_id?: string | null
           centre_code: string
           city: string
@@ -633,6 +636,7 @@ export type Database = {
           resolution_notes?: string | null
           resolution_time_hours?: number | null
           resolved_at?: string | null
+          resolved_via?: Database["public"]["Enums"]["resolution_via"] | null
           resource_id: string
           severity: string
           sla_target_hours?: number | null
@@ -647,6 +651,7 @@ export type Database = {
           user_dependency_started_at?: string | null
         }
         Update: {
+          approved_at?: string | null
           awign_app_ticket_id?: string | null
           centre_code?: string
           city?: string
@@ -667,6 +672,7 @@ export type Database = {
           resolution_notes?: string | null
           resolution_time_hours?: number | null
           resolved_at?: string | null
+          resolved_via?: Database["public"]["Enums"]["resolution_via"] | null
           resource_id?: string
           severity?: string
           sla_target_hours?: number | null
@@ -703,6 +709,117 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tickets_user_dependency_cleanup_backup: {
+        Row: {
+          approved_at: string | null
+          awign_app_ticket_id: string | null
+          centre_code: string | null
+          city: string | null
+          created_at: string | null
+          deleted: boolean | null
+          escalated_at: string | null
+          id: string | null
+          is_anonymous: boolean | null
+          is_sla_breached: boolean | null
+          is_testing: boolean | null
+          issue_category: string | null
+          issue_date: Json | null
+          issue_description: string | null
+          last_activity_at: string | null
+          last_reopened_at: string | null
+          reopen_count: number | null
+          reopened_by: string | null
+          resolution_notes: string | null
+          resolution_time_hours: number | null
+          resolved_at: string | null
+          resolved_via: Database["public"]["Enums"]["resolution_via"] | null
+          resource_id: string | null
+          severity: string | null
+          sla_target_hours: number | null
+          status: Database["public"]["Enums"]["ticket_status_new"] | null
+          status_changed_at: string | null
+          status_changed_by: string | null
+          submitted_at: string | null
+          submitted_by: string | null
+          submitted_by_user_id: string | null
+          ticket_number: string | null
+          updated_at: string | null
+          user_dependency_started_at: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          awign_app_ticket_id?: string | null
+          centre_code?: string | null
+          city?: string | null
+          created_at?: string | null
+          deleted?: boolean | null
+          escalated_at?: string | null
+          id?: string | null
+          is_anonymous?: boolean | null
+          is_sla_breached?: boolean | null
+          is_testing?: boolean | null
+          issue_category?: string | null
+          issue_date?: Json | null
+          issue_description?: string | null
+          last_activity_at?: string | null
+          last_reopened_at?: string | null
+          reopen_count?: number | null
+          reopened_by?: string | null
+          resolution_notes?: string | null
+          resolution_time_hours?: number | null
+          resolved_at?: string | null
+          resolved_via?: Database["public"]["Enums"]["resolution_via"] | null
+          resource_id?: string | null
+          severity?: string | null
+          sla_target_hours?: number | null
+          status?: Database["public"]["Enums"]["ticket_status_new"] | null
+          status_changed_at?: string | null
+          status_changed_by?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          submitted_by_user_id?: string | null
+          ticket_number?: string | null
+          updated_at?: string | null
+          user_dependency_started_at?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          awign_app_ticket_id?: string | null
+          centre_code?: string | null
+          city?: string | null
+          created_at?: string | null
+          deleted?: boolean | null
+          escalated_at?: string | null
+          id?: string | null
+          is_anonymous?: boolean | null
+          is_sla_breached?: boolean | null
+          is_testing?: boolean | null
+          issue_category?: string | null
+          issue_date?: Json | null
+          issue_description?: string | null
+          last_activity_at?: string | null
+          last_reopened_at?: string | null
+          reopen_count?: number | null
+          reopened_by?: string | null
+          resolution_notes?: string | null
+          resolution_time_hours?: number | null
+          resolved_at?: string | null
+          resolved_via?: Database["public"]["Enums"]["resolution_via"] | null
+          resource_id?: string | null
+          severity?: string | null
+          sla_target_hours?: number | null
+          status?: Database["public"]["Enums"]["ticket_status_new"] | null
+          status_changed_at?: string | null
+          status_changed_by?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          submitted_by_user_id?: string | null
+          ticket_number?: string | null
+          updated_at?: string | null
+          user_dependency_started_at?: string | null
+        }
+        Relationships: []
       }
       user_permissions: {
         Row: {
@@ -867,22 +984,20 @@ export type Database = {
       }
     }
     Functions: {
-      auto_resolve_user_dependency_tickets: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      cleanup_past_user_dependency_tickets: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      auto_close_approved_ticket: { Args: never; Returns: number }
+      auto_close_approved_ticket_v2: { Args: never; Returns: number }
+      auto_resolve_approved_tickets: { Args: never; Returns: undefined }
+      auto_resolve_user_dependency_tickets: { Args: never; Returns: number }
+      cleanup_past_user_dependency_tickets: { Args: never; Returns: number }
       log_ticket_history: {
         Args: {
           p_action_type: string
-          p_details?: Json
-          p_new_value?: string
-          p_old_value?: string
+          p_details: Json
+          p_new_value: string
+          p_old_value: string
           p_performed_by?: string
-          p_performed_by_role?: string
+          p_performed_by_name: string
+          p_performed_by_role: string
           p_ticket_id: string
         }
         Returns: undefined
@@ -912,10 +1027,7 @@ export type Database = {
           role: string
         }[]
       }
-      refresh_ticket_analytics: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      refresh_ticket_analytics: { Args: never; Returns: undefined }
       register_user_with_mobile_pin: {
         Args: {
           p_centre_code?: string
@@ -951,6 +1063,7 @@ export type Database = {
       }
     }
     Enums: {
+      resolution_via: "manual" | "auto"
       ticket_status_new:
         | "open"
         | "in_progress"
@@ -959,6 +1072,7 @@ export type Database = {
         | "resolved"
         | "ops_input_required"
         | "user_dependency"
+        | "ops_user_dependency"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1086,6 +1200,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      resolution_via: ["manual", "auto"],
       ticket_status_new: [
         "open",
         "in_progress",
@@ -1094,6 +1209,7 @@ export const Constants = {
         "resolved",
         "ops_input_required",
         "user_dependency",
+        "ops_user_dependency",
       ],
     },
   },

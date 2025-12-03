@@ -1338,29 +1338,6 @@ export const AdminPage: React.FC = () => {
                 </div>
 
                       <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          onClick={handleExportTickets}
-                          disabled={isExporting}
-                          className="flex items-center gap-2"
-                        >
-                          <Download className="h-4 w-4" />
-                          {isExporting ? 'Exporting...' : 'Export Filtered Tickets'}
-                        </Button>
-                    <Button 
-                        variant="outline" 
-                        onClick={() => openDownloadDialog('all')}
-                        disabled={isDownloading}
-                    >
-                        {isDownloading && downloadType === 'all' ? 'Downloading...' : 'Download All Tickets'}
-                    </Button>
-                    <Button 
-                        variant="outline" 
-                        onClick={() => openDownloadDialog('detailed')}
-                        disabled={isDownloading}
-                    >
-                        {isDownloading && downloadType === 'detailed' ? 'Downloading...' : 'Download Detailed Tickets'}
-                    </Button>
                         {hasActiveFilters && (
                     <Button 
                         variant="outline" 

@@ -38,6 +38,7 @@ import { AdminService } from '@/services/adminService';
 import { Issue, User } from '@/types/issue';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getStatusLabel } from '@/utils/status';
 import { RandomTicketGenerator } from './dev/RandomTicketGenerator';
 import { DashboardRouter } from './admin/DashboardRouter';
 import { TicketDetailsModal } from './admin/TicketDetailsModal';
@@ -186,7 +187,7 @@ const AdminDashboard: React.FC = () => {
     return (
       <Badge className={config?.color || 'bg-gray-100 text-gray-800'}>
         <Icon className="h-3 w-3 mr-1" />
-        {formatStatusValue(status)}
+        {getStatusLabel(status)}
       </Badge>
     );
   };

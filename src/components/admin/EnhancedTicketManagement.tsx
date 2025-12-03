@@ -12,6 +12,7 @@ import { TicketService } from '../../services/ticketService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import { formatRole, getTimelineDescription } from '../../utils/timelineUtils';
+import { getStatusLabel } from '../../utils/status';
 import { 
   Clock, 
   User, 

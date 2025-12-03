@@ -9,6 +9,7 @@ import { Ticket, Search, Calendar, MapPin, FileText, ExternalLink } from 'lucide
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthService } from '@/services/authService';
 import { format } from 'date-fns';
+import { getStatusLabel } from '@/utils/status';
 
 interface UserTicket {
   id: string;
