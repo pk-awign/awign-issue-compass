@@ -594,10 +594,6 @@ export const TicketAdminPage: React.FC = () => {
                         <SelectItem value="sev3">Sev 3</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button onClick={() => openDownloadDialog('all')} variant="outline">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
                   </div>
 
                   {/* Tickets Table */}
