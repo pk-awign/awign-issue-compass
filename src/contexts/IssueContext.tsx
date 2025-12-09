@@ -301,13 +301,25 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const mappedIssues = data.map((ticket: any) => {
         // Get assignments for this ticket
         const ticketAssigns = assigneesByTicket[ticket.id] || [];
-        const resolverAssignment = ticketAssigns.find((a: any) => a.role === 'resolver');
-        const approverAssignment = ticketAssigns.find((a: any) => a.role === 'approver');
-        const ticketAdminAssignment = ticketAssigns.find((a: any) => a.role === 'ticket_admin');
+        // Get ALL assignments per role (not just the first one)
+        const resolverAssignments = ticketAssigns.filter((a: any) => a.role === 'resolver');
+        const approverAssignments = ticketAssigns.filter((a: any) => a.role === 'approver');
+        const ticketAdminAssignments = ticketAssigns.filter((a: any) => a.role === 'ticket_admin');
+        // Store all assignees as an array for getAllAssignees to process
+        const allAssigneesArray = ticketAssigns.map((a: any) => ({
+          user_id: a.user_id,
+          role: a.role,
+          id: a.user_id, // For compatibility
+          name: '' // Will be populated if needed
+        }));
+        // Keep backward compatibility with single fields (use first one)
+        const firstResolver = resolverAssignments[0];
+        const firstApprover = approverAssignments[0];
+        const firstTicketAdmin = ticketAdminAssignments[0];
         const normalizedAssignees = {
-          resolver: resolverAssignment ? { name: '', role: resolverAssignment.role, id: resolverAssignment.user_id } : undefined,
-          approver: approverAssignment ? { name: '', role: approverAssignment.role, id: approverAssignment.user_id } : undefined,
-          ticketAdmin: ticketAdminAssignment ? { name: '', role: ticketAdminAssignment.role, id: ticketAdminAssignment.user_id } : undefined,
+          resolver: firstResolver ? { name: '', role: firstResolver.role, id: firstResolver.user_id } : undefined,
+          approver: firstApprover ? { name: '', role: firstApprover.role, id: firstApprover.user_id } : undefined,
+          ticketAdmin: firstTicketAdmin ? { name: '', role: firstTicketAdmin.role, id: firstTicketAdmin.user_id } : undefined,
         };
 
         // Map attachments with download URLs via Supabase helper
@@ -362,15 +374,16 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           submittedByUserId: ticket.submitted_by_user_id,
           submittedAt: new Date(ticket.submitted_at),
           // Use new assignment system, keep compatibility single fields
-          assignedResolver: resolverAssignment?.user_id || null,
-          assignedApprover: approverAssignment?.user_id || null,
+          assignedResolver: firstResolver?.user_id || null,
+          assignedApprover: firstApprover?.user_id || null,
           resolutionNotes: ticket.resolution_notes,
           resolvedAt: ticket.resolved_at ? new Date(ticket.resolved_at) : undefined,
           comments: sortedComments,
           attachments,
           issueEvidence: [],
           // Expose full list so multiple resolvers are visible to dashboards
-          assignees: normalizedAssignees,
+          // Store as array to support multiple assignees per role
+          assignees: allAssigneesArray.length > 0 ? allAssigneesArray : normalizedAssignees,
         };
       });
 
