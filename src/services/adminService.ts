@@ -1165,13 +1165,13 @@ export class AdminService {
           }
 
           if (current?.status === 'open') {
-            const { error: updateError } = await supabase
-              .from('tickets')
+          const { error: updateError } = await supabase
+            .from('tickets')
               .update({ status: 'in_progress' })
-              .eq('id', ticketId);
-            if (updateError) {
-              console.error(`❌ Failed to update ticket ${ticketId}:`, updateError);
-              return { success: false, error: updateError };
+            .eq('id', ticketId);
+          if (updateError) {
+            console.error(`❌ Failed to update ticket ${ticketId}:`, updateError);
+            return { success: false, error: updateError };
             }
           } else {
             // console.log(`ℹ️ Skipping status change for ticket ${ticketId} (current status: ${current?.status})`);

@@ -12,7 +12,7 @@ const SMS_CONFIG = {
   UID: process.env.VITE_SMS_UID,
   CLIENT_ID: process.env.VITE_SMS_CLIENT_ID || 'core',
   SENDER_ID: process.env.VITE_SMS_SENDER_ID || 'IAWIGN',
-  CHANNEL: process.env.VITE_SMS_CHANNEL || 'telspiel',
+  CHANNEL: process.env.VITE_SMS_CHANNEL || 'telspiel_product',
   TICKET_CREATION_TEMPLATE_ID: process.env.VITE_SMS_TICKET_CREATION_TEMPLATE_ID,
   TICKET_UPDATE_TEMPLATE_ID: process.env.VITE_SMS_TICKET_UPDATE_TEMPLATE_ID
 };

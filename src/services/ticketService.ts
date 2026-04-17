@@ -1386,7 +1386,7 @@ export class TicketService {
   static async getLastStatusForTickets(ticketIds: string[]): Promise<Map<string, string>> {
     try {
       if (ticketIds.length === 0) return new Map();
-
+      
       const uniqueIds = Array.from(new Set(ticketIds.filter(Boolean)));
       if (uniqueIds.length === 0) {
         return new Map();
@@ -1397,19 +1397,19 @@ export class TicketService {
 
       for (let i = 0; i < uniqueIds.length; i += PAGE_SIZE) {
         const batchIds = uniqueIds.slice(i, i + PAGE_SIZE);
-        const { data, error } = await supabase
-          .from('ticket_history')
-          .select('ticket_id, old_value, new_value, performed_at')
-          .eq('action_type', 'status_change')
+      const { data, error } = await supabase
+        .from('ticket_history')
+        .select('ticket_id, old_value, new_value, performed_at')
+        .eq('action_type', 'status_change')
           .in('ticket_id', batchIds)
-          .order('performed_at', { ascending: false });
-
-        if (error) throw error;
+        .order('performed_at', { ascending: false });
+      
+      if (error) throw error;
         if (data) {
           batchedResults.push(...data);
         }
       }
-
+      
       const lastStatusByTicket = new Map<string, string>();
       
       if (batchedResults.length > 0) {

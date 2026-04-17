@@ -236,7 +236,7 @@ export const AdvancedAnalytics: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-1">Total Tickets</p>
                 <p className="text-2xl font-bold">{analytics.totalTickets.toLocaleString()}</p>
-              </div>
+            </div>
               <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
                 <FileText className="h-6 w-6 text-blue-600" />
               </div>
@@ -250,7 +250,7 @@ export const AdvancedAnalytics: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-1">Open</p>
                 <p className="text-2xl font-bold text-red-600">{analytics.openTickets.toLocaleString()}</p>
-              </div>
+            </div>
               <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
                 <AlertCircle className="h-6 w-6 text-red-600" />
               </div>
@@ -264,7 +264,7 @@ export const AdvancedAnalytics: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-1">In Progress</p>
                 <p className="text-2xl font-bold text-orange-600">{analytics.inProgressTickets.toLocaleString()}</p>
-              </div>
+            </div>
               <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
                 <Clock className="h-6 w-6 text-orange-600" />
               </div>
@@ -279,7 +279,7 @@ export const AdvancedAnalytics: React.FC = () => {
                 <p className="text-sm font-medium text-muted-foreground mb-1">Resolved</p>
                 <p className="text-2xl font-bold text-green-600">{analytics.resolvedTickets.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground mt-1">{resolutionRate}% resolution rate</p>
-              </div>
+            </div>
               <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
@@ -294,7 +294,7 @@ export const AdvancedAnalytics: React.FC = () => {
                 <p className="text-sm font-medium text-muted-foreground mb-1">Assigned</p>
                 <p className="text-2xl font-bold text-purple-600">{analytics.assignedTickets.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground mt-1">{assignmentRate}% assigned</p>
-              </div>
+            </div>
               <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
                 <UserCheck className="h-6 w-6 text-purple-600" />
               </div>
@@ -309,7 +309,7 @@ export const AdvancedAnalytics: React.FC = () => {
                 <p className="text-sm font-medium text-muted-foreground mb-1">Avg Resolution</p>
                 <p className="text-2xl font-bold text-yellow-600">{Math.round(analytics.avgResolutionHours)}h</p>
                 <p className="text-xs text-muted-foreground mt-1">Average time</p>
-              </div>
+            </div>
               <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
                 <TrendingUp className="h-6 w-6 text-yellow-600" />
               </div>
@@ -422,23 +422,23 @@ export const AdvancedAnalytics: React.FC = () => {
                   {statusData.length > 0 ? (
                     <div className="space-y-4">
                       <ResponsiveContainer width="100%" height={280}>
-                        <PieChart>
-                          <Pie
-                            data={statusData}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
+                      <PieChart>
+                        <Pie
+                          data={statusData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
                             label={({ name, percent, value }) => 
                               `${name}: ${value} (${(percent * 100).toFixed(1)}%)`
                             }
                             outerRadius={90}
-                            fill="#8884d8"
-                            dataKey="value"
-                          >
-                            {statusData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {statusData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
                           <Tooltip 
                             formatter={(value: any) => [`${value} tickets`, 'Count']}
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
@@ -448,8 +448,8 @@ export const AdvancedAnalytics: React.FC = () => {
                             height={36}
                             formatter={(value) => value}
                           />
-                        </PieChart>
-                      </ResponsiveContainer>
+                      </PieChart>
+                    </ResponsiveContainer>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t">
                         {statusData.slice(0, 4).map((item) => (
                           <div key={item.name} className="text-center">
@@ -496,8 +496,8 @@ export const AdvancedAnalytics: React.FC = () => {
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                      </BarChart>
+                    </ResponsiveContainer>
                       <div className="grid grid-cols-3 gap-2 pt-2 border-t">
                         {severityData.map((item) => (
                           <div key={item.name} className="text-center">
@@ -536,20 +536,20 @@ export const AdvancedAnalytics: React.FC = () => {
                   <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-center">
                     <div className="text-3xl font-bold text-green-700 mb-1">
                       {analytics.assignedTickets.toLocaleString()}
-                    </div>
+                  </div>
                     <div className="text-sm font-medium text-green-800">Assigned Tickets</div>
                     <div className="text-xs text-green-600 mt-1">
                       {assignmentRate}% of total
-                    </div>
+                  </div>
                   </div>
                   <div className="p-4 rounded-lg bg-orange-50 border border-orange-200 text-center">
                     <div className="text-3xl font-bold text-orange-700 mb-1">
                       {analytics.unassignedTickets.toLocaleString()}
-                    </div>
+                  </div>
                     <div className="text-sm font-medium text-orange-800">Unassigned Tickets</div>
                     <div className="text-xs text-orange-600 mt-1">
                       {100 - assignmentRate}% of total
-                    </div>
+                </div>
                   </div>
                   <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 text-center">
                     <div className="text-3xl font-bold text-blue-700 mb-1">
@@ -596,7 +596,7 @@ export const AdvancedAnalytics: React.FC = () => {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Assignment Distribution</CardTitle>
+                <CardTitle>Assignment Distribution</CardTitle>
                   <div className="flex items-center gap-2">
                     <Select value={roleFilter} onValueChange={(value: any) => setRoleFilter(value)}>
                       <SelectTrigger className="w-[140px]">
@@ -720,7 +720,7 @@ export const AdvancedAnalytics: React.FC = () => {
                       <div className="h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 200, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
+                        <CartesianGrid strokeDasharray="3 3" />
                             <XAxis 
                               type="number" 
                               allowDecimals={false} 
@@ -733,7 +733,7 @@ export const AdvancedAnalytics: React.FC = () => {
                               width={180}
                               tick={{ fontSize: 12 }}
                             />
-                            <Tooltip content={<CustomTooltip />} />
+                        <Tooltip content={<CustomTooltip />} />
                             <Bar 
                               dataKey="count" 
                               radius={[0, 8, 8, 0]}
@@ -742,8 +742,8 @@ export const AdvancedAnalytics: React.FC = () => {
                                 <Cell key={`cell-${index}`} fill={getRoleColor(entry.role)} />
                               ))}
                             </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
+                      </BarChart>
+                    </ResponsiveContainer>
                       </div>
 
                       {/* Summary Stats - Show complete data from all users */}
@@ -817,8 +817,8 @@ export const AdvancedAnalytics: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
                       <MapPin className="h-5 w-5 text-blue-600" />
-                      City-wise Distribution
-                    </CardTitle>
+                    City-wise Distribution
+                  </CardTitle>
                     <Badge variant="outline">{analytics.cityBreakdown.length} cities</Badge>
                   </div>
                 </CardHeader>
@@ -840,8 +840,8 @@ export const AdvancedAnalytics: React.FC = () => {
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                           />
                           <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="#3b82f6" />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      </BarChart>
+                    </ResponsiveContainer>
                       {analytics.cityBreakdown.length > 10 && (
                         <p className="text-xs text-muted-foreground text-center">
                           Showing top 10 cities. Total: {analytics.cityBreakdown.length} cities
@@ -869,8 +869,8 @@ export const AdvancedAnalytics: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
                       <Building className="h-5 w-5 text-orange-600" />
-                      Centre-wise Distribution
-                    </CardTitle>
+                    Centre-wise Distribution
+                  </CardTitle>
                     <Badge variant="outline">{analytics.centreBreakdown.length} centres</Badge>
                   </div>
                 </CardHeader>
@@ -892,8 +892,8 @@ export const AdvancedAnalytics: React.FC = () => {
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                           />
                           <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="#f97316" />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      </BarChart>
+                    </ResponsiveContainer>
                       {analytics.centreBreakdown.length > 10 && (
                         <p className="text-xs text-muted-foreground text-center">
                           Showing top 10 centres. Total: {analytics.centreBreakdown.length} centres
@@ -925,8 +925,8 @@ export const AdvancedAnalytics: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
                       <Users className="h-5 w-5 text-green-600" />
-                      Resolver Workload
-                    </CardTitle>
+                    Resolver Workload
+                  </CardTitle>
                     <Badge variant="outline">{analytics.resolverBreakdown.length} resolvers</Badge>
                   </div>
                 </CardHeader>
@@ -943,14 +943,14 @@ export const AdvancedAnalytics: React.FC = () => {
                             width={150}
                             tick={{ fontSize: 12 }}
                           />
-                          <Tooltip 
+                        <Tooltip 
                             formatter={(value: any) => [`${value} tickets`, 'Assigned']}
-                            labelFormatter={(label) => `Resolver: ${label}`}
+                          labelFormatter={(label) => `Resolver: ${label}`}
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
-                          />
+                        />
                           <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="#22c55e" />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      </BarChart>
+                    </ResponsiveContainer>
                       {analytics.resolverBreakdown.length > 10 && (
                         <p className="text-xs text-muted-foreground text-center">
                           Showing top 10 resolvers. Total: {analytics.resolverBreakdown.length} resolvers
@@ -984,8 +984,8 @@ export const AdvancedAnalytics: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
                       <UserCheck className="h-5 w-5 text-blue-600" />
-                      Approver Workload
-                    </CardTitle>
+                    Approver Workload
+                  </CardTitle>
                     <Badge variant="outline">{analytics.approverBreakdown.length} approvers</Badge>
                   </div>
                 </CardHeader>
@@ -1002,14 +1002,14 @@ export const AdvancedAnalytics: React.FC = () => {
                             width={150}
                             tick={{ fontSize: 12 }}
                           />
-                          <Tooltip 
+                        <Tooltip 
                             formatter={(value: any) => [`${value} tickets`, 'Assigned']}
-                            labelFormatter={(label) => `Approver: ${label}`}
+                          labelFormatter={(label) => `Approver: ${label}`}
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
-                          />
+                        />
                           <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="#3b82f6" />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      </BarChart>
+                    </ResponsiveContainer>
                       {analytics.approverBreakdown.length > 10 && (
                         <p className="text-xs text-muted-foreground text-center">
                           Showing top 10 approvers. Total: {analytics.approverBreakdown.length} approvers
