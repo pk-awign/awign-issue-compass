@@ -263,6 +263,9 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
                      category === 'facility_issue' ? 'Facility Issue' :
                      category === 'penalty_issue' ? 'Penalty Issue' :
                      category === 'app_issue' ? 'App Issue' :
+                     category === 'noc' ? 'NOC' :
+                     category === 'posh' ? 'POSH' :
+                     category === 'workplace_misconduct' ? 'Workplace Misconduct' :
                      category.charAt(0).toUpperCase() + category.slice(1)}
                   </SelectItem>
                 ))}

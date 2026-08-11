@@ -16,6 +16,7 @@ import { ResolutionApproverPage } from "./pages/ResolutionApproverPage";
 import { WorkforcePage } from "./pages/WorkforcePage";
 import TrackTicket from "./pages/TrackTicket";
 import NotFound from "./pages/NotFound";
+import CombinedTicketsDashboardPage from "./pages/CombinedTicketsDashboardPage";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin/combined-tickets" element={<CombinedTicketsDashboardPage />} />
                 <Route path="/ticket-admin" element={<TicketAdminPage />} />
                 <Route path="/ticket-resolver" element={<TicketResolverPage />} />
                 <Route path="/resolution-approver" element={<ResolutionApproverPage />} />

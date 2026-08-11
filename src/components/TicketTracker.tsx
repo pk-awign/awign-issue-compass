@@ -171,7 +171,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
   };
 
   const getCategoryLabel = (category: Issue['issueCategory']) => {
-    const labels = {
+    const labels: Record<Issue['issueCategory'], string> = {
       payment_delay: 'Payment Delay',
       partial_payment: 'Partial Payment',
       behavioral_complaint: 'Behavioral Complaint',
@@ -180,6 +180,9 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
       penalty_issue: 'Penalty Issue',
       malpractice: 'Malpractice',
       app_issue: 'App Issue',
+      noc: 'NOC',
+      posh: 'POSH',
+      workplace_misconduct: 'Workplace Misconduct',
       other: 'Other'
     };
     return labels[category];

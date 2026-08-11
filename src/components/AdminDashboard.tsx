@@ -528,6 +528,9 @@ const AdminDashboard: React.FC = () => {
                     <SelectItem value="penalty_issue">Penalty Issue</SelectItem>
                     <SelectItem value="malpractice">Malpractice</SelectItem>
                     <SelectItem value="app_issue">App Issue</SelectItem>
+                    <SelectItem value="noc">NOC</SelectItem>
+                    <SelectItem value="posh">POSH</SelectItem>
+                    <SelectItem value="workplace_misconduct">Workplace Misconduct</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>

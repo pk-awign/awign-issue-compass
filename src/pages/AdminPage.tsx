@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2, MessageSquare, User, CheckCircle2, Send, Download, X } from 'lucide-react';
+import { Users, AlertCircle, CheckCircle, Clock, TrendingUp, Settings, Search, Filter, Eye, UserPlus, RefreshCw, FileText, Trash2, MessageSquare, User, CheckCircle2, Send, Download, X, Ticket } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -46,7 +46,7 @@ import { getStatusLabel } from '@/utils/status';
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
 
 export const AdminPage: React.FC = () => {
-  const { user, logout, loading, isTicketAdmin } = useAuth();
+  const { user, logout, loading, isTicketAdmin, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -1045,6 +1045,16 @@ export const AdminPage: React.FC = () => {
                       <MessageSquare className="h-4 w-4 mr-2" />
                       WhatsApp Test
                     </Button>
+                    {isSuperAdmin && (
+                      <Button
+                        onClick={() => navigate('/admin/combined-tickets')}
+                        className="w-full justify-start"
+                        variant="outline"
+                      >
+                        <Ticket className="h-4 w-4 mr-2" />
+                        Ticket Center
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1253,6 +1263,9 @@ export const AdminPage: React.FC = () => {
                                  category === 'facility_issue' ? 'Facility Issue' :
                                  category === 'penalty_issue' ? 'Penalty Issue' :
                                  category === 'app_issue' ? 'App Issue' :
+                                 category === 'noc' ? 'NOC' :
+                                 category === 'posh' ? 'POSH' :
+                                 category === 'workplace_misconduct' ? 'Workplace Misconduct' :
                                  category.charAt(0).toUpperCase() + category.slice(1)}
                               </SelectItem>
                             ))}

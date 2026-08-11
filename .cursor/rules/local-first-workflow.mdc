@@ -1,0 +1,20 @@
+---
+description: Local-first development — test locally before publishing
+alwaysApply: true
+---
+
+# Local-first workflow
+
+All changes must be developed and verified locally first. Do not publish until the user explicitly asks to commit (and push if requested).
+
+## Rules
+
+1. **Local only by default** — edit code/config in the local project; test with `npm run dev` (or equivalent).
+2. **No production / public writes** — do not modify the live Supabase database, Netlify production site, or any shared production data unless the user explicitly requests it.
+3. **Publish only on request** — commit only when the user asks; push only when the user asks.
+4. **Commits ≠ database** — committing publishes code, not data. Treat production DB changes as a separate, explicitly approved step.
+
+## Examples
+
+- Feature/bugfix → change local files → user tests locally → user asks to commit → then commit.
+- Ticket/data updates → do not PATCH/UPDATE production Supabase unless the user clearly asks for a live/public DB change.

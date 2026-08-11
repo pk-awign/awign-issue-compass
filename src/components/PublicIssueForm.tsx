@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CalendarIcon, Upload, FileText, Users, Copy, AlertCircle, Ticket, ExternalLink, LogOut, Download, MessageCircle, CheckCircle } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Issue } from '@/types/issue';
 import { toast } from 'sonner';
@@ -81,21 +81,22 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Date selection cutoff: block any date after this cutoff (default: 2026-08-31)
-  const DEFAULT_CUTOFF_ISO = '2026-08-31';
-  const envCutoff = (import.meta as any).env?.VITE_ISSUE_DATE_CUTOFF as string | undefined;
-  const cutoffDateString = (envCutoff && envCutoff.trim() !== '') ? envCutoff : DEFAULT_CUTOFF_ISO;
-  const cutoffY = parseInt(cutoffDateString.slice(0, 4), 10);
-  const cutoffM = parseInt(cutoffDateString.slice(5, 7), 10) - 1;
-  const cutoffD = parseInt(cutoffDateString.slice(8, 10), 10);
-  const cutoffDate = new Date(cutoffY, cutoffM, cutoffD, 23, 59, 59, 999);
-  const isAfterCutoff = (d?: Date) => {
+  // Issue dates must fall within the last 6 months ending today (today is dynamic).
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const earliestAllowed = subMonths(todayStart, 6);
+  const latestAllowed = todayStart;
+
+  const toDayStart = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+  const isOutsideAllowedIssueDateWindow = (d?: Date) => {
     if (!d) return false;
-    const dc = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const cc = new Date(cutoffY, cutoffM, cutoffD).getTime();
-    return dc > cc;
+    const day = toDayStart(d);
+    return day < toDayStart(earliestAllowed) || day > toDayStart(latestAllowed);
   };
-  const cutoffMessage = `Tickets can only be raised for issues up to ${format(new Date(cutoffY, cutoffM, cutoffD), 'MMM dd, yyyy')}. Please pick a date on or before ${format(new Date(cutoffY, cutoffM, cutoffD), 'MMM dd, yyyy')}.`;
+
+  const cutoffMessage = `Tickets can only be raised for issues from the last 6 months (${format(earliestAllowed, 'MMM dd, yyyy')} to ${format(latestAllowed, 'MMM dd, yyyy')}).`;
 
   // Pre-fill user data when logged in
   useEffect(() => {
@@ -177,6 +178,9 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
     { value: 'penalty_issue', label: 'Penalty Issue' },
     { value: 'malpractice', label: 'Malpractice' },
     { value: 'app_issue', label: 'App Issue' },
+    { value: 'noc', label: 'NOC' },
+    { value: 'posh', label: 'POSH' },
+    { value: 'workplace_misconduct', label: 'Workplace Misconduct' },
     { value: 'other', label: 'Other Issue' }
   ];
 
@@ -209,7 +213,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
   const handleMultipleDateSelect = (date: Date | undefined) => {
     if (!date) return;
-    if (isAfterCutoff(date)) return;
+    if (isOutsideAllowedIssueDateWindow(date)) return;
     setFormData(prev => {
       const exists = prev.multipleDates.find(d => d.date.getTime() === date.getTime());
       if (exists) {
@@ -288,6 +292,18 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
       if (!hasValidDate) {
         toast.error('Please select an issue date');
+        return;
+      }
+
+      if (formData.dateType === 'single' && formData.singleDate && isOutsideAllowedIssueDateWindow(formData.singleDate)) {
+        toast.error(cutoffMessage);
+        return;
+      }
+      if (
+        formData.dateType === 'multiple' &&
+        formData.multipleDates.some((item) => isOutsideAllowedIssueDateWindow(item.date))
+      ) {
+        toast.error(cutoffMessage);
         return;
       }
 
@@ -623,12 +639,12 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                               selected={formData.singleDate}
                               onSelect={(date) => {
                                 if (!date) return;
-                                if (isAfterCutoff(date)) return;
+                                if (isOutsideAllowedIssueDateWindow(date)) return;
                                 setFormData(prev => ({ ...prev, singleDate: date }));
                               }}
                               initialFocus
                               className="p-3 pointer-events-auto"
-                              disabled={(date) => isAfterCutoff(date)}
+                              disabled={(date) => isOutsideAllowedIssueDateWindow(date)}
                             />
                           </PopoverContent>
                         </Popover>
@@ -651,7 +667,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                               onSelect={handleMultipleDateSelect}
                               initialFocus
                               className="p-3 pointer-events-auto"
-                              disabled={(date) => isAfterCutoff(date)}
+                              disabled={(date) => isOutsideAllowedIssueDateWindow(date)}
                             />
                           </PopoverContent>
                         </Popover>

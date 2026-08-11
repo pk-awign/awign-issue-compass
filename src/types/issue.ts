@@ -7,7 +7,7 @@ export interface Issue {
   city: string;
   resourceId: string;
   awignAppTicketId?: string;
-  issueCategory: 'payment_delay' | 'partial_payment' | 'behavioral_complaint' | 'improvement_request' | 'facility_issue' | 'penalty_issue' | 'malpractice' | 'app_issue' | 'other';
+  issueCategory: 'payment_delay' | 'partial_payment' | 'behavioral_complaint' | 'improvement_request' | 'facility_issue' | 'penalty_issue' | 'malpractice' | 'app_issue' | 'noc' | 'posh' | 'workplace_misconduct' | 'other';
   issueDescription: string;
   issueEvidence?: File[];
   issueDate: {

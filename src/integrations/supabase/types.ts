@@ -255,6 +255,139 @@ export type Database = {
           },
         ]
       }
+      other_tickets: {
+        Row: {
+          assignee: string | null
+          assignee_status: string | null
+          attendance_copy_available: string | null
+          category: string | null
+          created_at: string
+          cx_owner: string | null
+          cx_status: string | null
+          description: string
+          exam_date: string | null
+          id: string
+          import_batch_id: string | null
+          internal_remark_1: string | null
+          internal_remark_2: string | null
+          issue_category: string
+          link_to_attendance_copy: string | null
+          resource_id: string
+          role: string | null
+          shift: string | null
+          status: Database["public"]["Enums"]["ticket_status_new"]
+          tc_code: string | null
+          ticket_number: string
+          type_of_exam: string | null
+          user_name: string | null
+        }
+        Insert: {
+          assignee?: string | null
+          assignee_status?: string | null
+          attendance_copy_available?: string | null
+          category?: string | null
+          created_at?: string
+          cx_owner?: string | null
+          cx_status?: string | null
+          description?: string
+          exam_date?: string | null
+          id?: string
+          import_batch_id?: string | null
+          internal_remark_1?: string | null
+          internal_remark_2?: string | null
+          issue_category: string
+          link_to_attendance_copy?: string | null
+          resource_id?: string
+          role?: string | null
+          shift?: string | null
+          status: Database["public"]["Enums"]["ticket_status_new"]
+          tc_code?: string | null
+          ticket_number: string
+          type_of_exam?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          assignee?: string | null
+          assignee_status?: string | null
+          attendance_copy_available?: string | null
+          category?: string | null
+          created_at?: string
+          cx_owner?: string | null
+          cx_status?: string | null
+          description?: string
+          exam_date?: string | null
+          id?: string
+          import_batch_id?: string | null
+          internal_remark_1?: string | null
+          internal_remark_2?: string | null
+          issue_category?: string
+          link_to_attendance_copy?: string | null
+          resource_id?: string
+          role?: string | null
+          shift?: string | null
+          status?: Database["public"]["Enums"]["ticket_status_new"]
+          tc_code?: string | null
+          ticket_number?: string
+          type_of_exam?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "other_tickets_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "other_ticket_import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      other_ticket_import_batches: {
+        Row: {
+          error_message: string | null
+          file_hash: string
+          file_name: string
+          id: string
+          imported_rows: number
+          status: string
+          total_rows: number
+          unique_ticket_count: number
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          file_hash: string
+          file_name: string
+          id?: string
+          imported_rows?: number
+          status?: string
+          total_rows?: number
+          unique_ticket_count?: number
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          file_hash?: string
+          file_name?: string
+          id?: string
+          imported_rows?: number
+          status?: string
+          total_rows?: number
+          unique_ticket_count?: number
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "other_ticket_import_batches_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       performance_metrics: {
         Row: {
           calculated_at: string
@@ -1026,6 +1159,16 @@ export type Database = {
           name: string
           role: string
         }[]
+      }
+      import_other_tickets_csv: {
+        Args: {
+          p_file_name: string
+          p_file_hash: string
+          p_uploaded_by: string | null
+          p_unique_ticket_count: number
+          p_rows: Json
+        }
+        Returns: Json
       }
       refresh_ticket_analytics: { Args: never; Returns: undefined }
       register_user_with_mobile_pin: {

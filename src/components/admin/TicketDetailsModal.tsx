@@ -45,13 +45,19 @@ interface TicketDetailsModalProps {
   onClose: () => void;
   ticket: Issue | null;
   onTicketUpdate: () => void;
+  /**
+   * Ticket Center view: hide Delete, status/severity badges, and Add Comment controls.
+   * Admin All Tickets keeps the full chrome by default.
+   */
+  hideHeaderActionsAndBadges?: boolean;
 }
 
 export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   isOpen,
   onClose,
   ticket,
-  onTicketUpdate
+  onTicketUpdate,
+  hideHeaderActionsAndBadges = false,
 }) => {
   const { user } = useAuth();
   const [resolvers, setResolvers] = useState<UserType[]>([]);
@@ -87,12 +93,15 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
     if (isOpen) {
       loadUsers();
       loadStatusTransitions();
+      if (hideHeaderActionsAndBadges) {
+        setActiveTab('details');
+      }
     }
     if (isOpen && ticket?.id) {
       loadAssignees();
       loadAllUsers();
     }
-  }, [isOpen, ticket?.id]);
+  }, [isOpen, ticket?.id, hideHeaderActionsAndBadges]);
 
   useEffect(() => {
     if (activeTab === 'timeline' && ticket) {
@@ -438,14 +447,16 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2">
               <span>Ticket Details - {ticket?.ticketNumber}</span>
-              {ticket && (
+              {ticket && !hideHeaderActionsAndBadges && (
                 <Badge variant={getStatusColor(ticket.status)}>
                   {getStatusLabel(ticket.status)}
                 </Badge>
               )}
             </DialogTitle>
             <div className="flex items-center gap-2 mr-8">
-              {user?.role === 'super_admin' && !ticket?.deleted && (
+              {!hideHeaderActionsAndBadges &&
+                user?.role === 'super_admin' &&
+                !ticket?.deleted && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -470,29 +481,36 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Header with badges */}
+          {/* Header with badges — Ticket Center shows category only (ID already in title) */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold">{ticket.ticketNumber}</h2>
-              <p className="text-gray-600">{ticket.issueCategory.replace('_', ' ').toUpperCase()}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {ticket.reopenCount > 0 && (
-                <Badge variant="destructive" className="flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3" />
-                  Re-Opened ({ticket.reopenCount})
-                </Badge>
+              {!hideHeaderActionsAndBadges && (
+                <h2 className="text-xl font-bold">{ticket.ticketNumber}</h2>
               )}
-              <Badge className={getStatusColor(ticket.status)}>
-                {getStatusLabel(ticket.status)}
-              </Badge>
-              <Badge className={getSeverityColor(ticket.severity)}>
-                {ticket.severity.toUpperCase()}
-              </Badge>
+              <p className={hideHeaderActionsAndBadges ? 'text-gray-600 font-medium' : 'text-gray-600'}>
+                {ticket.issueCategory.replace('_', ' ').toUpperCase()}
+              </p>
             </div>
+            {!hideHeaderActionsAndBadges && (
+              <div className="flex flex-wrap items-center gap-2">
+                {ticket.reopenCount > 0 && (
+                  <Badge variant="destructive" className="flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3" />
+                    Re-Opened ({ticket.reopenCount})
+                  </Badge>
+                )}
+                <Badge className={getStatusColor(ticket.status)}>
+                  {getStatusLabel(ticket.status)}
+                </Badge>
+                <Badge className={getSeverityColor(ticket.severity)}>
+                  {ticket.severity.toUpperCase()}
+                </Badge>
+              </div>
+            )}
           </div>
 
-          {/* Tab Navigation */}
+          {/* Tab Navigation — not shown in Ticket Center */}
+          {!hideHeaderActionsAndBadges && (
           <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-1 border-b">
             <Button
               variant={activeTab === 'details' ? 'default' : 'ghost'}
@@ -527,9 +545,10 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               Comments ({ticket.comments.length})
             </Button>
           </div>
+          )}
 
-          {/* Details Tab */}
-          {activeTab === 'details' && (
+          {/* Details Tab (always shown in Ticket Center) */}
+          {(activeTab === 'details' || hideHeaderActionsAndBadges) && (
             <div className="space-y-6">
               {/* Basic Information */}
               <Card>
@@ -740,6 +759,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       ))}
                     </div>
                     {/* Add Comment Box */}
+                    {!hideHeaderActionsAndBadges && (
                     <div className="mt-4">
                       <label className="text-sm font-medium text-gray-600 mb-1 block">Add Comment</label>
                       <Textarea
@@ -773,6 +793,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         Add Comment
                       </Button>
                     </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -780,7 +801,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
           )}
 
           {/* Management Tab */}
-          {activeTab === 'management' && user && ['super_admin', 'ticket_admin'].includes(user.role) && (
+          {!hideHeaderActionsAndBadges && activeTab === 'management' && user && ['super_admin', 'ticket_admin'].includes(user.role) && (
             <div className="space-y-6">
               {/* Assignment Management - Only for Super Admin */}
               <Card>
@@ -926,7 +947,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
           )}
 
           {/* Timeline Tab */}
-          {activeTab === 'timeline' && (
+          {!hideHeaderActionsAndBadges && activeTab === 'timeline' && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -987,7 +1008,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
           )}
 
           {/* Comments Tab */}
-          {activeTab === 'comments' && (
+          {!hideHeaderActionsAndBadges && activeTab === 'comments' && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1059,6 +1080,8 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                 )}
                 
                 {/* Add Comment */}
+                {!hideHeaderActionsAndBadges && (
+                <>
                 <Separator />
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Add Comment</p>
@@ -1160,6 +1183,8 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                     )}
                   </Button>
                 </div>
+                </>
+                )}
               </CardContent>
             </Card>
           )}
