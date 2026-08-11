@@ -17,6 +17,7 @@ import { WorkforcePage } from "./pages/WorkforcePage";
 import TrackTicket from "./pages/TrackTicket";
 import NotFound from "./pages/NotFound";
 import CombinedTicketsDashboardPage from "./pages/CombinedTicketsDashboardPage";
+import SuperAdminLoginPage from "./pages/SuperAdminLoginPage";
 
 const queryClient = new QueryClient();
 
@@ -38,8 +39,13 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/super-admin" element={<SuperAdminLoginPage />} />
+                <Route path="/super-admin/all-tickets" element={<CombinedTicketsDashboardPage />} />
+                <Route
+                  path="/admin/combined-tickets"
+                  element={<Navigate to="/super-admin/all-tickets" replace />}
+                />
                 <Route path="/admin" element={<AdminPage />} />
-                <Route path="/admin/combined-tickets" element={<CombinedTicketsDashboardPage />} />
                 <Route path="/ticket-admin" element={<TicketAdminPage />} />
                 <Route path="/ticket-resolver" element={<TicketResolverPage />} />
                 <Route path="/resolution-approver" element={<ResolutionApproverPage />} />

@@ -46,7 +46,8 @@ interface TicketDetailsModalProps {
   ticket: Issue | null;
   onTicketUpdate: () => void;
   /**
-   * Ticket Center view: hide Delete, status/severity badges, and Add Comment controls.
+   * Ticket Center view: hide Delete, status/severity badges, Add Comment controls,
+   * and Assigned Resolvers/Approvers when none are assigned.
    * Admin All Tickets keeps the full chrome by default.
    */
   hideHeaderActionsAndBadges?: boolean;
@@ -671,52 +672,58 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                       <label className="text-sm font-medium text-gray-600">Submitted At</label>
                       <p className="text-sm">{ticket.submittedAt ? format(new Date(ticket.submittedAt), 'MMM dd, yyyy HH:mm:ss') : 'N/A'}</p>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Assigned Resolvers</label>
-                      <p className="text-sm">
-                        {(() => {
-                          const resolverAssignees = assignees.filter(a => a.role === 'resolver');
-                          if (resolverAssignees.length > 0) {
-                            return resolverAssignees.map(a => {
-                              const u = allUsers.find(u => u.id === a.user_id);
-                              return u ? `${u.name} (${u.role})` : a.user_id;
-                            }).join(', ');
-                          }
-                          // Fallback to legacy fields on the ticket if assignees table is empty
-                          if (ticket.assignedResolverDetails?.name) {
-                            return `${ticket.assignedResolverDetails.name} (${ticket.assignedResolverDetails.role || 'resolver'})`;
-                          }
-                          if (ticket.assignedResolver) {
-                            const u = allUsers.find(u => u.id === ticket.assignedResolver);
-                            return u ? `${u.name} (${u.role})` : ticket.assignedResolver;
-                          }
-                          return 'Not assigned';
-                        })()}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Assigned Approvers</label>
-                      <p className="text-sm">
-                        {(() => {
-                          const approverAssignees = assignees.filter(a => a.role === 'approver');
-                          if (approverAssignees.length > 0) {
-                            return approverAssignees.map(a => {
-                              const u = allUsers.find(u => u.id === a.user_id);
-                              return u ? `${u.name} (${u.role})` : a.user_id;
-                            }).join(', ');
-                          }
-                          // Fallback to legacy fields on the ticket if assignees table is empty
-                          if (ticket.assignedApproverDetails?.name) {
-                            return `${ticket.assignedApproverDetails.name} (${ticket.assignedApproverDetails.role || 'approver'})`;
-                          }
-                          if (ticket.assignedApprover) {
-                            const u = allUsers.find(u => u.id === ticket.assignedApprover);
-                            return u ? `${u.name} (${u.role})` : ticket.assignedApprover;
-                          }
-                          return 'Not assigned';
-                        })()}
-                      </p>
-                    </div>
+                    {(() => {
+                      const resolverAssignees = assignees.filter(a => a.role === 'resolver');
+                      let assignedResolversLabel: string | null = null;
+                      if (resolverAssignees.length > 0) {
+                        assignedResolversLabel = resolverAssignees.map(a => {
+                          const u = allUsers.find(u => u.id === a.user_id);
+                          return u ? `${u.name} (${u.role})` : a.user_id;
+                        }).join(', ');
+                      } else if (ticket.assignedResolverDetails?.name) {
+                        assignedResolversLabel = `${ticket.assignedResolverDetails.name} (${ticket.assignedResolverDetails.role || 'resolver'})`;
+                      } else if (ticket.assignedResolver) {
+                        const u = allUsers.find(u => u.id === ticket.assignedResolver);
+                        assignedResolversLabel = u ? `${u.name} (${u.role})` : ticket.assignedResolver;
+                      }
+
+                      if (!assignedResolversLabel && hideHeaderActionsAndBadges) {
+                        return null;
+                      }
+
+                      return (
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">Assigned Resolvers</label>
+                          <p className="text-sm">{assignedResolversLabel || 'Not assigned'}</p>
+                        </div>
+                      );
+                    })()}
+                    {(() => {
+                      const approverAssignees = assignees.filter(a => a.role === 'approver');
+                      let assignedApproversLabel: string | null = null;
+                      if (approverAssignees.length > 0) {
+                        assignedApproversLabel = approverAssignees.map(a => {
+                          const u = allUsers.find(u => u.id === a.user_id);
+                          return u ? `${u.name} (${u.role})` : a.user_id;
+                        }).join(', ');
+                      } else if (ticket.assignedApproverDetails?.name) {
+                        assignedApproversLabel = `${ticket.assignedApproverDetails.name} (${ticket.assignedApproverDetails.role || 'approver'})`;
+                      } else if (ticket.assignedApprover) {
+                        const u = allUsers.find(u => u.id === ticket.assignedApprover);
+                        assignedApproversLabel = u ? `${u.name} (${u.role})` : ticket.assignedApprover;
+                      }
+
+                      if (!assignedApproversLabel && hideHeaderActionsAndBadges) {
+                        return null;
+                      }
+
+                      return (
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">Assigned Approvers</label>
+                          <p className="text-sm">{assignedApproversLabel || 'Not assigned'}</p>
+                        </div>
+                      );
+                    })()}
                   </div>
                   {/* Comments Section (latest on top) */}
                   <div className="mt-6">

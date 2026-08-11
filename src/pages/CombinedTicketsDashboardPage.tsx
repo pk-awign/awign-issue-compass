@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { differenceInCalendarDays, format } from 'date-fns';
+import { differenceInCalendarDays, endOfMonth, format, startOfMonth, subMonths } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import {
   Calendar as CalendarIcon,
@@ -29,7 +29,6 @@ import {
 } from 'recharts';
 
 import { Header } from '@/components/navigation/Header';
-import { CombinedTicketsCsvUploadDialog } from '@/components/admin/CombinedTicketsCsvUploadDialog';
 import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
 import { OtherTicketDetailsModal } from '@/components/admin/OtherTicketDetailsModal';
 import { Badge } from '@/components/ui/badge';
@@ -71,36 +70,92 @@ type IssueCategory = Issue['issueCategory'];
 
 /** Inclusive calendar-day span (same day = 1). Max allowed: 90. */
 const MAX_DATE_RANGE_DAYS = 90;
+const PAGE_SIZE = 50;
+const EXCLUDED_STATUSES: TicketStatus[] = ['open', 'in_progress'];
 
-function getInclusiveDayCount(from: Date, to: Date): number {
-  return differenceInCalendarDays(to, from) + 1;
-}
-
-const ALL_STATUSES: TicketStatus[] = [
+/** Fixed status filter order for super-admin Ticket Center only. */
+const SUPER_ADMIN_STATUS_FILTER_ORDER: TicketStatus[] = [
   'open',
   'in_progress',
-  'ops_input_required',
   'user_dependency',
+  'ops_input_required',
   'ops_user_dependency',
   'send_for_approval',
   'approved',
   'resolved',
 ];
 
-const ALL_CATEGORIES: IssueCategory[] = [
-  'payment_delay',
-  'partial_payment',
-  'behavioral_complaint',
-  'improvement_request',
-  'facility_issue',
-  'penalty_issue',
-  'malpractice',
-  'app_issue',
-  'noc',
-  'posh',
-  'workplace_misconduct',
-  'other',
-];
+function getInclusiveDayCount(from: Date, to: Date): number {
+  return differenceInCalendarDays(to, from) + 1;
+}
+
+/** Default filter: previous calendar month. */
+function getDefaultDateRange(): DateRange {
+  const previousMonth = subMonths(new Date(), 1);
+  return {
+    from: startOfMonth(previousMonth),
+    to: endOfMonth(previousMonth),
+  };
+}
+
+function isDefaultDateRange(range: DateRange | undefined): boolean {
+  if (!range?.from || !range?.to) return false;
+  const def = getDefaultDateRange();
+  if (!def.from || !def.to) return false;
+  return (
+    differenceInCalendarDays(range.from, def.from) === 0 &&
+    differenceInCalendarDays(range.to, def.to) === 0
+  );
+}
+
+function isExcludedStatus(status: TicketStatus): boolean {
+  return EXCLUDED_STATUSES.includes(status);
+}
+
+/** Open / Pending on CX are visible only for tickets created in August 2026. */
+const OPEN_PENDING_VISIBLE_YEAR = 2026;
+const OPEN_PENDING_VISIBLE_MONTH_INDEX = 7; // August (0-based)
+
+function isAugustOpenPendingVisible(createdAt: Date | string | null | undefined): boolean {
+  if (!createdAt) return false;
+  const date = createdAt instanceof Date ? createdAt : new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return false;
+  return (
+    date.getFullYear() === OPEN_PENDING_VISIBLE_YEAR &&
+    date.getMonth() === OPEN_PENDING_VISIBLE_MONTH_INDEX
+  );
+}
+
+function isTicketVisibleInSuperAdminView(ticket: CombinedTicketRow): boolean {
+  if (!isExcludedStatus(ticket.status)) return true;
+  return isAugustOpenPendingVisible(ticket.createdAt);
+}
+
+/** Title-case labels for the super-admin status filter dropdown. */
+function getSuperAdminStatusFilterLabel(status: TicketStatus): string {
+  switch (status) {
+    case 'open':
+      return 'Open';
+    case 'in_progress':
+      return 'Pending on CX';
+    case 'user_dependency':
+      return 'User Dependency';
+    case 'ops_input_required':
+      return 'Ops Dependency';
+    case 'ops_user_dependency':
+      return 'Ops + User Dependency';
+    case 'send_for_approval':
+      return 'Send for Approval';
+    case 'approved':
+      return 'Approved';
+    case 'resolved':
+      return 'Closed';
+    default: {
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
+  }
+}
 
 const CATEGORY_COLORS: Record<string, string> = {
   payment_delay: '#3b82f6',
@@ -175,7 +230,6 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
-  const [csvUploadOpen, setCsvUploadOpen] = useState(false);
   const [selectedPortalTicket, setSelectedPortalTicket] = useState<Issue | null>(null);
   const [showPortalTicketDetails, setShowPortalTicketDetails] = useState(false);
   const [selectedOtherTicket, setSelectedOtherTicket] = useState<CombinedTicketRow | null>(
@@ -186,9 +240,12 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [resourceIdFilter, setResourceIdFilter] = useState<string[]>([]);
-  const [filterDateRange, setFilterDateRange] = useState<DateRange | undefined>();
+  const [filterDateRange, setFilterDateRange] = useState<DateRange | undefined>(
+    getDefaultDateRange
+  );
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
 
   const loadTickets = useCallback(async () => {
     setIsLoading(true);
@@ -211,18 +268,97 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
     }
   }, [authLoading, user, loadTickets]);
 
-  const filteredTickets = useMemo(() => {
-    return CombinedTicketsService.filterCombinedTickets(allTickets, {
+  // Hide Open / Pending on CX except tickets created in August 2026.
+  const scopedTickets = useMemo(
+    () => allTickets.filter((ticket) => isTicketVisibleInSuperAdminView(ticket)),
+    [allTickets]
+  );
+
+  const sharedNonStatusCategoryFilters = useMemo(
+    () => ({
       searchQuery: searchQuery || undefined,
       resourceIdFilter:
         resourceIdFilter.length > 0 ? resourceIdFilter.join(',') : undefined,
       dateFrom: filterDateRange?.from,
       dateTo: filterDateRange?.to ?? filterDateRange?.from,
+    }),
+    [searchQuery, resourceIdFilter, filterDateRange]
+  );
+
+  const filteredTickets = useMemo(() => {
+    return CombinedTicketsService.filterCombinedTickets(scopedTickets, {
+      ...sharedNonStatusCategoryFilters,
       status: (statusFilter as TicketStatus | 'all') || 'all',
       category: (categoryFilter as IssueCategory | 'all') || 'all',
     });
+  }, [scopedTickets, sharedNonStatusCategoryFilters, statusFilter, categoryFilter]);
+
+  // Tickets used to build status/category dropdown options.
+  const ticketsForFilterOptions = useMemo(() => {
+    return CombinedTicketsService.filterCombinedTickets(
+      scopedTickets,
+      sharedNonStatusCategoryFilters
+    );
+  }, [scopedTickets, sharedNonStatusCategoryFilters]);
+
+  const availableStatuses = useMemo(() => {
+    let rows = ticketsForFilterOptions;
+    if (categoryFilter !== 'all') {
+      rows = CombinedTicketsService.filterCombinedTickets(rows, {
+        category: categoryFilter as IssueCategory,
+      });
+    }
+    const present = new Set<TicketStatus>();
+    for (const row of rows) {
+      const list = row.statuses.length > 0 ? row.statuses : [row.status];
+      for (const status of list) {
+        present.add(status);
+      }
+    }
+    return SUPER_ADMIN_STATUS_FILTER_ORDER.filter((status) => present.has(status));
+  }, [ticketsForFilterOptions, categoryFilter]);
+
+  const availableCategories = useMemo(() => {
+    let rows = ticketsForFilterOptions;
+    if (statusFilter !== 'all') {
+      rows = CombinedTicketsService.filterCombinedTickets(rows, {
+        status: statusFilter as TicketStatus,
+      });
+    }
+    const categories = new Set<IssueCategory>();
+    for (const row of rows) {
+      const list =
+        row.issueCategories.length > 0 ? row.issueCategories : [row.issueCategory];
+      for (const category of list) {
+        categories.add(category);
+      }
+    }
+    return Array.from(categories).sort((a, b) =>
+      formatCategory(a).localeCompare(formatCategory(b))
+    );
+  }, [ticketsForFilterOptions, statusFilter]);
+
+  useEffect(() => {
+    if (statusFilter !== 'all' && !availableStatuses.includes(statusFilter as TicketStatus)) {
+      setStatusFilter('all');
+    }
+  }, [availableStatuses, statusFilter]);
+
+  useEffect(() => {
+    if (
+      categoryFilter !== 'all' &&
+      !availableCategories.includes(categoryFilter as IssueCategory)
+    ) {
+      setCategoryFilter('all');
+    }
+  }, [availableCategories, categoryFilter]);
+
+  // Overview cards/charts and the tickets table share the same visible set.
+  const listTickets = filteredTickets;
+
+  useEffect(() => {
+    setPage(1);
   }, [
-    allTickets,
     searchQuery,
     resourceIdFilter,
     filterDateRange,
@@ -230,9 +366,19 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
     categoryFilter,
   ]);
 
+  const totalPages = Math.max(1, Math.ceil(listTickets.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedTickets = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return listTickets.slice(start, start + PAGE_SIZE);
+  }, [listTickets, currentPage]);
+
+  const pageStart = listTickets.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(currentPage * PAGE_SIZE, listTickets.length);
+
   const overviewStats = useMemo(
-    () => CombinedTicketsService.buildOverviewStats(filteredTickets),
-    [filteredTickets]
+    () => CombinedTicketsService.buildOverviewStats(listTickets),
+    [listTickets]
   );
 
   const categoryChartData = useMemo(() => {
@@ -249,7 +395,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
 
   const createdByDateChartData = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const ticket of filteredTickets) {
+    for (const ticket of listTickets) {
       const created = ticket.createdAt;
       if (!created || Number.isNaN(new Date(created).getTime())) continue;
       const key = format(new Date(created), 'yyyy-MM-dd');
@@ -262,7 +408,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
         date: format(new Date(`${dateKey}T00:00:00`), 'dd MMM yyyy'),
         count,
       }));
-  }, [filteredTickets]);
+  }, [listTickets]);
 
   const peakCreatedDate = useMemo(() => {
     if (createdByDateChartData.length === 0) return null;
@@ -274,16 +420,17 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
   const hasActiveFilters =
     Boolean(searchQuery.trim()) ||
     resourceIdFilter.length > 0 ||
-    Boolean(filterDateRange?.from) ||
+    Boolean(filterDateRange?.from && !isDefaultDateRange(filterDateRange)) ||
     statusFilter !== 'all' ||
     categoryFilter !== 'all';
 
   const clearFilters = () => {
     setSearchQuery('');
     setResourceIdFilter([]);
-    setFilterDateRange(undefined);
+    setFilterDateRange(getDefaultDateRange());
     setStatusFilter('all');
     setCategoryFilter('all');
+    setPage(1);
   };
 
   const handleDateRangeSelect = (range: DateRange | undefined) => {
@@ -333,7 +480,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/super-admin');
   };
 
   if (authLoading) {
@@ -341,7 +488,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/super-admin" replace />;
   }
 
   // Same unauthorized destination pattern as TicketAdminPage (role-gated pages).
@@ -451,9 +598,9 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                {ALL_STATUSES.map((status) => (
+                {availableStatuses.map((status) => (
                   <SelectItem key={status} value={status}>
-                    {getStatusLabel(status)}
+                    {getSuperAdminStatusFilterLabel(status)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -468,7 +615,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                {ALL_CATEGORIES.map((category) => (
+                {availableCategories.map((category) => (
                   <SelectItem key={category} value={category}>
                     {formatCategory(category)}
                   </SelectItem>
@@ -498,23 +645,6 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
 
       <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="space-y-4 md:space-y-6">
-          {/* Heading + Upload CSV hidden for now
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Ticket Center</h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Portal tickets and other-source tickets in one view
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => setCsvUploadOpen(true)}>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload CSV
-              </Button>
-            </div>
-          </div>
-          */}
-
           {error && (
             <Card className="border-destructive">
               <CardContent className="p-4 flex items-start gap-3 text-destructive">
@@ -786,7 +916,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
-                    <span>Tickets ({filteredTickets.length})</span>
+                    <span>Tickets ({listTickets.length})</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -810,7 +940,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredTickets.length === 0 ? (
+                        {listTickets.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                               {allTickets.length === 0
@@ -819,7 +949,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredTickets.map((ticket) => (
+                          paginatedTickets.map((ticket) => (
                             <TableRow key={`${ticket.source}-${ticket.id}`}>
                               <TableCell className="font-medium">
                                 {ticket.ticketNumber}
@@ -865,18 +995,39 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {!isLoading && listTickets.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {pageStart}–{pageEnd} of {listTickets.length} tickets
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage <= 1}
+                      onClick={() => setPage(currentPage - 1)}
+                    >
+                      Prev
+                    </Button>
+                    <span className="text-sm">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setPage(currentPage + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </div>
       </main>
-
-      <CombinedTicketsCsvUploadDialog
-        open={csvUploadOpen}
-        onOpenChange={setCsvUploadOpen}
-        onImportSuccess={() => {
-          void loadTickets();
-        }}
-      />
 
       <TicketDetailsModal
         isOpen={showPortalTicketDetails}

@@ -12,6 +12,8 @@ interface AuthContextType {
   isTicketAdmin: boolean;
   login: (identifier: string, otp: string, type: 'mobile' | 'email') => boolean;
   loginWithPin: (identifier: string, pin: string, type?: 'mobile' | 'email') => Promise<boolean>;
+  /** Set the authenticated session without re-validating credentials. */
+  establishSession: (user: User) => void;
   logout: () => void;
   switchRole: (role: 'invigilator' | 'resolver' | 'approver' | 'super_admin' | 'ticket_admin') => void;
   loading: boolean; // <-- Add loading to context type
@@ -108,6 +110,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const establishSession = (nextUser: User) => {
+    setUser(nextUser);
+  };
+
   const logout = () => {
     console.log('Logout');
     setUser(null);
@@ -185,6 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isTicketAdmin,
       login, 
       loginWithPin,
+      establishSession,
       logout, 
       switchRole 
     }}>

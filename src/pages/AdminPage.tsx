@@ -1047,7 +1047,7 @@ export const AdminPage: React.FC = () => {
                     </Button>
                     {isSuperAdmin && (
                       <Button
-                        onClick={() => navigate('/admin/combined-tickets')}
+                        onClick={() => navigate('/super-admin/all-tickets')}
                         className="w-full justify-start"
                         variant="outline"
                       >
