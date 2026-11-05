@@ -21,7 +21,7 @@ import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
 import { WhatsAppTestComponent } from '@/components/admin/WhatsAppTestComponent';
 import { ActivityLog } from '@/components/admin/ActivityLog';
-import { addDays, format } from "date-fns";
+import { addDays, format, subMonths } from "date-fns";
 import { Switch } from '@/components/ui/switch';
 import { MultiSelect } from '@/components/ui/multi-select';
 import {
@@ -44,6 +44,23 @@ import {
 import { getStatusLabel } from '@/utils/status';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
+
+function isArchivedTicket(submittedAt: Date | string | null | undefined, now = new Date()): boolean {
+  if (!submittedAt) return false;
+  const submitted = submittedAt instanceof Date ? submittedAt : new Date(submittedAt);
+  if (Number.isNaN(submitted.getTime())) return false;
+  const cutoff = subMonths(new Date(now.getFullYear(), now.getMonth(), now.getDate()), 6);
+  return submitted.getTime() < cutoff.getTime();
+}
+
+function applyArchiveView<T extends { submittedAt?: Date | string | null }>(
+  tickets: T[],
+  showArchived: boolean
+): T[] {
+  return tickets.filter((ticket) =>
+    showArchived ? isArchivedTicket(ticket.submittedAt) : !isArchivedTicket(ticket.submittedAt)
+  );
+}
 
 export const AdminPage: React.FC = () => {
   const { user, logout, loading, isTicketAdmin, isSuperAdmin } = useAuth();
@@ -81,6 +98,7 @@ export const AdminPage: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [downloadType, setDownloadType] = useState<'all' | 'detailed' | null>(null);
@@ -224,7 +242,10 @@ export const AdminPage: React.FC = () => {
       
       if (isTicketAdmin && user?.id) {
         // For ticket admin, only load assigned tickets
-        const assignedTickets = await AdminService.getTicketsAssignedToAdmin(user.id);
+        const assignedTickets = applyArchiveView(
+          await AdminService.getTicketsAssignedToAdmin(user.id),
+          showArchived
+        );
         result = {
           tickets: assignedTickets,
           total: assignedTickets.length,
@@ -236,21 +257,24 @@ export const AdminPage: React.FC = () => {
         
         if (hasFilters || onlyUnassignedResolver) {
           // Use unpaginated method when filters are applied to get ALL matching tickets
-          const allFilteredTickets = await AdminService.getFilteredTicketsUnpaginated({
-            searchQuery,
-            statusFilter,
-            severityFilter,
-            categoryFilter,
-            cityFilter,
-            resolverFilter,
-            approverFilter,
-            resourceIdFilter,
-            dateRange: filterDateRange,
-            onlyUnassignedResolver,
-            lastStatusFilter,
-            lastCommentByInvigilator,
-            showDeleted
-          });
+          const allFilteredTickets = applyArchiveView(
+            await AdminService.getFilteredTicketsUnpaginated({
+              searchQuery,
+              statusFilter,
+              severityFilter,
+              categoryFilter,
+              cityFilter,
+              resolverFilter,
+              approverFilter,
+              resourceIdFilter,
+              dateRange: filterDateRange,
+              onlyUnassignedResolver,
+              lastStatusFilter,
+              lastCommentByInvigilator,
+              showDeleted
+            }),
+            showArchived
+          );
           
           // Store all filtered tickets for dropdown calculations
           setAllFilteredTickets(allFilteredTickets);
@@ -266,14 +290,22 @@ export const AdminPage: React.FC = () => {
             hasMore: endIndex < allFilteredTickets.length
           };
         } else {
-          // Use regular method when no filters
-          result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit);
-          
-          // For no filters, we need to get all tickets for dropdown calculations
-          if (reset) {
-            const allTickets = await AdminService.getAllTicketsUnpaginated({ showDeleted });
-            setAllFilteredTickets(allTickets);
-          }
+          // Live All Tickets count, then the same rows. Hide or show only those older than 6 months.
+          const liveCount = await AdminService.getAllTickets(showDeleted, 1, 1);
+          const liveRows = await AdminService.getAllTicketsUnpaginated({ showDeleted });
+          const liveTickets = applyArchiveView(
+            liveRows.slice(0, liveCount.total || liveRows.length),
+            showArchived
+          );
+          setAllFilteredTickets(liveTickets);
+
+          const startIndex = (reset ? 0 : (page - 1) * limit);
+          const endIndex = startIndex + limit;
+          result = {
+            tickets: liveTickets.slice(startIndex, endIndex),
+            total: liveTickets.length,
+            hasMore: endIndex < liveTickets.length
+          };
         }
       }
       
@@ -304,7 +336,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, isTicketAdmin, user?.id]);
+  }, [showDeleted, showArchived, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, isTicketAdmin, user?.id]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   // Only reload if tickets tab is active and loaded
@@ -317,7 +349,7 @@ export const AdminPage: React.FC = () => {
       loadTickets(true);
     }
     // eslint-disable-next-line
-  }, [showDeleted, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, activeTab, loadedTabs]);
+  }, [showDeleted, showArchived, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, activeTab, loadedTabs]);
 
   // Fetch resolvers/approvers for filter dropdowns (only when tickets tab is active)
   useEffect(() => {
@@ -1349,6 +1381,17 @@ export const AdminPage: React.FC = () => {
                   {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
                   </label>
                 </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="show-archived"
+                          checked={showArchived}
+                          onCheckedChange={(checked) => setShowArchived(checked)}
+                        />
+                        <label htmlFor="show-archived" className="text-sm font-medium">
+                          {showArchived ? 'View Archived Tickets' : 'Hide Archived Tickets'}
+                        </label>
+                      </div>
 
                       <div className="flex items-center gap-2">
                         {hasActiveFilters && (
