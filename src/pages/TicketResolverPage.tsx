@@ -206,13 +206,16 @@ export const TicketResolverPage: React.FC = () => {
       if (requestId !== requestIdRef.current) return;
       if (error instanceof TooManyAdvancedMatchesError) {
         setListError(TOO_MANY_ADVANCED_MATCHES_MESSAGE);
+        setTickets([]);
+        setTotal(0);
+        setStatusCounts(emptyResolverCounts());
       } else {
+        // Keep the previously loaded list/counts so a transient failure does not blank the panel.
         console.error('Failed to load resolver tickets:', error);
-        setListError('Failed to load tickets. Please try again.');
+        const message = `Failed to load tickets: ${error instanceof Error && error.message ? error.message : 'unknown error'}. Showing the last loaded list.`;
+        setListError(message);
+        toast.error(message);
       }
-      setTickets([]);
-      setTotal(0);
-      setStatusCounts(emptyResolverCounts());
       setListLoading(false);
     }
   }, [
@@ -296,6 +299,19 @@ export const TicketResolverPage: React.FC = () => {
     const onPage = tickets.find(t => t.id === ticketId);
     if (onPage) {
       handleViewTicket(onPage);
+      return;
+    }
+    // The ticket is not on the current page (paginated list): fetch it directly.
+    try {
+      const fetched = await TicketService.getTicketById(ticketId);
+      if (!fetched) {
+        toast.error('Ticket not found');
+        return;
+      }
+      handleViewTicket(normalizeTicketComments(fetched));
+    } catch (error) {
+      console.error('Failed to open ticket from notification:', error);
+      toast.error('Failed to open ticket. Please try again.');
     }
   };
 
@@ -506,7 +522,7 @@ export const TicketResolverPage: React.FC = () => {
         </div>
       );
     }
-    if (listError) {
+    if (listError && tickets.length === 0) {
       return (
         <Card>
           <CardContent className="text-center py-8">
@@ -531,6 +547,14 @@ export const TicketResolverPage: React.FC = () => {
     }
     return (
       <>
+        {listError && (
+          <div className="mb-4 flex flex-col items-start justify-between gap-2 rounded-md border border-red-200 bg-red-50 p-3 sm:flex-row sm:items-center">
+            <p className="text-sm text-red-700">{listError}</p>
+            <Button variant="outline" size="sm" onClick={() => loadList({ invalidateAdvancedCache: true })}>
+              Retry
+            </Button>
+          </div>
+        )}
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {tickets.map(renderTicketCard)}
         </div>

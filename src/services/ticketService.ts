@@ -269,6 +269,18 @@ export class TicketService {
     }
   }
 
+  /** Fetches a fully hydrated ticket by its row id (e.g. from a notification). Null when not found. */
+  static async getTicketById(ticketId: string): Promise<Issue | null> {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('ticket_number')
+      .eq('id', ticketId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return TicketService.getTicketByNumber(data.ticket_number);
+  }
+
   private static async getUserDetails(userId: string): Promise<{ name: string; role: string } | null> {
     try {
       const { data, error } = await supabase
@@ -1642,7 +1654,7 @@ export class TicketService {
       return { tickets, total };
     } catch (error) {
       console.error('Error in getRoleTicketPage:', error);
-      return { tickets: [], total: 0 };
+      throw error;
     }
   }
 
@@ -1681,7 +1693,7 @@ export class TicketService {
       return result as ResolverStatusCountMap | ApproverStatusCountMap;
     } catch (error) {
       console.error('Error in getRoleTicketStatusCounts:', error);
-      return empty;
+      throw error;
     }
   }
 }
