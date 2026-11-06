@@ -19,6 +19,10 @@ export function MultiSelect({
   className,
 }: MultiSelectProps) {
   const [inputValue, setInputValue] = React.useState("")
+  // Long option lists (resolvers, approvers) rendered as an inline chip wall used
+  // to push the ticket list far down the page on phones.
+  const [showAllOptions, setShowAllOptions] = React.useState(false)
+  const VISIBLE_OPTION_COUNT = 8
 
   const handleInputChange = (value: string) => {
     setInputValue(value)
@@ -76,12 +80,13 @@ export function MultiSelect({
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            {options.map(opt => {
+            {(showAllOptions ? options : options.slice(0, VISIBLE_OPTION_COUNT)).map(opt => {
               const isSelected = selected.includes(opt.value)
               return (
                 <button
                   key={opt.value}
                   type="button"
+                  aria-pressed={isSelected}
                   className={`text-xs px-2 py-1 rounded border ${isSelected ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
                   onClick={() => toggleOption(opt.value)}
                 >
@@ -89,6 +94,18 @@ export function MultiSelect({
                 </button>
               )
             })}
+            {options.length > VISIBLE_OPTION_COUNT && (
+              <button
+                type="button"
+                onClick={() => setShowAllOptions(value => !value)}
+                aria-expanded={showAllOptions}
+                className="rounded border border-dashed border-gray-400 px-2 py-1 text-xs text-gray-600"
+              >
+                {showAllOptions
+                  ? 'Show less'
+                  : `+${options.length - VISIBLE_OPTION_COUNT} more`}
+              </button>
+            )}
           </div>
         </div>
       ) : (

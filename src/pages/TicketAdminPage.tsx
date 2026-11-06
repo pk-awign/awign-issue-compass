@@ -34,6 +34,38 @@ import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
+type BadgeVariant = 'default' | 'destructive' | 'secondary' | 'outline';
+
+const getStatusVariant = (status: string): BadgeVariant => {
+  switch (status) {
+    case 'open':
+      return 'destructive';
+    case 'approved':
+    case 'resolved':
+      return 'secondary';
+    case 'in_progress':
+    case 'user_dependency':
+    case 'ops_user_dependency':
+    case 'send_for_approval':
+      return 'default';
+    case 'ops_input_required':
+      return 'secondary';
+    default:
+      return 'outline';
+  }
+};
+
+const getSeverityVariant = (severity: string): BadgeVariant => {
+  switch (severity) {
+    case 'sev1':
+      return 'destructive';
+    case 'sev2':
+      return 'default';
+    default:
+      return 'secondary';
+  }
+};
+
 export const TicketAdminPage: React.FC = () => {
   const { user, logout, loading, isTicketAdmin } = useAuth();
   const navigate = useNavigate();
@@ -596,8 +628,50 @@ export const TicketAdminPage: React.FC = () => {
                     </Select>
                   </div>
 
-                  {/* Tickets Table */}
-                  <div className="border rounded-lg">
+                  {/* Tickets: cards on phones, table from md up */}
+                  <div className="space-y-3 md:hidden">
+                    {filteredTickets.length === 0 ? (
+                      <p className="py-10 text-center text-sm text-muted-foreground">No tickets found.</p>
+                    ) : (
+                      filteredTickets.map((ticket) => (
+                        <div key={`${ticket.id}-card`} className="rounded-lg border p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="whitespace-nowrap font-mono text-sm font-semibold">
+                                {ticket.ticketNumber}
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-1">
+                                <Badge variant="outline" className="text-[10px]">
+                                  {ticket.issueCategory.replace('_', ' ')}
+                                </Badge>
+                                <Badge variant={getStatusVariant(ticket.status)} className="text-[10px]">
+                                  {getStatusLabel(ticket.status as any)}
+                                </Badge>
+                                <Badge variant={getSeverityVariant(ticket.severity)} className="text-[10px]">
+                                  {ticket.severity.toUpperCase()}
+                                </Badge>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => handleViewTicket(ticket)}
+                              aria-label={`View ticket ${ticket.ticketNumber}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
+                            <span>{ticket.city}</span>
+                            <span>{format(new Date(ticket.submittedAt), 'dd MMM yyyy')}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="hidden rounded-lg border md:block">
                     <Table>
                       <TableHeader>
                         <TableRow>

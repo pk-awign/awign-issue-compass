@@ -10,6 +10,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthService } from '@/services/authService';
+import { BrandLogo } from '@/components/BrandLogo';
 
 export const SuperAdminLoginPage: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
@@ -91,34 +92,29 @@ export const SuperAdminLoginPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-white border-b shadow-sm">
-        <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col items-start">
-              <div className="bg-gray-800 p-1 rounded">
-                <img
-                  src="/awign-logo.svg"
-                  alt="Awign Logo"
-                  className="w-8 h-8 object-contain"
-                />
+        <div className="container mx-auto px-3 py-3 sm:px-6 sm:py-4">
+          <div className="flex w-full items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <BrandLogo />
+              <div className="flex min-w-0 flex-col items-start">
+                <span className="text-sm font-semibold leading-tight text-gray-900 sm:text-xl">
+                  ESCALATION MANAGEMENT
+                </span>
+                <span className="text-xs leading-tight text-gray-600 mt-1 sm:text-sm">
+                  Super Admin Portal
+                </span>
               </div>
             </div>
-            <div className="flex flex-col items-start flex-1 ml-4">
-              <span className="text-base sm:text-xl font-semibold text-gray-900 leading-tight">
-                AWIGN ESCALATION MANAGEMENT
-              </span>
-              <span className="text-xs sm:text-sm text-gray-600 mt-1 leading-tight">
-                Super Admin Portal
-              </span>
-            </div>
-            <div className="flex items-center gap-2 ml-4">
+            <div className="flex shrink-0 items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => navigate('/')}
                 className="flex items-center gap-2"
               >
-                <Home className="h-5 w-5 mr-1" />
+                <Home className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Back to Home</span>
+                <span className="sr-only sm:hidden">Back to Home</span>
               </Button>
             </div>
           </div>
@@ -126,8 +122,8 @@ export const SuperAdminLoginPage: React.FC = () => {
       </header>
 
       <div
-        className="flex items-center justify-center px-4"
-        style={{ minHeight: 'calc(100vh - 80px)' }}
+        className="flex items-center justify-center px-4 py-8"
+        style={{ minHeight: 'calc(100dvh - 5rem)' }}
       >
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">

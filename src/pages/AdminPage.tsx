@@ -13,11 +13,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Issue } from '@/types/issue';
-import { AdminService, TicketSortBy, TicketSortDir } from '@/services/adminService';
+import { AdminService, TicketAnalytics, TicketSortBy, TicketSortDir } from '@/services/adminService';
 import { AnalyticsDateFilter } from '@/components/admin/AnalyticsDateFilter';
 import { DateRangePresetId } from '@/utils/dateRangePresets';
 import { exportTicketsAsCSV, generateExportFilename } from '@/utils/ticketExport';
-import { UserManagementModal } from '@/components/admin/UserManagementModal';
+import { UserManagementPanel } from '@/components/admin/UserManagementPanel';
 import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
 import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
@@ -44,13 +44,84 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { getStatusLabel } from '@/utils/status';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
+
+const OVERVIEW_CATEGORY_COLORS: Record<string, string> = {
+  payment_delay: '#3b82f6',
+  partial_payment: '#f59e0b',
+  behavioral_complaint: '#ef4444',
+  improvement_request: '#8b5cf6',
+  facility_issue: '#06b6d4',
+  penalty_issue: '#f97316',
+  malpractice: '#dc2626',
+  app_issue: '#14b8a6',
+  noc: '#6366f1',
+  posh: '#ec4899',
+  workplace_misconduct: '#84cc16',
+  other: '#64748b',
+};
+
+const OVERVIEW_CATEGORY_COLOR_FALLBACK = [
+  '#3b82f6',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#06b6d4',
+  '#f97316',
+  '#14b8a6',
+  '#ec4899',
+  '#84cc16',
+  '#64748b',
+];
+
+function getOverviewCategoryColor(categoryKey: string, index: number): string {
+  return (
+    OVERVIEW_CATEGORY_COLORS[categoryKey] ||
+    OVERVIEW_CATEGORY_COLOR_FALLBACK[index % OVERVIEW_CATEGORY_COLOR_FALLBACK.length]
+  );
+}
+
+function formatOverviewCategory(category: string): string {
+  if (category === 'noc') return 'NOC';
+  if (category === 'posh') return 'POSH';
+  if (category === 'workplace_misconduct') return 'Workplace Misconduct';
+  return category
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Tab strip styling shared by every trigger.
+ *
+ * The strip never scrolls or hides a tab: it is a grid at every width, so all
+ * seven sections stay visible and tappable. Labels stay on one line thanks to
+ * the column counts (2 on phones, 4 on tablets, 7 from lg up) chosen so the
+ * longest label ("User Management") fits its cell.
+ */
+const tabTriggerClass =
+  "w-full whitespace-nowrap rounded-lg px-2 py-2 text-center data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow lg:px-3";
 
 export const AdminPage: React.FC = () => {
   const { user, logout, loading, isTicketAdmin, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isMobile = useIsMobile();
   
   // Get the tab parameter from URL
   const tabParam = searchParams.get('tab');
@@ -68,7 +139,7 @@ export const AdminPage: React.FC = () => {
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(defaultTab);
-  const [analytics, setAnalytics] = useState<any>(null);
+  const [analytics, setAnalytics] = useState<TicketAnalytics | null>(null);
   const [resolverFilterSingle, setResolverFilterSingle] = useState<string>('all');
   const [resolverFilter, setResolverFilter] = useState<string[]>([]);
   const [resolvers, setResolvers] = useState<{ id: string; name: string }[]>([]);
@@ -78,7 +149,6 @@ export const AdminPage: React.FC = () => {
   const [resourceIds, setResourceIds] = useState<{ value: string; label: string }[]>([]);
   
   // Modal states
-  const [showUserManagement, setShowUserManagement] = useState(false);
   const [showTicketDetails, setShowTicketDetails] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
@@ -102,6 +172,9 @@ export const AdminPage: React.FC = () => {
   const [analyticsIncludeArchived, setAnalyticsIncludeArchived] = useState(false);
   const [analyticsDateRange, setAnalyticsDateRange] = useState<DateRange | undefined>();
   const [analyticsDatePreset, setAnalyticsDatePreset] = useState<DateRangePresetId>('all');
+  // All Tickets filters: collapsed on phones so the table is reachable without
+  // scrolling past eight stacked controls. Always open from md up.
+  const [ticketFiltersOpen, setTicketFiltersOpen] = useState(false);
   
   // Track which tabs have been loaded to avoid reloading
   const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
@@ -181,7 +254,7 @@ export const AdminPage: React.FC = () => {
         setLoadedTabs(prev => new Set(prev).add('analytics'));
         break;
       case 'users':
-        // UserManagementModal handles its own data loading
+        // UserManagementPanel handles its own data loading
         setLoadedTabs(prev => new Set(prev).add('users'));
         break;
       case 'whatsapp':
@@ -401,18 +474,21 @@ export const AdminPage: React.FC = () => {
   }, [finalFilteredTickets]);
 
   // Check if there are active filters
-  const hasActiveFilters = searchQuery || 
-    statusFilter !== 'all' || 
-    severityFilter !== 'all' || 
-    categoryFilter !== 'all' || 
-    cityFilter !== 'all' || 
-    resolverFilter.length > 0 || 
-    approverFilter.length > 0 ||
-    resourceIdFilter.length > 0 || 
-    filterDateRange?.from ||
-    onlyUnassignedResolver ||
-    lastStatusFilter !== 'all' ||
-    lastCommentByInvigilator;
+  const activeTicketFiltersCount = [
+    Boolean(searchQuery.trim()),
+    statusFilter !== 'all',
+    severityFilter !== 'all',
+    categoryFilter !== 'all',
+    cityFilter !== 'all',
+    resolverFilter.length > 0,
+    approverFilter.length > 0,
+    resourceIdFilter.length > 0,
+    Boolean(filterDateRange?.from),
+    onlyUnassignedResolver,
+    lastStatusFilter !== 'all',
+    lastCommentByInvigilator,
+  ].filter(Boolean).length;
+  const hasActiveFilters = activeTicketFiltersCount > 0;
 
   // When page changes (and not reset), load next page
   useEffect(() => {
@@ -454,6 +530,32 @@ export const AdminPage: React.FC = () => {
       loadAnalytics();
     }
   }, [analyticsIncludeArchived, analyticsDateRange, activeTab, loadedTabs, loadAnalytics]);
+
+  const overviewCategoryChartData = useMemo(() => {
+    const rows = analytics?.categoryBreakdown ?? [];
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    return rows.map((row) => ({
+      categoryKey: row.category,
+      category: formatOverviewCategory(row.category),
+      count: row.count,
+      percent: total > 0 ? Math.round((row.count / total) * 1000) / 10 : 0,
+    }));
+  }, [analytics?.categoryBreakdown]);
+
+  const overviewCreatedByDateChartData = useMemo(() => {
+    return (analytics?.createdByDate ?? []).map((row) => ({
+      dateKey: row.date,
+      date: format(new Date(`${row.date}T00:00:00`), 'dd MMM yyyy'),
+      count: row.count,
+    }));
+  }, [analytics?.createdByDate]);
+
+  const overviewPeakCreatedDate = useMemo(() => {
+    if (overviewCreatedByDateChartData.length === 0) return null;
+    return overviewCreatedByDateChartData.reduce((best, row) =>
+      row.count > best.count ? row : best
+    );
+  }, [overviewCreatedByDateChartData]);
 
   const handleLogout = () => {
     logout();
@@ -928,20 +1030,22 @@ export const AdminPage: React.FC = () => {
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className={`flex flex-col items-center gap-2 w-full p-2 bg-muted rounded-xl border shadow-md my-4 md:grid md:gap-0 md:p-1 ${
-              isTicketAdmin ? 'md:grid-cols-3' : 'md:grid-cols-7'
-            }`}>
-              <TabsTrigger value="overview" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Overview</TabsTrigger>
-              <TabsTrigger value="tickets" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">
+            <TabsList
+              className={`my-4 grid w-full grid-cols-2 gap-1.5 rounded-xl border bg-muted p-1.5 shadow-md md:gap-0 md:p-1 ${
+                isTicketAdmin ? 'md:grid-cols-3' : 'md:grid-cols-4 lg:grid-cols-7'
+              }`}
+            >
+              <TabsTrigger value="overview" className={tabTriggerClass}>Overview</TabsTrigger>
+              <TabsTrigger value="tickets" className={tabTriggerClass}>
                 {isTicketAdmin ? 'Assigned Tickets' : 'All Tickets'}
               </TabsTrigger>
-              <TabsTrigger value="analytics" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Analytics</TabsTrigger>
+              <TabsTrigger value="analytics" className={tabTriggerClass}>Analytics</TabsTrigger>
               {!isTicketAdmin && (
                 <>
-                  <TabsTrigger value="users" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">User Management</TabsTrigger>
-                  <TabsTrigger value="whatsapp" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">WhatsApp</TabsTrigger>
-                  <TabsTrigger value="activity" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Activity Log</TabsTrigger>
-                  <TabsTrigger value="settings" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Settings</TabsTrigger>
+                  <TabsTrigger value="users" className={tabTriggerClass}>User Management</TabsTrigger>
+                  <TabsTrigger value="whatsapp" className={tabTriggerClass}>WhatsApp</TabsTrigger>
+                  <TabsTrigger value="activity" className={tabTriggerClass}>Activity Log</TabsTrigger>
+                  <TabsTrigger value="settings" className={tabTriggerClass}>Settings</TabsTrigger>
                 </>
               )}
             </TabsList>
@@ -1040,6 +1144,158 @@ export const AdminPage: React.FC = () => {
                 </Card>
               </div>
 
+              <div className="grid grid-cols-1 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Tickets by Category</CardTitle>
+                    <p className="text-sm text-muted-foreground font-normal">
+                      Count of tickets per category
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {overviewCategoryChartData.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-12">
+                        No category data for the current filters.
+                      </p>
+                    ) : (
+                      <div
+                        className="w-full"
+                        style={{
+                          height: Math.max(360, overviewCategoryChartData.length * 36 + 48),
+                        }}
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={overviewCategoryChartData}
+                            layout="vertical"
+                            margin={{
+                              top: 8,
+                              right: isMobile ? 8 : 56,
+                              left: isMobile ? 0 : 16,
+                              bottom: isMobile ? 24 : 36,
+                            }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis
+                              type="number"
+                              allowDecimals={false}
+                              label={{
+                                value: 'Number of Tickets',
+                                position: 'insideBottom',
+                                offset: -20,
+                                style: { fontSize: 12, fill: '#64748b' },
+                              }}
+                            />
+                            <YAxis
+                              type="category"
+                              dataKey="category"
+                              width={isMobile ? 80 : 170}
+                              tick={{ fontSize: isMobile ? 10 : 12 }}
+                              tickFormatter={(value: string) =>
+                                isMobile && value.length > 12 ? `${value.slice(0, 11)}…` : value
+                              }
+                              label={
+                                isMobile
+                                  ? undefined
+                                  : {
+                                      value: 'Category',
+                                      angle: -90,
+                                      position: 'insideLeft',
+                                      offset: -4,
+                                      style: { fontSize: 12, fill: '#64748b', textAnchor: 'middle' },
+                                    }
+                              }
+                            />
+                            <Tooltip
+                              formatter={(value: number, _name, item) => {
+                                const percent = item?.payload?.percent ?? 0;
+                                return [`${value} (${percent}%)`, 'Tickets'];
+                              }}
+                            />
+                            <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={22}>
+                              {overviewCategoryChartData.map((entry, index) => (
+                                <Cell
+                                  key={entry.categoryKey}
+                                  fill={getOverviewCategoryColor(entry.categoryKey, index)}
+                                />
+                              ))}
+                              <LabelList
+                                dataKey="count"
+                                position="right"
+                                className="fill-foreground text-xs"
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Tickets Created by Date</CardTitle>
+                    {overviewPeakCreatedDate && (
+                      <p className="text-sm text-muted-foreground font-normal">
+                        Peak: {overviewPeakCreatedDate.date} ({overviewPeakCreatedDate.count} tickets)
+                      </p>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {overviewCreatedByDateChartData.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-12">
+                        No created-date data for the current filters.
+                      </p>
+                    ) : (
+                      <div className="w-full h-[360px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart
+                            data={overviewCreatedByDateChartData}
+                            margin={{ top: 8, right: 24, left: 16, bottom: 36 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis
+                              dataKey="date"
+                              tick={{ fontSize: 11 }}
+                              interval="preserveStartEnd"
+                              minTickGap={24}
+                              label={{
+                                value: 'Created Date',
+                                position: 'insideBottom',
+                                offset: -20,
+                                style: { fontSize: 12, fill: '#64748b' },
+                              }}
+                            />
+                            <YAxis
+                              allowDecimals={false}
+                              label={{
+                                value: 'Number of Tickets',
+                                angle: -90,
+                                position: 'insideLeft',
+                                offset: -4,
+                                style: { fontSize: 12, fill: '#64748b', textAnchor: 'middle' },
+                              }}
+                            />
+                            <Tooltip
+                              formatter={(value: number) => [value, 'Tickets']}
+                              labelFormatter={(label) => String(label)}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="count"
+                              stroke="#10b981"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              activeDot={{ r: 5 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
               {/* Quick Actions */}
               <div className="grid md:grid-cols-3 gap-4">
                 <Card>
@@ -1048,7 +1304,7 @@ export const AdminPage: React.FC = () => {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <Button
-                      onClick={() => setShowUserManagement(true)}
+                      onClick={() => handleTabChange('users')}
                       className="w-full justify-start"
                       variant="outline"
                     >
@@ -1151,8 +1407,44 @@ export const AdminPage: React.FC = () => {
             <TabsContent value="tickets" className="space-y-6">
               {/* Consolidated Filters */}
               <Card className="border-l-4 border-l-blue-500">
-                
-                <CardContent className="p-4">
+                <CardHeader className="pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Filter className="h-4 w-4" />
+                      Filters
+                      {activeTicketFiltersCount > 0 && (
+                        <Badge variant="secondary">{activeTicketFiltersCount} active</Badge>
+                      )}
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      {hasActiveFilters && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearFilters}
+                          className="h-8"
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          Clear
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 md:hidden"
+                        onClick={() => setTicketFiltersOpen((open) => !open)}
+                        aria-expanded={ticketFiltersOpen}
+                        aria-controls="admin-ticket-filters-body"
+                      >
+                        {ticketFiltersOpen ? 'Hide' : 'Show'}
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent
+                  id="admin-ticket-filters-body"
+                  className={cn('p-4 pt-0', ticketFiltersOpen ? 'block' : 'hidden md:block')}
+                >
                   <div className="space-y-6">
                     {/* Row 1: Search, Resource ID, Date Range, Severity */}
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -1537,11 +1829,16 @@ export const AdminPage: React.FC = () => {
                     {/* Mobile Ticket Cards */}
                     {filteredTickets.map((ticket) => (
                       <Card key={ticket.id} className={`p-4 ${viewAllTickets && ticket.archiveStatus === 'Yes' ? 'bg-red-50' : ''}`}>
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-semibold">{ticket.ticketNumber}</span>
+                        <div className="mb-3 flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <Checkbox
+                              checked={selectedTickets.includes(ticket.id)}
+                              onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked === true)}
+                              aria-label={`Select ticket ${ticket.ticketNumber}`}
+                            />
+                            <span className="whitespace-nowrap font-mono text-sm font-semibold">{ticket.ticketNumber}</span>
                             {ticket.deleted && (
-                              <span className="ml-2" title="This ticket is soft deleted">
+                              <span title="This ticket is soft deleted">
                                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold gap-1">
                                   <Trash2 className="h-3 w-3" />DELETED
                                 </span>
@@ -1554,11 +1851,12 @@ export const AdminPage: React.FC = () => {
                               {ticket.severity.toUpperCase()}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex shrink-0 items-center gap-2">
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleViewTicket(ticket)}
+                              aria-label={`View ticket ${ticket.ticketNumber}`}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -1568,6 +1866,7 @@ export const AdminPage: React.FC = () => {
                                 size="sm"
                                 onClick={() => handleDeleteTicket(ticket)}
                                 disabled={deletingTicketId === ticket.id}
+                                aria-label={`Delete ticket ${ticket.ticketNumber}`}
                               >
                                 {deletingTicketId === ticket.id ? (
                                   <>
@@ -1670,7 +1969,7 @@ export const AdminPage: React.FC = () => {
                         <TableBody>
                           {filteredTickets.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={8} className="text-center">No tickets found.</TableCell>
+                              <TableCell colSpan={9} className="text-center">No tickets found.</TableCell>
                             </TableRow>
                           ) : (
                             filteredTickets.map((ticket) => (
@@ -1782,17 +2081,7 @@ export const AdminPage: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="users">
-              <Card>
-                <CardHeader>
-                  <CardTitle>User Management</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Button onClick={() => setShowUserManagement(true)}>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Open User Management
-                  </Button>
-                </CardContent>
-              </Card>
+              <UserManagementPanel />
             </TabsContent>
 
             <TabsContent value="whatsapp">
@@ -1818,11 +2107,6 @@ export const AdminPage: React.FC = () => {
       </main>
 
       {/* Modals */}
-      <UserManagementModal
-        isOpen={showUserManagement}
-        onClose={() => setShowUserManagement(false)}
-      />
-
       <TicketDetailsModal
         isOpen={showTicketDetails}
         onClose={() => setShowTicketDetails(false)}

@@ -19,6 +19,8 @@ import { Issue } from '@/types/issue';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { TicketTracker } from './TicketTracker';
+import { BrandLogo } from '@/components/BrandLogo';
+import { BrandPoweredByFooter } from '@/components/BrandPoweredByFooter';
 import { generateTicketFile, generateWhatsAppMessage } from '@/utils/ticketDownload';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '@/components/ui/command';
@@ -384,45 +386,41 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       {/* Header */}
       {!hideHeader && (
-        <header className="bg-white border-b shadow-sm">
-          <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex flex-col items-start">
-                <div className="bg-gray-800 p-1 rounded">
-                  <img 
-                    src="/awign-logo.svg" 
-                    alt="Awign Logo" 
-                    className="w-8 h-8 object-contain"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col items-start flex-1 ml-4">
-                <span className="text-base sm:text-xl font-semibold text-gray-900">Awign invIgilation Escalation Portal</span>
-                <span className="text-xs sm:text-sm text-gray-600 mt-1">Report Escalations Only This is a leadership connect portal for escalations of your Issue when other channels like TL, Awign Support have not resolved your issue in time</span>
-              </div>
-              <div className="flex items-center gap-2 ml-4">
-                {user && (
-                  <Button variant="outline" size="sm" onClick={logout}>
-                    <LogOut className="h-5 w-5" />
-                  </Button>
-                )}
+        <header className="border-b bg-white shadow-sm">
+          <div className="container mx-auto flex items-center justify-between gap-3 px-3 py-2 sm:px-6 sm:py-4">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <BrandLogo />
+              <div className="flex min-w-0 flex-col items-start">
+                <span className="text-sm font-semibold leading-tight text-gray-900 sm:text-xl">
+                  Awign Invigilation Escalation Portal
+                </span>
+                <span className="mt-1 hidden text-xs text-gray-600 sm:block sm:text-sm">
+                  For issues not resolved by your Team Leader or Awign Support.
+                </span>
               </div>
             </div>
-            {/* 5. After login, show 'Logged in as ...' below header */}
-            {user && (
-              <div className="text-xs text-gray-700 mt-2 text-right">
-                Logged in as <span className="font-semibold">{user.name}</span>
-              </div>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              {user && (
+                <Button variant="outline" size="sm" onClick={logout} aria-label="Log out">
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
+          {/* 5. After login, show 'Logged in as ...' below header */}
+          {user && (
+            <div className="container mx-auto px-3 pb-2 text-right text-xs text-gray-700 sm:px-6">
+              Logged in as <span className="font-semibold">{user.name}</span>
+            </div>
+          )}
         </header>
       )}
 
       {/* Main Content */}
-      <main className="container mx-auto px-2 py-4 sm:px-6 sm:py-8">
+      <main className="container mx-auto flex-1 px-3 py-4 sm:px-6 sm:py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full max-w-4xl mx-auto">
           <TabsList className="grid w-full grid-cols-2 mb-8">
             <TabsTrigger value="report">Report Issue</TabsTrigger>
@@ -674,10 +672,10 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                         {formData.multipleDates.length > 0 && (
                           <div className="space-y-2">
                             {formData.multipleDates.map((item, index) => (
-                              <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-blue-50 p-2 rounded-lg">
-                                <div className="font-mono text-sm min-w-[120px]">{format(item.date, "MMM dd, yyyy")}</div>
+                              <div key={index} className="flex flex-col items-stretch gap-2 rounded-lg bg-blue-50 p-2 sm:flex-row sm:items-center">
+                                <div className="shrink-0 font-mono text-sm sm:min-w-[120px]">{format(item.date, "MMM dd, yyyy")}</div>
                                 <Textarea
-                                  className="flex-1 min-w-[180px]"
+                                  className="w-full sm:flex-1"
                                   placeholder="Description for this date..."
                                   value={item.description}
                                   onChange={e => setFormData(prev => {
@@ -730,7 +728,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
                             <span className="truncate max-w-[120px]">{file.name}</span>
                             <button
                               type="button"
-                              className="ml-2 text-red-500 hover:text-red-700"
+                              className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-base leading-none text-red-600 hover:bg-red-100"
                               onClick={() => setFiles(files => files.filter((_, i) => i !== idx))}
                               aria-label={`Remove ${file.name}`}
                             >
@@ -850,6 +848,8 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      <BrandPoweredByFooter className="mt-auto px-3 pb-6 sm:px-6 sm:pb-8" />
     </div>
   );
 };

@@ -63,6 +63,7 @@ import { TicketService } from '@/services/ticketService';
 import type { Issue } from '@/types/issue';
 import { getStatusLabel } from '@/utils/status';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 
 type TicketStatus = Issue['status'];
@@ -225,6 +226,7 @@ function getStatusBadgeClass(status: string): string {
 export const CombinedTicketsDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout, loading: authLoading, isSuperAdmin } = useAuth();
+  const isMobile = useIsMobile();
 
   const [allTickets, setAllTickets] = useState<CombinedTicketRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -353,8 +355,15 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
     }
   }, [availableCategories, categoryFilter]);
 
-  // Overview cards/charts and the tickets table share the same visible set.
-  const listTickets = filteredTickets;
+  // Overview cards/charts and the tickets table share the same visible set,
+  // newest created_at first.
+  const listTickets = useMemo(
+    () =>
+      [...filteredTickets].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      ),
+    [filteredTickets]
+  );
 
   useEffect(() => {
     setPage(1);
@@ -792,7 +801,12 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                             <BarChart
                               data={categoryChartData}
                               layout="vertical"
-                              margin={{ top: 8, right: 56, left: 16, bottom: 36 }}
+                              margin={{
+                                top: 8,
+                                right: isMobile ? 8 : 56,
+                                left: isMobile ? 0 : 16,
+                                bottom: isMobile ? 24 : 36,
+                              }}
                             >
                               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                               <XAxis
@@ -808,15 +822,22 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                               <YAxis
                                 type="category"
                                 dataKey="category"
-                                width={170}
-                                tick={{ fontSize: 12 }}
-                                label={{
-                                  value: 'Category',
-                                  angle: -90,
-                                  position: 'insideLeft',
-                                  offset: -4,
-                                  style: { fontSize: 12, fill: '#64748b', textAnchor: 'middle' },
-                                }}
+                                width={isMobile ? 80 : 170}
+                                tick={{ fontSize: isMobile ? 10 : 12 }}
+                                tickFormatter={(value: string) =>
+                                  isMobile && value.length > 12 ? `${value.slice(0, 11)}…` : value
+                                }
+                                label={
+                                  isMobile
+                                    ? undefined
+                                    : {
+                                        value: 'Category',
+                                        angle: -90,
+                                        position: 'insideLeft',
+                                        offset: -4,
+                                        style: { fontSize: 12, fill: '#64748b', textAnchor: 'middle' },
+                                      }
+                                }
                               />
                               <Tooltip
                                 formatter={(value: number, _name, item) => {
@@ -928,70 +949,132 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Ticket #</TableHead>
-                          <TableHead>Issue Type</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {listTickets.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                              {allTickets.length === 0
-                                ? 'No tickets found. Portal tickets will appear here; other tickets appear after data is loaded into other_tickets.'
-                                : 'No tickets match the current filters.'}
-                            </TableCell>
-                          </TableRow>
+                    <>
+                      {/* Phones get one card per ticket; the 6-column table only fits from md up. */}
+                      <div className="space-y-3 p-3 md:hidden">
+                        {paginatedTickets.length === 0 ? (
+                          <p className="py-8 text-center text-sm text-muted-foreground">
+                            {allTickets.length === 0
+                              ? 'No tickets found. Portal tickets will appear here; other tickets appear after data is loaded into other_tickets.'
+                              : 'No tickets match the current filters.'}
+                          </p>
                         ) : (
                           paginatedTickets.map((ticket) => (
-                            <TableRow key={`${ticket.source}-${ticket.id}`}>
-                              <TableCell className="font-medium">
-                                {ticket.ticketNumber}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">
-                                  {formatCategory(ticket.issueCategory).toUpperCase()}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="max-w-xs truncate" title={ticket.description}>
-                                {ticket.description || '—'}
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant="outline"
-                                  className={cn('text-xs font-medium', getStatusBadgeClass(ticket.status))}
-                                >
-                                  {getStatusLabel(ticket.status)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {ticket.createdAt
-                                  ? format(new Date(ticket.createdAt), 'dd MMM yyyy HH:mm:ss')
-                                  : 'N/A'}
-                              </TableCell>
-                              <TableCell>
+                            <div
+                              key={`${ticket.source}-${ticket.id}-card`}
+                              className="rounded-lg border p-3"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="whitespace-nowrap font-mono text-sm font-semibold">
+                                    {ticket.ticketNumber}
+                                  </p>
+                                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {formatCategory(ticket.issueCategory).toUpperCase()}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">
+                                      {ticket.createdAt
+                                        ? format(new Date(ticket.createdAt), 'dd MMM yyyy')
+                                        : 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  className="shrink-0"
                                   onClick={() => void handleViewTicket(ticket)}
                                   disabled={isOpeningView}
-                                  title="View"
+                                  aria-label={`View ${ticket.ticketNumber}`}
                                 >
                                   <Eye className="h-4 w-4" />
-                                  <span className="sr-only">View</span>
                                 </Button>
-                              </TableCell>
-                            </TableRow>
+                              </div>
+                              <p className="mt-2 line-clamp-2 text-sm">
+                                {ticket.description || '—'}
+                              </p>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'mt-2 text-xs font-medium',
+                                  getStatusBadgeClass(ticket.status)
+                                )}
+                              >
+                                {getStatusLabel(ticket.status)}
+                              </Badge>
+                            </div>
                           ))
                         )}
-                      </TableBody>
-                    </Table>
+                      </div>
+
+                      <div className="hidden md:block">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Ticket #</TableHead>
+                              <TableHead>Issue Type</TableHead>
+                              <TableHead>Description</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Created</TableHead>
+                              <TableHead>Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {listTickets.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                  {allTickets.length === 0
+                                    ? 'No tickets found. Portal tickets will appear here; other tickets appear after data is loaded into other_tickets.'
+                                    : 'No tickets match the current filters.'}
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              paginatedTickets.map((ticket) => (
+                                <TableRow key={`${ticket.source}-${ticket.id}`}>
+                                  <TableCell className="font-medium">
+                                    {ticket.ticketNumber}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="text-xs">
+                                      {formatCategory(ticket.issueCategory).toUpperCase()}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="max-w-xs truncate" title={ticket.description}>
+                                    {ticket.description || '—'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant="outline"
+                                      className={cn('text-xs font-medium', getStatusBadgeClass(ticket.status))}
+                                    >
+                                      {getStatusLabel(ticket.status)}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    {ticket.createdAt
+                                      ? format(new Date(ticket.createdAt), 'dd MMM yyyy HH:mm:ss')
+                                      : 'N/A'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => void handleViewTicket(ticket)}
+                                      disabled={isOpeningView}
+                                      title="View"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                      <span className="sr-only">View</span>
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>

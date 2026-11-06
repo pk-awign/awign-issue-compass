@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DateRange } from 'react-day-picker';
 import { DateRangePresetId } from '@/utils/dateRangePresets';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface UserAssignment {
   userId: string;
@@ -53,6 +54,7 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
   const [localDatePreset, setLocalDatePreset] = useState<DateRangePresetId>('all');
   const navigate = useNavigate();
   const { user, isTicketAdmin } = useAuth();
+  const isMobile = useIsMobile();
 
   const includeArchived = includeArchivedProp ?? localIncludeArchived;
   const dateRange = dateRangeProp ?? localDateRange;
@@ -492,10 +494,10 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
                           cx="50%"
                           cy="50%"
                           labelLine={false}
-                            label={({ name, percent, value }) => 
+                            label={isMobile ? false : ({ name, percent, value }) => 
                               `${name}: ${value} (${(percent * 100).toFixed(1)}%)`
                             }
-                            outerRadius={90}
+                            outerRadius={isMobile ? 72 : 90}
                           fill="#8884d8"
                           dataKey="value"
                         >
@@ -659,11 +661,11 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
 
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                <CardTitle>Assignment Distribution</CardTitle>
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-xl sm:text-2xl">Assignment Distribution</CardTitle>
+                  <div className="flex w-full items-center gap-2 sm:w-auto">
                     <Select value={roleFilter} onValueChange={(value: any) => setRoleFilter(value)}>
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-full sm:w-[140px]">
                         <SelectValue placeholder="Filter by role" />
                       </SelectTrigger>
                       <SelectContent>
@@ -674,7 +676,7 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
                       </SelectContent>
                     </Select>
                     <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-full sm:w-[140px]">
                         <SelectValue placeholder="Sort by" />
                       </SelectTrigger>
                       <SelectContent>
@@ -783,7 +785,11 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
                       {/* Chart View */}
                       <div className="h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 200, bottom: 5 }}>
+                          <BarChart
+                            data={chartData}
+                            layout="vertical"
+                            margin={{ top: 5, right: isMobile ? 8 : 30, left: isMobile ? 0 : 200, bottom: isMobile ? 0 : 5 }}
+                          >
                         <CartesianGrid strokeDasharray="3 3" />
                             <XAxis 
                               type="number" 
@@ -794,8 +800,11 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
                             <YAxis 
                               dataKey="name" 
                               type="category" 
-                              width={180}
-                              tick={{ fontSize: 12 }}
+                              width={isMobile ? 84 : 180}
+                              tick={{ fontSize: isMobile ? 10 : 12 }}
+                              tickFormatter={(value: string) =>
+                                isMobile && value.length > 14 ? `${value.slice(0, 13)}…` : value
+                              }
                             />
                         <Tooltip content={<CustomTooltip />} />
                             <Bar 
@@ -896,8 +905,8 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
                           <YAxis 
                             dataKey="city" 
                             type="category" 
-                            width={120}
-                            tick={{ fontSize: 12 }}
+                            width={isMobile ? 72 : 120}
+                            tick={{ fontSize: isMobile ? 10 : 12 }}
                           />
                           <Tooltip 
                             formatter={(value: any) => [`${value} tickets`, 'Count']}
@@ -1004,8 +1013,8 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
                           <YAxis 
                             dataKey="resolver" 
                             type="category" 
-                            width={150}
-                            tick={{ fontSize: 12 }}
+                            width={isMobile ? 84 : 150}
+                            tick={{ fontSize: isMobile ? 10 : 12 }}
                           />
                         <Tooltip 
                             formatter={(value: any) => [`${value} tickets`, 'Assigned']}
@@ -1063,8 +1072,8 @@ export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
                           <YAxis 
                             dataKey="approver" 
                             type="category" 
-                            width={150}
-                            tick={{ fontSize: 12 }}
+                            width={isMobile ? 84 : 150}
+                            tick={{ fontSize: isMobile ? 10 : 12 }}
                           />
                         <Tooltip 
                             formatter={(value: any) => [`${value} tickets`, 'Assigned']}
