@@ -13,6 +13,16 @@ export interface AdvancedTicketFilterParams {
 }
 
 const ID_BATCH = 1000;
+/** Above this many matching ids we refuse to build a giant `.in()` list for the list/count queries. */
+export const MAX_ADVANCED_FILTER_IDS = 500;
+export const TOO_MANY_ADVANCED_MATCHES_MESSAGE = 'Too many matches for advanced filters — narrow your search';
+
+export class TooManyAdvancedMatchesError extends Error {
+  constructor() {
+    super(TOO_MANY_ADVANCED_MATCHES_MESSAGE);
+    this.name = 'TooManyAdvancedMatchesError';
+  }
+}
 const COMMENT_ID_BATCH = 100;
 
 export function hasAdvancedTicketFilters(p: Pick<AdvancedTicketFilterParams, 'lastStatusFilter' | 'lastCommentMode' | 'lastCommentByInvigilator'>): boolean {
@@ -103,6 +113,8 @@ export async function resolveAdvancedTicketIds(params: AdvancedTicketFilterParam
     const lastStatusMap = await TicketService.getLastStatusForTickets(ids);
     ids = ids.filter(id => lastStatusMap.get(id) === params.lastStatusFilter);
   }
+
+  if (ids.length > MAX_ADVANCED_FILTER_IDS) throw new TooManyAdvancedMatchesError();
 
   return ids;
 }

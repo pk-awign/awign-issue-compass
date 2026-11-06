@@ -34,7 +34,7 @@ import {
   clampPage,
   emptyResolverCounts
 } from '@/services/roleTicketQuery';
-import { resolveAdvancedTicketIds } from '@/services/roleTicketAdvancedFilters';
+import { resolveAdvancedTicketIds, TooManyAdvancedMatchesError, TOO_MANY_ADVANCED_MATCHES_MESSAGE } from '@/services/roleTicketAdvancedFilters';
 
 const PAGE_LIMIT = 50;
 const SEARCH_DEBOUNCE_MS = 400;
@@ -96,6 +96,8 @@ export const TicketResolverPage: React.FC = () => {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  // Resolved advanced-filter ids, reused across page/tab changes that share the same inputs.
+  const advancedIdsCacheRef = useRef<{ key: string; ids: string[] | null } | null>(null);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -125,8 +127,9 @@ export const TicketResolverPage: React.FC = () => {
     return () => clearTimeout(handle);
   }, [searchTerm]);
 
-  const loadList = useCallback(async () => {
+  const loadList = useCallback(async (options?: { invalidateAdvancedCache?: boolean }) => {
     if (!userId) return;
+    if (options?.invalidateAdvancedCache) advancedIdsCacheRef.current = null;
     const requestId = ++requestIdRef.current;
     setListLoading(true);
     setListError(null);
@@ -134,14 +137,25 @@ export const TicketResolverPage: React.FC = () => {
     try {
       // Advanced filters (last status / last comment) are resolved to ticket ids on the
       // caller's assignee scope first; the list/count queries then intersect with them.
-      const constrainToTicketIds = await resolveAdvancedTicketIds({
-        role: queryRole,
-        userId,
-        lastStatusFilter,
-        lastCommentMode,
-        lastCommentAuthor,
-        lastCommentByInvigilator,
-      });
+      // Cached by advanced-filter inputs + user/role so Prev/Next and tab switches skip the full scan.
+      const advancedKey = JSON.stringify([
+        userId, queryRole, lastStatusFilter, lastCommentMode, lastCommentAuthor, lastCommentByInvigilator,
+      ]);
+      let constrainToTicketIds: string[] | null;
+      if (advancedIdsCacheRef.current?.key === advancedKey) {
+        constrainToTicketIds = advancedIdsCacheRef.current.ids;
+      } else {
+        constrainToTicketIds = await resolveAdvancedTicketIds({
+          role: queryRole,
+          userId,
+          lastStatusFilter,
+          lastCommentMode,
+          lastCommentAuthor,
+          lastCommentByInvigilator,
+        });
+        if (requestId !== requestIdRef.current) return;
+        advancedIdsCacheRef.current = { key: advancedKey, ids: constrainToTicketIds };
+      }
 
       const filters: RoleTicketListFilters = {
         searchQuery: debouncedSearch || undefined,
@@ -188,10 +202,15 @@ export const TicketResolverPage: React.FC = () => {
       setListLoading(false);
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
-      console.error('Failed to load resolver tickets:', error);
-      setListError('Failed to load tickets. Please try again.');
+      if (error instanceof TooManyAdvancedMatchesError) {
+        setListError(TOO_MANY_ADVANCED_MATCHES_MESSAGE);
+      } else {
+        console.error('Failed to load resolver tickets:', error);
+        setListError('Failed to load tickets. Please try again.');
+      }
       setTickets([]);
       setTotal(0);
+      setStatusCounts(emptyResolverCounts());
       setListLoading(false);
     }
   }, [
@@ -225,7 +244,7 @@ export const TicketResolverPage: React.FC = () => {
       const ok = await TicketService.updateTicketStatus(ticketId, 'resolved', user.id, undefined, user.role);
       if (ok) {
         toast.success('Ticket closed');
-        loadList();
+        loadList({ invalidateAdvancedCache: true });
       } else {
         toast.error('Failed to close ticket');
       }
@@ -281,7 +300,7 @@ export const TicketResolverPage: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedTicket(null);
-    loadList(); // Reload current page + counts after a possible update
+    loadList({ invalidateAdvancedCache: true }); // Reload current page + counts after a possible update
   };
 
   const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, lastStatusFilter]
@@ -490,7 +509,7 @@ export const TicketResolverPage: React.FC = () => {
         <Card>
           <CardContent className="text-center py-8">
             <p className="text-lg font-medium text-red-600">{listError}</p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={() => loadList()}>
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => loadList({ invalidateAdvancedCache: true })}>
               Retry
             </Button>
           </CardContent>
