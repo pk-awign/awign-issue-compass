@@ -6,15 +6,38 @@ import { Issue } from '@/types/issue';
 import { getStatusLabel } from '@/utils/status';
 
 interface TicketStatsCardsProps {
-  tickets: Issue[];
+  tickets?: Issue[];
   userRole: 'resolver' | 'approver';
+  summary?: {
+    total: number;
+    open: number;
+    pendingOrInProgress: number;
+    resolved: number;
+  };
 }
 
 export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
-  tickets,
-  userRole
+  tickets = [],
+  userRole,
+  summary
 }) => {
   const stats = React.useMemo(() => {
+    if (summary) {
+      const pendingOrInProgress = summary.pendingOrInProgress;
+      return {
+        total: summary.total,
+        open: summary.open,
+        pending: userRole === 'approver' ? pendingOrInProgress : 0,
+        inProgress: userRole === 'resolver' ? pendingOrInProgress : 0,
+        resolved: summary.resolved,
+        sev1: 0,
+        sev2: 0,
+        sev3: 0,
+        last24h: 0,
+        avgResolutionTime: 0
+      };
+    }
+
     const total = tickets.length;
     const open = tickets.filter(t => t.status === 'open').length;
     const resolved = tickets.filter(t => t.status === 'resolved').length;
@@ -51,7 +74,7 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
       last24h,
       avgResolutionTime: Math.round(avgResolutionTime * 10) / 10
     };
-  }, [tickets, userRole]);
+  }, [tickets, userRole, summary]);
 
   const statCards = [
     {
@@ -122,17 +145,21 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
             <CardTitle className="text-sm font-medium">Severity Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="flex gap-2">
-              <Badge className="bg-red-100 text-red-800">
-                SEV1: {stats.sev1}
-              </Badge>
-              <Badge className="bg-orange-100 text-orange-800">
-                SEV2: {stats.sev2}
-              </Badge>
-              <Badge className="bg-green-100 text-green-800">
-                SEV3: {stats.sev3}
-              </Badge>
-            </div>
+            {summary ? (
+              <p className="text-2xl font-bold">N/A</p>
+            ) : (
+              <div className="flex gap-2">
+                <Badge className="bg-red-100 text-red-800">
+                  SEV1: {stats.sev1}
+                </Badge>
+                <Badge className="bg-orange-100 text-orange-800">
+                  SEV2: {stats.sev2}
+                </Badge>
+                <Badge className="bg-green-100 text-green-800">
+                  SEV3: {stats.sev3}
+                </Badge>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -145,7 +172,7 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
           </CardHeader>
           <CardContent className="pt-0">
             <p className="text-2xl font-bold">
-              {stats.avgResolutionTime > 0 ? `${stats.avgResolutionTime}h` : 'N/A'}
+              {!summary && stats.avgResolutionTime > 0 ? `${stats.avgResolutionTime}h` : 'N/A'}
             </p>
           </CardContent>
         </Card>
@@ -155,7 +182,7 @@ export const TicketStatsCards: React.FC<TicketStatsCardsProps> = ({
             <CardTitle className="text-sm font-medium">Last 24 Hours</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <p className="text-2xl font-bold text-blue-600">{stats.last24h}</p>
+            <p className="text-2xl font-bold text-blue-600">{summary ? 'N/A' : stats.last24h}</p>
             <p className="text-xs text-muted-foreground">New tickets</p>
           </CardContent>
         </Card>
