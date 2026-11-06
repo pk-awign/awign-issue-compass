@@ -23,7 +23,7 @@ if (!SMS_CONFIG.ACCESS_TOKEN || !SMS_CONFIG.CLIENT || !SMS_CONFIG.UID ||
   console.error('❌ Missing required SMS environment variables');
 }
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   // Handle CORS preflight request
   if (event.httpMethod === 'OPTIONS') {
     return {
