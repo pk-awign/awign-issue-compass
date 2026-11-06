@@ -1,10 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { Issue, Comment } from '@/types/issue';
 import { TicketService } from '@/services/ticketService';
 import { supabase } from '@/integrations/supabase/client';
-import { NotificationService } from '@/services/notificationService';
-import { useAuth } from '@/contexts/AuthContext';
-
 interface IssueContextType {
   issues: Issue[];
   loading: boolean;
@@ -34,54 +31,15 @@ export const useIssues = () => {
 export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
 
-  // Real-time subscription for ticket updates
-  useEffect(() => {
-    const channel = supabase
-      .channel('tickets-changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'tickets' 
-        }, 
-        (payload) => {
-          console.log('Real-time ticket update:', payload);
-          // Refresh issues when changes occur
-          refreshIssues();
-        }
-      )
-      .subscribe();
-
-    // Subscribe to ticket_assignees changes for real-time assignment updates
-    const assignmentsChannel = supabase
-      .channel('ticket-assignees-changes')
-      .on('postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'ticket_assignees'
-        },
-        (payload) => {
-          console.log('Real-time assignment update:', payload);
-          refreshIssues();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-      supabase.removeChannel(assignmentsChannel);
-    };
-  }, []);
+  // Intentionally no mount auto-load and no realtime → refreshIssues().
+  // Full-corpus dumps were the main app-wide load bottleneck. Pages that need
+  // lists use page-local / role-scoped fetches; Track/TicketTracker use service helpers.
 
   const addIssue = async (issueData: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'>, userId?: string): Promise<string> => {
     setLoading(true);
     try {
-      const ticketNumber = await TicketService.createTicket(issueData, userId);
-      await refreshIssues();
-      return ticketNumber;
+      return await TicketService.createTicket(issueData, userId);
     } finally {
       setLoading(false);
     }
@@ -142,7 +100,6 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .eq('id', issueId);
 
       if (error) throw error;
-      await refreshIssues();
     } finally {
       setLoading(false);
     }
@@ -150,7 +107,6 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addComment = async (issueId: string, commentData: Omit<Comment, 'id' | 'timestamp'> & { attachments?: File[] }): Promise<void> => {
     await TicketService.addComment(issueId, {...commentData, attachments: commentData.attachments || []});
-    await refreshIssues();
   };
 
   const getIssuesByCity = async (city: string): Promise<Issue[]> => {
@@ -177,7 +133,6 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Note: This method needs userId which we don't have in this context
     // For now, we'll use a placeholder. Components should use TicketService directly
     await TicketService.updateTicketStatus(issueId, status, 'system', resolutionNotes, userRole);
-    await refreshIssues();
   };
 
   const getIssuesForApproval = (city: string): Issue[] => {
@@ -395,20 +350,12 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
 
       setIssues(sortedIssues);
-      
-      // Process notifications for new invigilator comments (only for assigned tickets)
-      NotificationService.processNewComments(sortedIssues, user?.id);
     } catch (error) {
       console.error('Error refreshing issues:', error);
     } finally {
       setLoading(false);
     }
   };
-
-  // Load initial data
-  useEffect(() => {
-    refreshIssues();
-  }, []);
 
   return (
     <IssueContext.Provider value={{ 

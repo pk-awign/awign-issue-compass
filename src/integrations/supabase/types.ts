@@ -996,6 +996,61 @@ export type Database = {
           },
         ]
       }
+      user_notifications: {
+        Row: {
+          id: string
+          user_id: string
+          ticket_id: string
+          comment_id: string
+          ticket_number: string
+          body: string
+          created_at: string
+          read_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          ticket_id: string
+          comment_id: string
+          ticket_number: string
+          body: string
+          created_at?: string
+          read_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          ticket_id?: string
+          comment_id?: string
+          ticket_number?: string
+          body?: string
+          created_at?: string
+          read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_notifications_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_notifications_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           centre_code: string | null

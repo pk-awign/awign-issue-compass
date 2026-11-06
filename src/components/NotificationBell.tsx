@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, X, MessageSquare } from 'lucide-react';
+import { Bell, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { NotificationService, NotificationItem } from '@/services/notificationService';
+import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 
 interface NotificationBellProps {
@@ -13,38 +13,38 @@ interface NotificationBellProps {
 }
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({ onTicketClick }) => {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    // Subscribe to notification updates
     const unsubscribe = NotificationService.subscribe(setNotifications);
-    
-    // Load initial notifications
     setNotifications(NotificationService.getNotifications());
-
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void NotificationService.startForUser(user.id);
+    return () => {
+      NotificationService.stop();
+    };
+  }, [user?.id]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const handleNotificationClick = (notification: NotificationItem) => {
-    // Mark as read
-    NotificationService.markAsRead(notification.id);
-    
-    // Open ticket details
+    void NotificationService.markAsRead(notification.id);
     onTicketClick(notification.ticketId);
-    
-    // Close popover
     setIsOpen(false);
   };
 
   const handleMarkAllAsRead = () => {
-    NotificationService.markAllAsRead();
+    void NotificationService.markAllAsRead();
   };
 
   const handleClearAll = () => {
-    NotificationService.clearNotifications();
+    void NotificationService.clearNotifications();
   };
 
   return (

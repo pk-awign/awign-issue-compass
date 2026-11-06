@@ -442,6 +442,63 @@ export class AdminService {
     }
   }
 
+  /**
+   * Slim rows for Admin status cards / filter option lists — avoids pulling
+   * descriptions and other heavy columns for the full corpus.
+   */
+  static async getTicketListMetaUnpaginated({
+    showDeleted = false,
+    archiveStatus,
+  }: {
+    showDeleted?: boolean;
+    archiveStatus?: boolean;
+  } = {}): Promise<
+    Array<
+      Pick<Issue, 'id' | 'status' | 'severity' | 'city' | 'issueCategory' | 'resourceId'>
+    >
+  > {
+    const rows: Array<
+      Pick<Issue, 'id' | 'status' | 'severity' | 'city' | 'issueCategory' | 'resourceId'>
+    > = [];
+    let page = 1;
+    const BATCH_SIZE = 1000;
+
+    while (true) {
+      let query = supabase
+        .from('tickets')
+        .select('id, status, severity, city, issue_category, resource_id')
+        .eq('deleted', showDeleted)
+        .order('submitted_at', { ascending: false })
+        .range((page - 1) * BATCH_SIZE, page * BATCH_SIZE - 1);
+
+      if (typeof archiveStatus === 'boolean') {
+        query = query.eq('archive_status', archiveStatusValue(archiveStatus));
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching ticket list meta:', error);
+        break;
+      }
+      if (!data || data.length === 0) break;
+
+      for (const t of data as any[]) {
+        rows.push({
+          id: t.id,
+          status: t.status,
+          severity: t.severity,
+          city: t.city,
+          issueCategory: t.issue_category,
+          resourceId: t.resource_id,
+        });
+      }
+      if (data.length < BATCH_SIZE) break;
+      page += 1;
+    }
+
+    return rows;
+  }
+
   static async getAllTicketsUnpaginated({
     showDeleted = false,
     startDate,
@@ -1719,19 +1776,91 @@ export class AdminService {
     }
   }
 
+  /** Narrow ticket rows for overview/analytics aggregates (no descriptions/comments). */
+  private static async fetchAnalyticsTicketRows(options?: {
+    includeArchived?: boolean;
+    dateRange?: { from: Date; to?: Date };
+  }): Promise<
+    Array<{
+      id: string;
+      status: Issue['status'];
+      severity: Issue['severity'];
+      city: string;
+      centreCode: string;
+      issueCategory: string;
+      submittedAt: string | Date;
+      resolvedAt?: string | Date | null;
+      isSlaBreached?: boolean;
+    }>
+  > {
+    const rows: Array<{
+      id: string;
+      status: Issue['status'];
+      severity: Issue['severity'];
+      city: string;
+      centreCode: string;
+      issueCategory: string;
+      submittedAt: string | Date;
+      resolvedAt?: string | Date | null;
+      isSlaBreached?: boolean;
+    }> = [];
+    const BATCH_SIZE = 1000;
+    let page = 1;
+
+    while (true) {
+      let query = supabase
+        .from('tickets')
+        .select(
+          'id, status, severity, city, centre_code, issue_category, submitted_at, resolved_at, is_sla_breached, archive_status'
+        )
+        .eq('deleted', false)
+        .order('submitted_at', { ascending: false })
+        .range((page - 1) * BATCH_SIZE, page * BATCH_SIZE - 1);
+
+      if (!options?.includeArchived) {
+        query = query.eq('archive_status', archiveStatusValue(false));
+      }
+      if (options?.dateRange?.from) {
+        const fromTime = new Date(options.dateRange.from);
+        fromTime.setHours(0, 0, 0, 0);
+        const toSource = options.dateRange.to ?? options.dateRange.from;
+        const toTime = new Date(toSource);
+        toTime.setHours(23, 59, 59, 999);
+        query = query
+          .gte('submitted_at', fromTime.toISOString())
+          .lte('submitted_at', toTime.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      for (const t of data as any[]) {
+        rows.push({
+          id: t.id,
+          status: t.status,
+          severity: t.severity,
+          city: t.city,
+          centreCode: t.centre_code,
+          issueCategory: t.issue_category,
+          submittedAt: t.submitted_at,
+          resolvedAt: t.resolved_at,
+          isSlaBreached: t.is_sla_breached,
+        });
+      }
+      if (data.length < BATCH_SIZE) break;
+      page += 1;
+    }
+
+    return rows;
+  }
+
   static async getTicketAnalytics(options?: {
     includeArchived?: boolean;
     dateRange?: { from: Date; to?: Date };
   }): Promise<TicketAnalytics> {
     try {
-      // Fetch all non-deleted tickets in batches to avoid 1000-row caps
-      // Default: exclude archived. includeArchived=true means no archive filter.
-      const tickets = await this.getAllTicketsUnpaginated({
-        showDeleted: false,
-        archiveStatus: options?.includeArchived ? undefined : false,
-        startDate: options?.dateRange?.from,
-        endDate: options?.dateRange?.to ?? options?.dateRange?.from,
-      });
+      const tickets = await this.fetchAnalyticsTicketRows(options);
       if (!tickets || tickets.length === 0) return this.getEmptyAnalytics();
 
       // Get all users to map IDs to names
@@ -1743,15 +1872,15 @@ export class AdminService {
         console.error('Error fetching users for analytics:', usersError);
       }
 
-      // Get all ticket assignments from the new ticket_assignees table (with pagination)
-      let allAssignments = [];
+      // Assignments: only fields needed for resolver/approver breakdowns
+      let allAssignments: Array<{ ticket_id: string; user_id: string; role: string }> = [];
       let assignmentPage = 1;
       const BATCH_SIZE = 1000;
       
       while (true) {
       const { data: assignments, error: assignmentsError } = await supabase
         .from('ticket_assignees')
-          .select('*')
+          .select('ticket_id, user_id, role')
           .range((assignmentPage - 1) * BATCH_SIZE, assignmentPage * BATCH_SIZE - 1);
 
       if (assignmentsError) {

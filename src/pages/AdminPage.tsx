@@ -357,13 +357,12 @@ export const AdminPage: React.FC = () => {
           });
 
           if (reset) {
-            const allTickets = await AdminService.getAllTicketsUnpaginated({
+            // Slim meta for status cards / filter dropdowns — not full Issue rows.
+            const meta = await AdminService.getTicketListMetaUnpaginated({
               showDeleted,
               archiveStatus: viewAllTickets ? undefined : false,
-              sortBy,
-              sortDir,
             });
-            setAllFilteredTickets(allTickets);
+            setAllFilteredTickets(meta as Issue[]);
           }
         }
       }
