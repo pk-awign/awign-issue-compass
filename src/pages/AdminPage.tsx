@@ -81,7 +81,7 @@ export const AdminPage: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const [viewAllTickets, setViewAllTickets] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [downloadType, setDownloadType] = useState<'all' | 'detailed' | null>(null);
@@ -251,7 +251,7 @@ export const AdminPage: React.FC = () => {
             lastStatusFilter,
             lastCommentByInvigilator,
             showDeleted,
-            archiveStatus: showArchived
+            archiveStatus: viewAllTickets ? undefined : false
           });
           
           // Store all filtered tickets for dropdown calculations
@@ -268,12 +268,12 @@ export const AdminPage: React.FC = () => {
             hasMore: endIndex < allFilteredTickets.length
           };
         } else {
-          result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit, { archiveStatus: showArchived });
+          result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit, { archiveStatus: viewAllTickets ? undefined : false });
 
           if (reset) {
             const allTickets = await AdminService.getAllTicketsUnpaginated({
               showDeleted,
-              archiveStatus: showArchived
+              archiveStatus: viewAllTickets ? undefined : false
             });
             setAllFilteredTickets(allTickets);
           }
@@ -307,7 +307,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, showArchived, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, isTicketAdmin, user?.id]);
+  }, [showDeleted, viewAllTickets, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, isTicketAdmin, user?.id]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   // Only reload if tickets tab is active and loaded
@@ -320,7 +320,7 @@ export const AdminPage: React.FC = () => {
       loadTickets(true);
     }
     // eslint-disable-next-line
-  }, [showDeleted, showArchived, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, activeTab, loadedTabs]);
+  }, [showDeleted, viewAllTickets, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, activeTab, loadedTabs]);
 
   // Fetch resolvers/approvers for filter dropdowns (only when tickets tab is active)
   useEffect(() => {
@@ -1357,11 +1357,11 @@ export const AdminPage: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="show-archived"
-                          checked={showArchived}
-                          onCheckedChange={(checked) => setShowArchived(checked)}
+                          checked={viewAllTickets}
+                          onCheckedChange={(checked) => setViewAllTickets(checked)}
                         />
                         <label htmlFor="show-archived" className="text-sm font-medium">
-                          {showArchived ? 'View Archived Tickets' : 'Hide Archived Tickets'}
+                          {viewAllTickets ? 'View All Tickets' : 'Hide Archived Tickets'}
                         </label>
                       </div>
                       )}
@@ -1480,7 +1480,7 @@ export const AdminPage: React.FC = () => {
 
                     {/* Mobile Ticket Cards */}
                     {filteredTickets.map((ticket) => (
-                      <Card key={ticket.id} className="p-4">
+                      <Card key={ticket.id} className={`p-4 ${viewAllTickets && ticket.archiveStatus === 'Yes' ? 'bg-red-50' : ''}`}>
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-semibold">{ticket.ticketNumber}</span>
@@ -1573,7 +1573,7 @@ export const AdminPage: React.FC = () => {
                               resourceIdFilter,
                               dateRange: filterDateRange,
                               onlyUnassignedResolver,
-                              archiveStatus: showArchived
+                              archiveStatus: viewAllTickets ? undefined : false
                             });
                             setSelectedTickets(ids);
                           }}
@@ -1618,7 +1618,7 @@ export const AdminPage: React.FC = () => {
                             </TableRow>
                           ) : (
                             filteredTickets.map((ticket) => (
-                              <TableRow key={ticket.id}>
+                              <TableRow key={ticket.id} className={viewAllTickets && ticket.archiveStatus === 'Yes' ? 'bg-red-50 hover:bg-red-100' : undefined}>
                                 <TableCell>
                                   <Checkbox
                                     checked={selectedTickets.includes(ticket.id)}

@@ -1307,6 +1307,7 @@ export class TicketService {
         name: data.status_changed_by_name,
         role: data.status_changed_by_role || 'system'
       } : undefined,
+      archiveStatus: data.archive_status === true || data.archive_status === 'Yes' ? 'Yes' : 'No',
     };
   }
 

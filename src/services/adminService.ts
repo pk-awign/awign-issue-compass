@@ -3,6 +3,10 @@ import { User } from '@/types/issue';
 import { Issue } from '@/types/issue';
 import { TicketService } from './ticketService';
 
+function archiveStatusValue(showArchived: boolean): 'Yes' | 'No' {
+  return showArchived ? 'Yes' : 'No';
+}
+
 export interface TicketAnalytics {
   totalTickets: number;
   openTickets: number;
@@ -368,7 +372,7 @@ export class AdminService {
         .select('id', { count: 'exact', head: true })
         .eq('deleted', includeDeleted);
       if (typeof archiveStatus === 'boolean') {
-        countQuery = countQuery.eq('archive_status', archiveStatus);
+        countQuery = countQuery.eq('archive_status', archiveStatusValue(archiveStatus));
       }
       const { count: totalCount, error: countError } = await countQuery;
       if (countError) throw countError;
@@ -379,7 +383,7 @@ export class AdminService {
         .select('ticket_number')
         .eq('deleted', includeDeleted);
       if (typeof archiveStatus === 'boolean') {
-        listQuery = listQuery.eq('archive_status', archiveStatus);
+        listQuery = listQuery.eq('archive_status', archiveStatusValue(archiveStatus));
       }
       const { data: tickets, error } = await listQuery
         .order('created_at', { ascending: false })
@@ -421,7 +425,7 @@ export class AdminService {
         query = query.eq('deleted', false);
       }
       if (typeof archiveStatus === 'boolean') {
-        query = query.eq('archive_status', archiveStatus);
+        query = query.eq('archive_status', archiveStatusValue(archiveStatus));
       }
       
       // Debug logging for ticket fetching
@@ -554,7 +558,7 @@ export class AdminService {
         query = query.eq('deleted', false);
       }
       if (typeof filters.archiveStatus === 'boolean') {
-        query = query.eq('archive_status', filters.archiveStatus);
+        query = query.eq('archive_status', archiveStatusValue(filters.archiveStatus));
       }
       
       // Note: lastStatusFilter, lastCommentByInvigilator, resolverFilter, approverFilter, and onlyUnassignedResolver
@@ -1029,7 +1033,7 @@ export class AdminService {
           .select('id')
           .eq('deleted', includeDeleted);
         if (typeof filters.archiveStatus === 'boolean') {
-          q = q.eq('archive_status', filters.archiveStatus);
+          q = q.eq('archive_status', archiveStatusValue(filters.archiveStatus));
         }
 
         if (filters.searchQuery) {

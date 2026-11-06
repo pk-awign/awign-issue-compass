@@ -43,6 +43,7 @@ export interface Issue {
   statusChangedByDetails?: { name: string; role: string };
   timeline?: TimelineEvent[];
   deleted?: boolean;
+  archiveStatus?: 'Yes' | 'No';
   // New field for user dependency tracking
   userDependencyStartedAt?: Date;
   // Assignees field for compatibility
