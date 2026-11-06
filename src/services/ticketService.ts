@@ -1627,6 +1627,7 @@ export class TicketService {
       }
       const { data: rows, error } = await listQuery
         .order('submitted_at', { ascending: false })
+        .order('id', { ascending: true })
         .range(from, to);
       if (error) throw error;
 
