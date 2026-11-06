@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PublicIssueForm } from '@/components/PublicIssueForm';
+import { BrandPoweredByFooter } from '@/components/BrandPoweredByFooter';
 import { useIssues } from '@/contexts/IssueContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -36,9 +37,9 @@ export const WorkforcePage: React.FC = () => {
             <div className="font-semibold text-red-600 flex items-center mb-2">⚠️ Important:</div>
             <p className="mb-2">This portal is only for issues already reported to your Team Leader or Support but not solved yet.<br/>If it's your first time reporting, please use the usual channels.</p>
             <p className="mb-2">Use this portal to:</p>
-            <ul className="list-disc ml-6 mb-2">
-              <li>✅ Raise an issue that hasn't been resolved</li>
-              <li>✅ Get faster attention from the leadership team</li>
+            <ul className="ml-1 space-y-2 mb-2">
+              <li className="flex gap-2"><span aria-hidden="true">✅</span><span>Raise an issue that hasn't been resolved</span></li>
+              <li className="flex gap-2"><span aria-hidden="true">✅</span><span>Get faster attention from the leadership team</span></li>
             </ul>
             <div className="mt-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
               <span className="font-semibold text-yellow-800 block mb-1">Saw something wrong at the exam centre?</span>
@@ -51,6 +52,7 @@ export const WorkforcePage: React.FC = () => {
           >
             I Understand, Report Now
           </button>
+          <BrandPoweredByFooter className="mt-8 border-gray-100" />
         </div>
       </div>
     );

@@ -1,15 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from '@/components/navigation/Header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
-import { useIssues } from '@/contexts/IssueContext';
 import { TicketDetailsModal } from '@/components/TicketDetailsModal';
 import { TicketFilters } from '@/components/TicketFilters';
 import { TicketStatsCards } from '@/components/TicketStatsCards';
-import { NotificationBell } from '@/components/NotificationBell';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Issue } from '@/types/issue';
@@ -17,33 +15,93 @@ import { getStatusLabel } from '@/utils/status';
 import { exportTicketsAsCSV, generateExportFilename } from '@/utils/ticketExport';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
-import { 
-  Eye, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle, 
+import {
+  Eye,
+  CheckCircle,
   MessageSquare,
   MapPin,
   FileText,
   Calendar,
-  User
+  User,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { TicketService } from '@/services/ticketService';
+import {
+  RoleTicketListFilters,
+  ResolverStatusCountMap,
+  ResolverStatusTab,
+  clampPage,
+  emptyResolverCounts
+} from '@/services/roleTicketQuery';
+import { resolveAdvancedTicketIds, TooManyAdvancedMatchesError, TOO_MANY_ADVANCED_MATCHES_MESSAGE } from '@/services/roleTicketAdvancedFilters';
 
-type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
+const PAGE_LIMIT = 50;
+const SEARCH_DEBOUNCE_MS = 400;
+const SEVERITY_OPTIONS = ['sev1', 'sev2', 'sev3'];
+
+/**
+ * Status tab styling shared by every trigger.
+ *
+ * Phones and tablets use a grid (2 then 4 columns) so labels wrap inside their
+ * cell and every status stays visible. From xl up the triggers size to their
+ * content on a single line, where eight labels fit without scrolling.
+ */
+const filterTabTriggerClass =
+  "w-full shrink-0 rounded-lg py-3 text-center data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow xl:w-auto xl:flex-none xl:min-w-fit xl:whitespace-nowrap xl:px-2";
+
+const RESOLVER_TABS: { value: ResolverStatusTab; label: string; emptyTitle: string; emptyHint: string }[] = [
+  { value: 'all', label: 'All', emptyTitle: 'No tickets found', emptyHint: 'No tickets assigned to you' },
+  { value: 'in_progress', label: 'Pending on CX', emptyTitle: 'No in progress tickets', emptyHint: 'No tickets in progress' },
+  { value: 'user_dependency', label: 'User Dependency', emptyTitle: 'No user dependency tickets', emptyHint: 'No tickets in user dependency' },
+  { value: 'ops_input_required', label: 'Ops Dependency', emptyTitle: 'No ops dependency tickets', emptyHint: 'No tickets in ops dependency' },
+  { value: 'ops_user_dependency', label: 'Ops + User Dependency', emptyTitle: 'No ops + user dependency tickets', emptyHint: 'No tickets in ops + user dependency' },
+  { value: 'send_for_approval', label: 'Send for Approval', emptyTitle: 'No send for approval tickets', emptyHint: 'No tickets in send for approval' },
+  { value: 'approved', label: 'Approved', emptyTitle: 'No approved tickets', emptyHint: 'No tickets in approved status' },
+  { value: 'resolved', label: 'Closed', emptyTitle: 'No resolved tickets', emptyHint: 'No tickets in resolved status' },
+];
+
+const isResolverTab = (value: string): value is ResolverStatusTab =>
+  RESOLVER_TABS.some(tab => tab.value === value);
+
+/**
+ * Tickets hydrated by TicketService.getTicketByNumber carry comments oldest-first and no
+ * `isFromInvigilator` flag; this page's cards and modal expect newest-first with the flag.
+ */
+const normalizeTicketComments = (ticket: Issue): Issue => ({
+  ...ticket,
+  comments: [...(ticket.comments || [])]
+    .map(comment => ({
+      ...comment,
+      isFromInvigilator:
+        comment.isFromInvigilator ??
+        (comment.author === 'anonymous' || comment.author === 'Anonymous' || comment.authorRole === 'invigilator'),
+    }))
+    .sort((a, b) => (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0)),
+});
 
 export const TicketResolverPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const { issues, loading, refreshIssues } = useIssues();
   const navigate = useNavigate();
-  
+
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('all');
-  
+  const [activeTab, setActiveTab] = useState<ResolverStatusTab>('all');
+
+  // Server-side list state (this page owns it)
+  const [tickets, setTickets] = useState<Issue[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<ResolverStatusCountMap>(emptyResolverCounts());
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  // Resolved advanced-filter ids, reused across page/tab changes that share the same inputs.
+  const advancedIdsCacheRef = useRef<{ key: string; ids: string[] | null } | null>(null);
+
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -55,7 +113,135 @@ export const TicketResolverPage: React.FC = () => {
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
   const [lastCommentMode, setLastCommentMode] = useState<'any' | 'by' | 'not_by'>('any');
   const [lastCommentAuthor, setLastCommentAuthor] = useState<string>('');
-  const [lastStatusMap, setLastStatusMap] = useState<Map<string, string>>(new Map());
+
+  const userId = user?.id;
+  const userRole = user?.role;
+  const queryRole = userRole === 'super_admin' ? 'super_admin' : 'resolver';
+  const dateFromMs = dateRange?.from?.getTime();
+  const dateToMs = dateRange?.to?.getTime();
+  const resourceIdKey = resourceIdFilter.join('|');
+
+  // Debounce free-text search so each keystroke does not hit the database.
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(searchTerm), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [searchTerm]);
+
+  const loadList = useCallback(async (options?: { invalidateAdvancedCache?: boolean }) => {
+    if (!userId) return;
+    if (options?.invalidateAdvancedCache) advancedIdsCacheRef.current = null;
+    const requestId = ++requestIdRef.current;
+    setListLoading(true);
+    setListError(null);
+
+    try {
+      // Advanced filters (last status / last comment) are resolved to ticket ids on the
+      // caller's assignee scope first; the list/count queries then intersect with them.
+      // Cached by advanced-filter inputs + user/role so Prev/Next and tab switches skip the full scan.
+      const advancedKey = JSON.stringify([
+        userId, queryRole, lastStatusFilter, lastCommentMode, lastCommentAuthor, lastCommentByInvigilator,
+      ]);
+      let constrainToTicketIds: string[] | null;
+      if (advancedIdsCacheRef.current?.key === advancedKey) {
+        constrainToTicketIds = advancedIdsCacheRef.current.ids;
+      } else {
+        constrainToTicketIds = await resolveAdvancedTicketIds({
+          role: queryRole,
+          userId,
+          lastStatusFilter,
+          lastCommentMode,
+          lastCommentAuthor,
+          lastCommentByInvigilator,
+        });
+        if (requestId !== requestIdRef.current) return;
+        advancedIdsCacheRef.current = { key: advancedKey, ids: constrainToTicketIds };
+      }
+
+      const filters: RoleTicketListFilters = {
+        searchQuery: debouncedSearch || undefined,
+        severityFilter,
+        categoryFilter,
+        cityFilter,
+        resourceIdFilter,
+        dateRange,
+        constrainToTicketIds,
+      };
+
+      // The status dropdown is ANDed with the active tab: it can only narrow the tab, never widen it.
+      const statusPin = statusFilter !== 'all' ? statusFilter : null;
+      const pinnedTab: ResolverStatusTab | null = statusPin && isResolverTab(statusPin) ? statusPin : null;
+      // Statuses without a tab (e.g. OPEN) are applied as an exact status filter on the "All" tab.
+      const exactStatus = statusPin && !pinnedTab ? (statusPin as Issue['status']) : undefined;
+      const tabConflictsWithPin = statusPin !== null && activeTab !== 'all' && activeTab !== pinnedTab;
+      const effectiveTab: ResolverStatusTab = activeTab === 'all' && pinnedTab ? pinnedTab : activeTab;
+
+      const [pageResult, rawCounts] = await Promise.all([
+        tabConflictsWithPin
+          ? Promise.resolve({ tickets: [] as Issue[], total: 0 })
+          : TicketService.getRoleTicketPage({ role: queryRole, userId, statusTab: effectiveTab, exactStatus, filters, page, limit: PAGE_LIMIT }),
+        TicketService.getRoleTicketStatusCounts({ role: queryRole, userId, panel: 'resolver', filters }),
+      ]);
+      if (requestId !== requestIdRef.current) return; // a newer request superseded this one
+
+      let counts = rawCounts as ResolverStatusCountMap;
+      if (statusPin) {
+        const pinnedCount = pinnedTab ? counts[pinnedTab] : pageResult.total;
+        const masked = emptyResolverCounts();
+        if (pinnedTab) masked[pinnedTab] = pinnedCount;
+        masked.all = pinnedCount;
+        counts = masked;
+      }
+
+      setStatusCounts(counts);
+      setTotal(pageResult.total);
+      const clamped = clampPage(page, pageResult.total, PAGE_LIMIT);
+      if (clamped !== page) {
+        // Page ran past the end (e.g. last ticket on it was updated); the page effect reloads.
+        setPage(clamped);
+        return;
+      }
+      setTickets(pageResult.tickets.map(normalizeTicketComments));
+      setListLoading(false);
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      if (error instanceof TooManyAdvancedMatchesError) {
+        setListError(TOO_MANY_ADVANCED_MATCHES_MESSAGE);
+        setTickets([]);
+        setTotal(0);
+        setStatusCounts(emptyResolverCounts());
+      } else {
+        // Keep the previously loaded list/counts so a transient failure does not blank the panel.
+        console.error('Failed to load resolver tickets:', error);
+        const message = `Failed to load tickets: ${error instanceof Error && error.message ? error.message : 'unknown error'}. Showing the last loaded list.`;
+        setListError(message);
+        toast.error(message);
+      }
+      setListLoading(false);
+    }
+  }, [
+    userId, queryRole, activeTab, page, statusFilter, severityFilter, categoryFilter, cityFilter,
+    resourceIdFilter, dateRange, debouncedSearch, lastStatusFilter, lastCommentMode,
+    lastCommentAuthor, lastCommentByInvigilator,
+  ]);
+
+  // Any filter / tab change goes back to page 1 without firing a wasted fetch for the old page.
+  const resetKey = JSON.stringify([
+    userId, queryRole, activeTab, debouncedSearch, statusFilter, severityFilter, categoryFilter, cityFilter,
+    resourceIdKey, dateFromMs, dateToMs, lastStatusFilter, lastCommentMode, lastCommentAuthor, lastCommentByInvigilator,
+  ]);
+  const lastResetKeyRef = useRef(resetKey);
+
+  useEffect(() => {
+    if (lastResetKeyRef.current !== resetKey) {
+      lastResetKeyRef.current = resetKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
+    loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey, page]);
 
   const handleCloseTicket = async (ticketId: string) => {
     if (!user) return;
@@ -63,7 +249,7 @@ export const TicketResolverPage: React.FC = () => {
       const ok = await TicketService.updateTicketStatus(ticketId, 'resolved', user.id, undefined, user.role);
       if (ok) {
         toast.success('Ticket closed');
-        refreshIssues();
+        loadList({ invalidateAdvancedCache: true });
       } else {
         toast.error('Failed to close ticket');
       }
@@ -71,26 +257,6 @@ export const TicketResolverPage: React.FC = () => {
       toast.error('Failed to close ticket');
     }
   };
-
-  // Normalize assignees to array form for compatibility with both old (array) and new (object) shapes
-  const getAllAssignees = (issue: Issue): { user_id: string; role: string }[] => {
-    const raw: any = (issue as any).assignees;
-    if (!raw) return [];
-    if (Array.isArray(raw)) {
-      return raw.filter(Boolean);
-    }
-    if (typeof raw === 'object') {
-      return Object.values(raw)
-        .filter(Boolean)
-        .map((a: any) => ({ user_id: a?.id ?? a?.user_id, role: a?.role }))
-        .filter((a: any) => a?.user_id && a?.role);
-    }
-    return [];
-  };
-
-  useEffect(() => {
-    refreshIssues();
-  }, []);
 
   const handleLogout = () => {
     logout();
@@ -104,7 +270,7 @@ export const TicketResolverPage: React.FC = () => {
   };
 
   const handleExportTickets = async () => {
-    if (!filteredTickets.length) {
+    if (!tickets.length) {
       toast.info('No tickets to export');
       return;
     }
@@ -118,8 +284,9 @@ export const TicketResolverPage: React.FC = () => {
         cityFilter,
         searchTerm
       });
-      exportTicketsAsCSV(filteredTickets, filename);
-      toast.success(`Exported ${filteredTickets.length} tickets successfully!`);
+      // Only the currently loaded page is exported (the list is paginated server-side).
+      exportTicketsAsCSV(tickets, filename);
+      toast.success(`Exported ${tickets.length} tickets from this page successfully!`);
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to export tickets. Please try again.');
@@ -128,219 +295,35 @@ export const TicketResolverPage: React.FC = () => {
     }
   };
 
-  const handleTicketClick = (ticketId: string) => {
-    const ticket = assignedTickets.find(t => t.id === ticketId);
-    if (ticket) {
-      handleViewTicket(ticket);
+  const handleTicketClick = async (ticketId: string) => {
+    const onPage = tickets.find(t => t.id === ticketId);
+    if (onPage) {
+      handleViewTicket(onPage);
+      return;
+    }
+    // The ticket is not on the current page (paginated list): fetch it directly.
+    try {
+      const fetched = await TicketService.getTicketById(ticketId);
+      if (!fetched) {
+        toast.error('Ticket not found');
+        return;
+      }
+      handleViewTicket(normalizeTicketComments(fetched));
+    } catch (error) {
+      console.error('Failed to open ticket from notification:', error);
+      toast.error('Failed to open ticket. Please try again.');
     }
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedTicket(null);
-    refreshIssues(); // Refresh to get latest data
+    loadList({ invalidateAdvancedCache: true }); // Reload current page + counts after a possible update
   };
 
-  // Get tickets assigned to current resolver
-  const assignedTickets = useMemo(() => {
-    if (!user) return [];
-    
-    const filtered = issues.filter(issue => {
-      // Super admin can see all tickets
-      if (user.role === 'super_admin') return true;
-      // Only show tickets assigned to this resolver using new assignment system
-      const hasAssigneeMatch = getAllAssignees(issue).some(a => a.user_id === user.id && a.role === 'resolver');
-      
-      // Debug logging for resolver visibility
-      if (user.role === 'resolver' && hasAssigneeMatch) {
-        console.log('🔍 [RESOLVER DEBUG] Ticket visible:', {
-          ticketNumber: issue.ticketNumber,
-          status: issue.status,
-          assignedResolver: issue.assignedResolver,
-          assignees: (issue as any).assignees,
-          hasAssigneeMatch,
-          userId: user.id
-        });
-      }
-      
-      return hasAssigneeMatch;
-    });
-    
-    // Debug logging for resolver
-    if (user?.role === 'resolver') {
-      console.log('🔍 [RESOLVER DEBUG] Total issues:', issues.length);
-      console.log('🔍 [RESOLVER DEBUG] Filtered resolver tickets:', filtered.length);
-      console.log('🔍 [RESOLVER DEBUG] User ID:', user.id);
-      console.log('🔍 [RESOLVER DEBUG] User name:', user.name);
-      console.log('🔍 [RESOLVER DEBUG] Sample ticket assignments:', issues.slice(0, 5).map(t => ({
-        ticketNumber: t.ticketNumber,
-        assignedResolver: t.assignedResolver,
-        assignees: (t as IssueWithAssignees).assignees
-      })));
-      
-      // Check specifically for the problematic ticket
-      const problematicTicket = issues.find(t => t.id === 'd61dcf47-2abe-41bd-ae0f-ca8bf166670e');
-      if (problematicTicket) {
-        console.log('🔍 [RESOLVER DEBUG] Problematic ticket found:', {
-          ticketId: problematicTicket.id,
-          ticketNumber: problematicTicket.ticketNumber,
-          assignedResolver: problematicTicket.assignedResolver,
-          assignees: (problematicTicket as any).assignees,
-          userId: user.id,
-          hasAssigneeMatch: getAllAssignees(problematicTicket).some(a => a.user_id === user.id && a.role === 'resolver'),
-          assigneesLength: getAllAssignees(problematicTicket).length
-        });
-      } else {
-        console.log('🔍 [RESOLVER DEBUG] Problematic ticket NOT found in issues list');
-      }
-      
-      // Check all tickets with assignments
-      const ticketsWithAssignments = issues.filter(t => getAllAssignees(t).length > 0);
-      console.log('🔍 [RESOLVER DEBUG] Tickets with assignments:', ticketsWithAssignments.length);
-      console.log('🔍 [RESOLVER DEBUG] Sample tickets with assignments:', ticketsWithAssignments.slice(0, 3).map(t => ({
-        ticketNumber: t.ticketNumber,
-        assignees: (t as any).assignees
-      })));
-    }
-    
-    return filtered;
-  }, [issues, user]);
-
-  // Fetch last status data when tickets change
-  useEffect(() => {
-    const fetchLastStatus = async () => {
-      if (assignedTickets.length > 0) {
-        const ticketIds = assignedTickets.map(t => t.id);
-        const lastStatusData = await TicketService.getLastStatusForTickets(ticketIds);
-        setLastStatusMap(lastStatusData);
-      }
-    };
-    
-    fetchLastStatus();
-  }, [assignedTickets]);
-
-  // Apply filters
-  const filteredTickets = useMemo(() => {
-    let filtered = assignedTickets;
-
-    // Search filter
-    if (searchTerm) {
-      const searchTerms = searchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
-      
-      filtered = filtered.filter(ticket => {
-        // Check if any search term matches
-        return searchTerms.some(term => {
-          const lowerTerm = term.toLowerCase();
-          const lowerTicketNumber = ticket.ticketNumber.toLowerCase();
-          const lowerDescription = ticket.issueDescription.toLowerCase();
-          const lowerCategory = ticket.issueCategory.toLowerCase();
-          
-          // If the search term looks like a ticket number (contains AWG), prioritize exact ticket number matching
-          if (lowerTerm.includes('awg') || lowerTerm.includes('awg-')) {
-            return lowerTicketNumber.includes(lowerTerm);
-          }
-          
-          // Otherwise, search across all fields
-          return lowerTicketNumber.includes(lowerTerm) ||
-                 lowerDescription.includes(lowerTerm) ||
-                 lowerCategory.includes(lowerTerm);
-        });
-      });
-    }
-
-    // Status filter (normalize UI value to backend value)
-    if (statusFilter !== 'all') {
-      const statusMap: Record<string, string> = {
-        approval_pending: 'send_for_approval'
-      };
-      const backendStatus = statusMap[statusFilter] || statusFilter;
-      filtered = filtered.filter(ticket => ticket.status === backendStatus);
-    }
-
-    // Severity filter
-    if (severityFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.severity === severityFilter);
-    }
-
-    // Category filter
-    if (categoryFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.issueCategory === categoryFilter);
-    }
-
-    // City filter
-    if (cityFilter !== 'all') {
-      filtered = filtered.filter(ticket => ticket.city === cityFilter);
-    }
-
-    // Resource ID filter
-    if (resourceIdFilter.length > 0) {
-      filtered = filtered.filter(ticket => resourceIdFilter.includes(ticket.resourceId));
-    }
-
-    // Date range filter
-    if (dateRange?.from) {
-      filtered = filtered.filter(ticket => {
-        const ticketDate = new Date(ticket.submittedAt);
-        const fromDate = dateRange.from;
-        const toDate = dateRange.to || dateRange.from;
-        
-        return ticketDate >= fromDate && ticketDate <= toDate;
-      });
-    }
-
-    // Last Status filter - filter by the last status change from ticket history
-    if (lastStatusFilter !== 'all') {
-      filtered = filtered.filter(ticket => {
-        const lastStatus = lastStatusMap.get(ticket.id);
-        return lastStatus === lastStatusFilter;
-      });
-    }
-
-    // Last Comment filter (advanced)
-    if (lastCommentMode !== 'any') {
-      filtered = filtered.filter(ticket => {
-        const last = ticket.comments && ticket.comments.length > 0 ? ticket.comments[0] : undefined;
-        if (!last) return lastCommentMode === 'not_by';
-        if (lastCommentAuthor === 'invigilator') {
-          return lastCommentMode === 'by' ? !!last.isFromInvigilator : !last.isFromInvigilator;
-        }
-        return lastCommentMode === 'by' ? last.author === lastCommentAuthor : last.author !== lastCommentAuthor;
-      });
-    } else if (lastCommentByInvigilator) {
-      // fallback to legacy toggle
-      filtered = filtered.filter(ticket => ticket.comments && ticket.comments.length > 0 && ticket.comments[0].isFromInvigilator);
-    }
-
-    // Sort: primary by last comment timestamp, secondary by last updated (statusChangedAt), fallback submittedAt
-    const getLastCommentAt = (t: Issue) => (t.comments && t.comments.length > 0 ? t.comments[0].timestamp : undefined);
-    const getLastUpdatedAt = (t: any) => t.statusChangedAt || t.resolvedAt || t.submittedAt;
-    return [...filtered].sort((a, b) => {
-      const aC = getLastCommentAt(a)?.getTime() || 0;
-      const bC = getLastCommentAt(b)?.getTime() || 0;
-      if (aC !== bC) return bC - aC;
-      const aU = getLastUpdatedAt(a)?.getTime() || 0;
-      const bU = getLastUpdatedAt(b)?.getTime() || 0;
-      return bU - aU;
-    });
-  }, [assignedTickets, searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, resourceIdFilter, dateRange, lastStatusFilter, lastCommentByInvigilator, lastCommentMode, lastCommentAuthor, lastStatusMap]);
-
-  // Categorize tickets by status
-  const ticketsByStatus = useMemo(() => {
-    return {
-      all: filteredTickets,
-      in_progress: filteredTickets.filter(t => t.status === 'in_progress'),
-      user_dependency: filteredTickets.filter(t => t.status === 'user_dependency'),
-      ops_input_required: filteredTickets.filter(t => t.status === 'ops_input_required'),
-      ops_user_dependency: filteredTickets.filter(t => (t as any).status === 'ops_user_dependency'),
-      send_for_approval: filteredTickets.filter(t => t.status === 'send_for_approval'),
-      approved: filteredTickets.filter(t => t.status === 'approved'),
-      resolved: filteredTickets.filter(t => t.status === 'resolved'),
-    } as const;
-  }, [filteredTickets]);
-
   const activeFiltersCount = [searchTerm, statusFilter, severityFilter, categoryFilter, cityFilter, lastStatusFilter]
-    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0) + (lastCommentByInvigilator ? 1 : 0);
-    
+    .filter(filter => filter && filter !== 'all').length + resourceIdFilter.length + (dateRange ? 1 : 0) + (lastCommentByInvigilator ? 1 : 0)
+    + (lastCommentMode !== 'any' ? 1 : 0);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -421,8 +404,8 @@ export const TicketResolverPage: React.FC = () => {
           </div>
 
           {/* Meta Info */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-y-1 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <div className="flex items-center gap-1">
                 <MapPin className="h-3 w-3" />
                 {ticket.city}
@@ -501,18 +484,98 @@ export const TicketResolverPage: React.FC = () => {
     );
   }
 
-  // Get unique cities for filter
-  const uniqueCities = Array.from(new Set(assignedTickets.map(ticket => ticket.city)));
+  // Filter options: severity is a fixed enum; city/category/resource id come from the loaded
+  // page plus any currently selected value so the dropdowns never lose their selection (MVP).
+  const uniqueCities = Array.from(new Set([
+    ...tickets.map(ticket => ticket.city),
+    ...(cityFilter !== 'all' ? [cityFilter] : []),
+  ])).filter(Boolean);
 
-  // Get unique values for dynamic filters
-  const uniqueSeverities = Array.from(new Set(assignedTickets.map(ticket => ticket.severity))).filter(Boolean);
-  const uniqueCategories = Array.from(new Set(assignedTickets.map(ticket => ticket.issueCategory))).filter(Boolean);
+  const uniqueCategories = Array.from(new Set([
+    ...tickets.map(ticket => ticket.issueCategory),
+    ...(categoryFilter !== 'all' ? [categoryFilter] : []),
+  ])).filter(Boolean);
 
-  // Get unique resource IDs for filter
-  const uniqueResourceIds = Array.from(new Set(assignedTickets.map(ticket => ticket.resourceId)))
+  const uniqueResourceIds = Array.from(new Set([
+    ...tickets.map(ticket => ticket.resourceId),
+    ...resourceIdFilter,
+  ]))
     .filter(id => id && id.trim() !== '')
     .sort()
     .map(id => ({ value: id, label: id }));
+
+  const uniqueCommentAuthors = [...new Set(tickets
+    .map(t => t.comments?.[0]?.author)
+    .filter((a): a is string => typeof a === 'string' && a.trim() !== '' && a.toLowerCase() !== 'anonymous'))].sort();
+
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_LIMIT + 1;
+  const rangeEnd = Math.min(page * PAGE_LIMIT, total);
+  const hasPrev = page > 1;
+  const hasNext = page * PAGE_LIMIT < total;
+
+  const renderTabBody = (tab: (typeof RESOLVER_TABS)[number]) => {
+    if (listLoading) {
+      return (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading tickets...</p>
+        </div>
+      );
+    }
+    if (listError && tickets.length === 0) {
+      return (
+        <Card>
+          <CardContent className="text-center py-8">
+            <p className="text-lg font-medium text-red-600">{listError}</p>
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => loadList({ invalidateAdvancedCache: true })}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    if (tickets.length === 0) {
+      return (
+        <Card>
+          <CardContent className="text-center py-8">
+            <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+            <p className="text-lg font-medium">{tab.emptyTitle}</p>
+            <p className="text-sm text-muted-foreground">{tab.emptyHint}</p>
+          </CardContent>
+        </Card>
+      );
+    }
+    return (
+      <>
+        {listError && (
+          <div className="mb-4 flex flex-col items-start justify-between gap-2 rounded-md border border-red-200 bg-red-50 p-3 sm:flex-row sm:items-center">
+            <p className="text-sm text-red-700">{listError}</p>
+            <Button variant="outline" size="sm" onClick={() => loadList({ invalidateAdvancedCache: true })}>
+              Retry
+            </Button>
+          </div>
+        )}
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {tickets.map(renderTicketCard)}
+        </div>
+        <div className="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row">
+          <p className="text-sm text-muted-foreground">
+            Showing {rangeStart}–{rangeEnd} of {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={!hasPrev} onClick={() => setPage(p => Math.max(1, p - 1))}>
+              <ChevronLeft className="h-4 w-4" />
+              Prev
+            </Button>
+            <Button variant="outline" size="sm" disabled={!hasNext} onClick={() => setPage(p => p + 1)}>
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -523,7 +586,15 @@ export const TicketResolverPage: React.FC = () => {
           {/* Hide page header and stats per request (keep top header only) */}
           <div className="hidden" />
           <div className="hidden">
-            <TicketStatsCards tickets={assignedTickets} userRole="resolver" />
+            <TicketStatsCards
+              userRole="resolver"
+              summary={{
+                total: statusCounts.all,
+                open: 0,
+                pendingOrInProgress: statusCounts.in_progress,
+                resolved: statusCounts.resolved,
+              }}
+            />
           </div>
 
           {/* Filters */}
@@ -551,233 +622,36 @@ export const TicketResolverPage: React.FC = () => {
             setLastCommentMode={setLastCommentMode}
             lastCommentAuthor={lastCommentAuthor}
             setLastCommentAuthor={setLastCommentAuthor}
-            uniqueCommentAuthors={[...new Set(assignedTickets
-              .map(t => t.comments?.[0]?.author)
-              .filter((a): a is string => typeof a === 'string' && a.trim() !== '' && a.toLowerCase() !== 'anonymous'))].sort()}
+            uniqueCommentAuthors={uniqueCommentAuthors}
             onClearFilters={clearFilters}
             activeFiltersCount={activeFiltersCount}
             uniqueCities={uniqueCities}
             uniqueResourceIds={uniqueResourceIds}
-            uniqueSeverities={uniqueSeverities}
+            uniqueSeverities={SEVERITY_OPTIONS}
             uniqueCategories={uniqueCategories}
             onExportTickets={handleExportTickets}
             isExporting={isExporting}
           />
 
           {/* Tickets Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-2 sm:flex sm:flex-row w-full gap-3 sm:gap-0 bg-white p-2 rounded-xl border shadow-md my-4 z-10">
-              <TabsTrigger value="all" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                All
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.all?.length ?? 0}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="in_progress" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Pending on CX
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.in_progress?.length ?? 0}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="user_dependency" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                User Dependency
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.user_dependency?.length ?? 0}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="ops_input_required" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Ops Dependency
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.ops_input_required?.length ?? 0}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="ops_user_dependency" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Ops + User Dependency
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.ops_user_dependency?.length ?? 0}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="send_for_approval" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Send for Approval
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.send_for_approval?.length ?? 0}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="approved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Approved
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.approved?.length ?? 0}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="resolved" className="w-full rounded-lg py-3 data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow">
-                Closed
-                <Badge variant="secondary" className="ml-2">
-                  {ticketsByStatus.resolved?.length ?? 0}
-                </Badge>
-              </TabsTrigger>
+          <Tabs value={activeTab} onValueChange={value => { if (isResolverTab(value)) setActiveTab(value); }}>
+            <TabsList className="grid w-full grid-cols-2 gap-3 rounded-xl border bg-white p-2 shadow-md my-4 z-10 md:grid-cols-4 xl:flex xl:flex-row xl:flex-nowrap xl:gap-1 xl:overflow-x-auto">
+              {RESOLVER_TABS.map(tab => (
+                <TabsTrigger key={tab.value} value={tab.value} className={filterTabTriggerClass}>
+                  {tab.label}
+                  <Badge variant="secondary" className="ml-2">
+                    {statusCounts[tab.value] ?? 0}
+                  </Badge>
+                </TabsTrigger>
+              ))}
             </TabsList>
 
-            {/* Tab contents for each status */}
-            <TabsContent value="all" className="mt-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading tickets...</p>
-                </div>
-              ) : (ticketsByStatus.all?.length ?? 0) === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No tickets found</p>
-                    <p className="text-sm text-muted-foreground">No tickets assigned to you</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {(ticketsByStatus.all ?? []).map(renderTicketCard)}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="user_dependency" className="mt-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading tickets...</p>
-                </div>
-              ) : (ticketsByStatus.user_dependency?.length ?? 0) === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No user dependency tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in user dependency</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {(ticketsByStatus.user_dependency ?? []).map(renderTicketCard)}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="in_progress" className="mt-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading tickets...</p>
-                </div>
-              ) : (ticketsByStatus.in_progress?.length ?? 0) === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No in progress tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in progress</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {(ticketsByStatus.in_progress ?? []).map(renderTicketCard)}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="ops_input_required" className="mt-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading tickets...</p>
-                </div>
-              ) : (ticketsByStatus.ops_input_required?.length ?? 0) === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No ops dependency tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in ops dependency</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {(ticketsByStatus.ops_input_required ?? []).map(renderTicketCard)}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="ops_user_dependency" className="mt-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading tickets...</p>
-                </div>
-              ) : (ticketsByStatus.ops_user_dependency?.length ?? 0) === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No ops + user dependency tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in ops + user dependency</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {(ticketsByStatus.ops_user_dependency ?? []).map(renderTicketCard)}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="send_for_approval" className="mt-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading tickets...</p>
-                </div>
-              ) : (ticketsByStatus.send_for_approval?.length ?? 0) === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No send for approval tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in send for approval</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {(ticketsByStatus.send_for_approval ?? []).map(renderTicketCard)}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="approved" className="mt-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading tickets...</p>
-                </div>
-              ) : (ticketsByStatus.approved?.length ?? 0) === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No approved tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in approved status</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {(ticketsByStatus.approved ?? []).map(renderTicketCard)}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="resolved" className="mt-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading tickets...</p>
-                </div>
-              ) : (ticketsByStatus.resolved?.length ?? 0) === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <p className="text-lg font-medium">No resolved tickets</p>
-                    <p className="text-sm text-muted-foreground">No tickets in resolved status</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {(ticketsByStatus.resolved ?? []).map(renderTicketCard)}
-                </div>
-              )}
-            </TabsContent>
+            {/* Server already filters by the active tab; only that tab renders the page of tickets. */}
+            {RESOLVER_TABS.map(tab => (
+              <TabsContent key={tab.value} value={tab.value} className="mt-6">
+                {tab.value === activeTab ? renderTabBody(tab) : null}
+              </TabsContent>
+            ))}
           </Tabs>
         </div>
       </main>

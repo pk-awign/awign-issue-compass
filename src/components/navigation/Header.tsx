@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertTriangle, Users, LogOut, Shield, UserCog, Home, Menu, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
+import { BrandLogo } from '@/components/BrandLogo';
 import { toast } from 'sonner';
 
 interface HeaderProps {
@@ -56,20 +57,14 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
 
   return (
     <header className="bg-white border-b shadow-sm">
-      <div className="container mx-auto px-2 py-2 sm:px-6 sm:py-4">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex flex-col items-start">
-            <div className="bg-gray-800 p-1 rounded">
-              <img 
-                src="/awign-logo.svg" 
-                alt="Awign Logo" 
-                className="w-8 h-8 object-contain"
-              />
+      <div className="container mx-auto px-3 py-3 sm:px-6 sm:py-4">
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandLogo />
+            <div className="flex min-w-0 flex-col items-start">
+              <span className="text-sm sm:text-xl font-semibold text-gray-900">ESCALATION MANAGEMENT</span>
+              <span className="text-xs sm:text-sm text-gray-600 mt-1">{getPanelName()}</span>
             </div>
-          </div>
-          <div className="flex flex-col items-start flex-1 ml-4">
-            <span className="text-base sm:text-xl font-semibold text-gray-900">AWIGN ESCALATION MANAGEMENT</span>
-            <span className="text-xs sm:text-sm text-gray-600 mt-1">{getPanelName()}</span>
           </div>
           
           {/* Desktop Navigation */}
@@ -114,11 +109,17 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="sm:hidden">
+          <div className="flex shrink-0 items-center gap-1 sm:hidden">
+            {user && isResolver && onTicketClick && (
+              <NotificationBell onTicketClick={onTicketClick} />
+            )}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-nav-menu"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
@@ -127,7 +128,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="sm:hidden mt-4 border-t pt-4 space-y-4">
+          <div id="mobile-nav-menu" className="mt-4 space-y-4 border-t pt-4 sm:hidden">
             {/* Only show role switcher for Super Admin on mobile */}
             {user && showRoleSwitcher && isSuperAdmin && (
               <div className="space-y-2">

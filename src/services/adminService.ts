@@ -54,6 +54,9 @@ export interface TicketAnalytics {
   centreBreakdown: Array<{ centreCode: string; count: number }>;
   resolverBreakdown: Array<{ resolver: string; count: number }>;
   approverBreakdown: Array<{ approver: string; count: number }>;
+  categoryBreakdown: Array<{ category: string; count: number }>;
+  /** Created/submitted dates as `yyyy-MM-dd`, ascending. */
+  createdByDate: Array<{ date: string; count: number }>;
 }
 
 // Define a named interface for ticket filters to avoid deep type instantiation
@@ -1926,6 +1929,8 @@ export class AdminService {
         .map(([approver, count]) => ({ approver, count }))
         .sort((a, b) => b.count - a.count); // Sort by count descending
 
+      const { categoryBreakdown, createdByDate } = this.buildCategoryAndCreatedByDate(tickets);
+
       return {
         totalTickets,
         openTickets,
@@ -1950,7 +1955,9 @@ export class AdminService {
         cityBreakdown,
         centreBreakdown,
         resolverBreakdown,
-        approverBreakdown
+        approverBreakdown,
+        categoryBreakdown,
+        createdByDate,
       };
     } catch (error) {
       console.error('Error in getTicketAnalytics:', error);
@@ -2067,6 +2074,9 @@ export class AdminService {
         .map(([approver, count]) => ({ approver, count }))
         .sort((a, b) => b.count - a.count);
 
+      const { categoryBreakdown, createdByDate } =
+        this.buildCategoryAndCreatedByDate(assignedTickets);
+
       // console.log(`✅ Calculated analytics for ${assignedTickets.length} assigned tickets`);
       return {
         totalTickets,
@@ -2092,7 +2102,9 @@ export class AdminService {
         cityBreakdown,
         centreBreakdown,
         resolverBreakdown,
-        approverBreakdown
+        approverBreakdown,
+        categoryBreakdown,
+        createdByDate,
       };
     } catch (error) {
       console.error('❌ Error in getTicketAnalyticsForAdmin:', error);
@@ -2125,7 +2137,41 @@ export class AdminService {
       cityBreakdown: [],
       centreBreakdown: [],
       resolverBreakdown: [],
-      approverBreakdown: []
+      approverBreakdown: [],
+      categoryBreakdown: [],
+      createdByDate: [],
+    };
+  }
+
+  private static buildCategoryAndCreatedByDate(
+    tickets: Array<{ issueCategory?: string | null; submittedAt?: string | Date | null }>
+  ): Pick<TicketAnalytics, 'categoryBreakdown' | 'createdByDate'> {
+    const categoryMap = new Map<string, number>();
+    const createdByDateMap = new Map<string, number>();
+
+    for (const ticket of tickets) {
+      const category = ticket.issueCategory;
+      if (category) {
+        categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+      }
+
+      if (!ticket.submittedAt) continue;
+      const submitted = new Date(ticket.submittedAt);
+      if (Number.isNaN(submitted.getTime())) continue;
+      const yyyy = submitted.getFullYear();
+      const mm = String(submitted.getMonth() + 1).padStart(2, '0');
+      const dd = String(submitted.getDate()).padStart(2, '0');
+      const key = `${yyyy}-${mm}-${dd}`;
+      createdByDateMap.set(key, (createdByDateMap.get(key) || 0) + 1);
+    }
+
+    return {
+      categoryBreakdown: Array.from(categoryMap.entries())
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count),
+      createdByDate: Array.from(createdByDateMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, count]) => ({ date, count })),
     };
   }
 

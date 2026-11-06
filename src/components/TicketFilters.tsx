@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -91,35 +91,51 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   onExportTickets,
   isExporting = false
 }) => {
+  // Filters are collapsed on phones: eight stacked controls used to fill the
+  // entire first screen before any ticket was visible. From md up the body is
+  // always rendered.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <Filter className="h-4 w-4" />
             Filters
+            {activeFiltersCount > 0 && (
+              <Badge variant="secondary">{activeFiltersCount} active</Badge>
+            )}
           </CardTitle>
           <div className="flex items-center gap-2">
             {activeFiltersCount > 0 && (
-              <>
-                <Badge variant="secondary">
-                  {activeFiltersCount} active
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onClearFilters}
-                  className="h-8"
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Clear
-                </Button>
-              </>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClearFilters}
+                className="h-8"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear
+              </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 md:hidden"
+              onClick={() => setFiltersOpen(open => !open)}
+              aria-expanded={filtersOpen}
+              aria-controls="ticket-filters-body"
+            >
+              {filtersOpen ? 'Hide' : 'Show'}
+            </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent
+        id="ticket-filters-body"
+        className={cn('space-y-4', filtersOpen ? 'block' : 'hidden md:block')}
+      >
         {/* First row: Search, Resource ID, Date Range */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Search */}
