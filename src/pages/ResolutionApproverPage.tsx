@@ -37,11 +37,13 @@ import {
   ApproverStatusCountMap,
   ApproverStatusTab,
   RoleTicketListFilters,
+  approverTabToStatus,
   clampPage,
   emptyApproverCounts
 } from '@/services/roleTicketQuery';
 import {
-  MAX_ADVANCED_FILTER_IDS,
+  assertWithinAdvancedFilterLimit,
+  fetchScopedTicketIds,
   resolveAdvancedTicketIds,
   TooManyAdvancedMatchesError,
   TOO_MANY_ADVANCED_MATCHES_MESSAGE
@@ -71,10 +73,10 @@ const APPROVER_TABS: { value: ApproverStatusTab; label: string; emptyTitle: stri
 const isApproverTab = (value: string): value is ApproverStatusTab =>
   APPROVER_TABS.some(tab => tab.value === value);
 
-/** Maps a status dropdown value to the approver tab it narrows to (null = no tab can match). */
-const statusFilterToTab = (value: string): ApproverStatusTab | null => {
-  if (value === 'send_for_approval' || value === 'approval_pending') return 'approval_pending';
-  if (value === 'approved' || value === 'resolved') return value;
+/** Maps a ticket status to the approver tab that shows it (null = no tab, e.g. open / in_progress). */
+const statusToApproverTab = (status: Issue['status']): ApproverStatusTab | null => {
+  if (status === 'send_for_approval') return 'approval_pending';
+  if (status === 'approved' || status === 'resolved') return status;
   return null;
 };
 
@@ -208,13 +210,19 @@ export const ResolutionApproverPage: React.FC = () => {
           const to = recentlySentRange.to || recentlySentRange.from;
           const sentIds = Array.from(new Set(await TicketService.getTicketsSentForApprovalInRange(from, to)));
           if (requestId !== requestIdRef.current) return;
-          if (sentIds.length > MAX_ADVANCED_FILTER_IDS) throw new TooManyAdvancedMatchesError();
-          if (advancedIds === null) {
-            constrainToTicketIds = sentIds;
-          } else {
+          // Narrow by advanced filters and assignee scope first; the 500-id cap applies to the result,
+          // not to the raw global list of tickets ever sent for approval in the range.
+          let narrowed = sentIds;
+          if (advancedIds !== null) {
             const allowed = new Set(advancedIds);
-            constrainToTicketIds = sentIds.filter(id => allowed.has(id));
+            narrowed = narrowed.filter(id => allowed.has(id));
+          } else if (queryRole !== 'super_admin') {
+            const scoped = new Set(await fetchScopedTicketIds(queryRole, userId));
+            if (requestId !== requestIdRef.current) return;
+            narrowed = narrowed.filter(id => scoped.has(id));
           }
+          assertWithinAdvancedFilterLimit(narrowed);
+          constrainToTicketIds = narrowed;
         }
         constrainIdsCacheRef.current = { key: constrainKey, ids: constrainToTicketIds };
       }
@@ -231,25 +239,27 @@ export const ResolutionApproverPage: React.FC = () => {
 
       // The status dropdown and "recently sent" (only sent-for-approval tickets) are ANDed with the
       // active tab: they can only narrow the tab, never widen it.
-      const pins: (ApproverStatusTab | null)[] = [];
-      if (statusFilter !== 'all') pins.push(statusFilterToTab(statusFilter));
-      if (recentlySentForApproval) pins.push('approval_pending');
-      const pinsConflict = pins.some(pin => pin === null) || new Set(pins).size > 1;
-      const pinnedTab = !pinsConflict && pins.length > 0 ? pins[0] : null;
-      const tabConflictsWithPin = pinsConflict || (pinnedTab !== null && activeTab !== 'all' && activeTab !== pinnedTab);
-      const effectiveTab: ApproverStatusTab = activeTab === 'all' && pinnedTab ? pinnedTab : activeTab;
+      // Statuses without a tab (open / in_progress / ops_* / user_dependency) are applied as an exact status.
+      const pins: Issue['status'][] = [];
+      if (statusFilter !== 'all') pins.push(statusFilter as Issue['status']);
+      if (recentlySentForApproval) pins.push('send_for_approval');
+      const pinsConflict = new Set(pins).size > 1;
+      const pinStatus = !pinsConflict && pins.length > 0 ? pins[0] : null;
+      const pinnedTab = pinStatus ? statusToApproverTab(pinStatus) : null;
+      const tabConflictsWithPin = pinsConflict
+        || (pinStatus !== null && activeTab !== 'all' && approverTabToStatus(activeTab) !== pinStatus);
 
       const [pageResult, rawCounts] = await Promise.all([
         tabConflictsWithPin
           ? Promise.resolve({ tickets: [] as Issue[], total: 0 })
-          : TicketService.getRoleTicketPage({ role: queryRole, userId, statusTab: effectiveTab, filters, page, limit: PAGE_LIMIT }),
+          : TicketService.getRoleTicketPage({ role: queryRole, userId, statusTab: activeTab, exactStatus: pinStatus ?? undefined, filters, page, limit: PAGE_LIMIT }),
         TicketService.getRoleTicketStatusCounts({ role: queryRole, userId, panel: 'approver', filters }),
       ]);
       if (requestId !== requestIdRef.current) return; // a newer request superseded this one
 
       let counts = rawCounts as ApproverStatusCountMap;
       if (pins.length > 0) {
-        const pinnedCount = pinnedTab ? counts[pinnedTab] : 0;
+        const pinnedCount = pinnedTab ? counts[pinnedTab] : pageResult.total;
         const masked = emptyApproverCounts();
         if (pinnedTab) masked[pinnedTab] = pinnedCount;
         masked.all = pinnedCount;

@@ -170,20 +170,22 @@ export const TicketResolverPage: React.FC = () => {
       // The status dropdown is ANDed with the active tab: it can only narrow the tab, never widen it.
       const statusPin = statusFilter !== 'all' ? statusFilter : null;
       const pinnedTab: ResolverStatusTab | null = statusPin && isResolverTab(statusPin) ? statusPin : null;
-      const tabConflictsWithPin = statusPin !== null && (pinnedTab === null || (activeTab !== 'all' && activeTab !== pinnedTab));
+      // Statuses without a tab (e.g. OPEN) are applied as an exact status filter on the "All" tab.
+      const exactStatus = statusPin && !pinnedTab ? (statusPin as Issue['status']) : undefined;
+      const tabConflictsWithPin = statusPin !== null && activeTab !== 'all' && activeTab !== pinnedTab;
       const effectiveTab: ResolverStatusTab = activeTab === 'all' && pinnedTab ? pinnedTab : activeTab;
 
       const [pageResult, rawCounts] = await Promise.all([
         tabConflictsWithPin
           ? Promise.resolve({ tickets: [] as Issue[], total: 0 })
-          : TicketService.getRoleTicketPage({ role: queryRole, userId, statusTab: effectiveTab, filters, page, limit: PAGE_LIMIT }),
+          : TicketService.getRoleTicketPage({ role: queryRole, userId, statusTab: effectiveTab, exactStatus, filters, page, limit: PAGE_LIMIT }),
         TicketService.getRoleTicketStatusCounts({ role: queryRole, userId, panel: 'resolver', filters }),
       ]);
       if (requestId !== requestIdRef.current) return; // a newer request superseded this one
 
       let counts = rawCounts as ResolverStatusCountMap;
       if (statusPin) {
-        const pinnedCount = pinnedTab ? counts[pinnedTab] : 0;
+        const pinnedCount = pinnedTab ? counts[pinnedTab] : pageResult.total;
         const masked = emptyResolverCounts();
         if (pinnedTab) masked[pinnedTab] = pinnedCount;
         masked.all = pinnedCount;

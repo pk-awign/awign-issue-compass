@@ -1598,11 +1598,13 @@ export class TicketService {
     role: RoleTicketRole;
     userId: string;
     statusTab: ResolverStatusTab | ApproverStatusTab;
+    /** Exact ticket status; when set it replaces the status tab (e.g. a dropdown status that has no tab). */
+    exactStatus?: Issue['status'];
     filters: RoleTicketListFilters;
     page?: number;
     limit?: number;
   }): Promise<{ tickets: Issue[]; total: number }> {
-    const { role, userId, statusTab, filters, page = 1, limit = 50 } = params;
+    const { role, userId, statusTab, exactStatus, filters, page = 1, limit = 50 } = params;
     try {
       const scopeIds = await TicketService.resolveRoleTicketScope(role, userId, filters.constrainToTicketIds);
       if (scopeIds !== null && scopeIds.length === 0) {
@@ -1610,9 +1612,9 @@ export class TicketService {
       }
 
       // `approval_pending` only exists on the approver panel, which super admins also use.
-      const status = role === 'approver' || statusTab === 'approval_pending'
+      const status = exactStatus ?? (role === 'approver' || statusTab === 'approval_pending'
         ? approverTabToStatus(statusTab as ApproverStatusTab)
-        : resolverTabToStatus(statusTab as ResolverStatusTab);
+        : resolverTabToStatus(statusTab as ResolverStatusTab));
 
       const total = await TicketService.countRoleTickets(scopeIds, filters, status);
       if (total === 0) {

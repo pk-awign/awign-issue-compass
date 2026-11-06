@@ -23,6 +23,11 @@ export class TooManyAdvancedMatchesError extends Error {
     this.name = 'TooManyAdvancedMatchesError';
   }
 }
+
+/** Throws when an id list (after every intersection) is too large to send as a `.in()` list. */
+export function assertWithinAdvancedFilterLimit(ids: string[]): void {
+  if (ids.length > MAX_ADVANCED_FILTER_IDS) throw new TooManyAdvancedMatchesError();
+}
 const COMMENT_ID_BATCH = 100;
 
 export function hasAdvancedTicketFilters(p: Pick<AdvancedTicketFilterParams, 'lastStatusFilter' | 'lastCommentMode' | 'lastCommentByInvigilator'>): boolean {
@@ -30,7 +35,7 @@ export function hasAdvancedTicketFilters(p: Pick<AdvancedTicketFilterParams, 'la
 }
 
 /** Ids of tickets in the caller's scope (assignee-scoped for resolver, every non-deleted ticket for super admin). */
-async function fetchScopedTicketIds(role: RoleTicketRole, userId: string): Promise<string[]> {
+export async function fetchScopedTicketIds(role: RoleTicketRole, userId: string): Promise<string[]> {
   const ids: string[] = [];
   for (let from = 0; ; from += ID_BATCH) {
     const query = role === 'super_admin'
@@ -114,7 +119,7 @@ export async function resolveAdvancedTicketIds(params: AdvancedTicketFilterParam
     ids = ids.filter(id => lastStatusMap.get(id) === params.lastStatusFilter);
   }
 
-  if (ids.length > MAX_ADVANCED_FILTER_IDS) throw new TooManyAdvancedMatchesError();
+  assertWithinAdvancedFilterLimit(ids);
 
   return ids;
 }
