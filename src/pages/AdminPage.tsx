@@ -110,9 +110,9 @@ function formatOverviewCategory(category: string): string {
  * Tab strip styling shared by every trigger.
  *
  * The strip never scrolls or hides a tab: it is a grid at every width, so all
- * seven sections stay visible and tappable. Labels stay on one line thanks to
- * the column counts (2 on phones, 4 on tablets, 7 from lg up) chosen so the
- * longest label ("User Management") fits its cell.
+ * sections stay visible and tappable. Labels stay on one line thanks to
+ * the column counts (2 on phones, 3–4 on tablets, 6 from lg up for super admin)
+ * chosen so the longest label ("User Management") fits its cell.
  */
 const tabTriggerClass =
   "w-full whitespace-nowrap rounded-lg px-2 py-2 text-center data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow lg:px-3";
@@ -125,7 +125,15 @@ export const AdminPage: React.FC = () => {
   
   // Get the tab parameter from URL
   const tabParam = searchParams.get('tab');
-  const defaultTab = tabParam === 'tickets' ? 'tickets' : 'overview';
+  const defaultTab =
+    tabParam === 'tickets'
+      ? 'tickets'
+      : tabParam === 'whatsapp' || tabParam === 'settings'
+        ? 'settings'
+        : tabParam &&
+            ['overview', 'analytics', 'users', 'activity'].includes(tabParam)
+          ? tabParam
+          : 'overview';
   
   // State management
   const [tickets, setTickets] = useState<Issue[]>([]);
@@ -206,7 +214,15 @@ export const AdminPage: React.FC = () => {
   // Update active tab when URL changes
   useEffect(() => {
     const newTabParam = searchParams.get('tab');
-    const newDefaultTab = newTabParam === 'tickets' ? 'tickets' : 'overview';
+    const newDefaultTab =
+      newTabParam === 'tickets'
+        ? 'tickets'
+        : newTabParam === 'whatsapp' || newTabParam === 'settings'
+          ? 'settings'
+          : newTabParam &&
+              ['overview', 'analytics', 'users', 'activity'].includes(newTabParam)
+            ? newTabParam
+            : 'overview';
     setActiveTab(newDefaultTab);
     // console.log('🔄 URL changed, setting active tab to:', newDefaultTab);
   }, [searchParams]);
@@ -257,16 +273,12 @@ export const AdminPage: React.FC = () => {
         // UserManagementPanel handles its own data loading
         setLoadedTabs(prev => new Set(prev).add('users'));
         break;
-      case 'whatsapp':
-        // WhatsAppTestComponent handles its own data loading
-        setLoadedTabs(prev => new Set(prev).add('whatsapp'));
-        break;
       case 'activity':
         // ActivityLog component handles its own data loading
         setLoadedTabs(prev => new Set(prev).add('activity'));
         break;
       case 'settings':
-        // Settings tab doesn't need data loading
+        // WhatsApp tools live under Settings; component loads its own data
         setLoadedTabs(prev => new Set(prev).add('settings'));
         break;
     }
@@ -1031,7 +1043,7 @@ export const AdminPage: React.FC = () => {
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList
               className={`my-4 grid w-full grid-cols-2 gap-1.5 rounded-xl border bg-muted p-1.5 shadow-md md:gap-0 md:p-1 ${
-                isTicketAdmin ? 'md:grid-cols-3' : 'md:grid-cols-4 lg:grid-cols-7'
+                isTicketAdmin ? 'md:grid-cols-3' : 'md:grid-cols-3 lg:grid-cols-6'
               }`}
             >
               <TabsTrigger value="overview" className={tabTriggerClass}>Overview</TabsTrigger>
@@ -1042,7 +1054,6 @@ export const AdminPage: React.FC = () => {
               {!isTicketAdmin && (
                 <>
                   <TabsTrigger value="users" className={tabTriggerClass}>User Management</TabsTrigger>
-                  <TabsTrigger value="whatsapp" className={tabTriggerClass}>WhatsApp</TabsTrigger>
                   <TabsTrigger value="activity" className={tabTriggerClass}>Activity Log</TabsTrigger>
                   <TabsTrigger value="settings" className={tabTriggerClass}>Settings</TabsTrigger>
                 </>
@@ -1327,12 +1338,12 @@ export const AdminPage: React.FC = () => {
                       View Tickets
                     </Button>
                     <Button 
-                      onClick={() => handleTabChange('whatsapp')}
-                      className="w-full justify-start" 
+                      onClick={() => handleTabChange('settings')}
+                      className="w-full justify-start"
                       variant="outline"
                     >
                       <MessageSquare className="h-4 w-4 mr-2" />
-                      WhatsApp Test
+                      WhatsApp / Settings
                     </Button>
                     {isSuperAdmin && (
                       <Button
@@ -2083,23 +2094,12 @@ export const AdminPage: React.FC = () => {
               <UserManagementPanel />
             </TabsContent>
 
-            <TabsContent value="whatsapp">
-              <WhatsAppTestComponent />
-            </TabsContent>
-
             <TabsContent value="activity" className="space-y-6">
               <ActivityLog />
             </TabsContent>
 
-            <TabsContent value="settings">
-              <Card>
-                <CardHeader>
-                  <CardTitle>System Settings</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">System configuration options will be available here.</p>
-                </CardContent>
-              </Card>
+            <TabsContent value="settings" className="space-y-6">
+              <WhatsAppTestComponent />
             </TabsContent>
           </Tabs>
         </div>
