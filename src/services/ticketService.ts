@@ -5,6 +5,19 @@ import { EmailService } from './emailService';
 import { WhatsAppService } from './whatsappService';
 import { SMSService } from './smsService';
 import { SharedContactService } from './sharedContactService';
+import {
+  approverTabToStatus,
+  emptyApproverCounts,
+  emptyResolverCounts,
+  pageRange,
+  resolverTabToStatus,
+  type ApproverStatusCountMap,
+  type ApproverStatusTab,
+  type ResolverStatusCountMap,
+  type ResolverStatusTab,
+  type RoleTicketListFilters,
+  type RoleTicketRole,
+} from './roleTicketQuery';
 
 export class TicketService {
   static async createTicket(issueData: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'> & { issueEvidence?: File[] }, userId?: string): Promise<string> {
@@ -1468,6 +1481,203 @@ export class TicketService {
     } catch (error) {
       console.error('Error fetching last ticket:', error);
       return null;
+    }
+  }
+
+  /**
+   * Resolve the ticket-ID scope for a role-scoped list.
+   * - Returns `null` when no ID restriction applies (super admin without constrainToTicketIds).
+   * - Returns `[]` when the scope is provably empty.
+   * resolver/approver: ids come from ticket_assignees (user_id + role), fetched in batches of 1000
+   * to avoid the PostgREST default row cap. `constrainToTicketIds` (advanced filters such as
+   * last status / last comment / recently sent) is intersected with that set; callers resolve it
+   * on the assignee-scoped id set, never from a full dump.
+   */
+  private static async resolveRoleTicketScope(
+    role: RoleTicketRole,
+    userId: string,
+    constrainToTicketIds?: string[] | null
+  ): Promise<string[] | null> {
+    let scopedIds: string[] | null = null;
+
+    if (role === 'resolver' || role === 'approver') {
+      const BATCH_SIZE = 1000;
+      const ids = new Set<string>();
+      for (let from = 0; ; from += BATCH_SIZE) {
+        const { data, error } = await supabase
+          .from('ticket_assignees')
+          .select('ticket_id')
+          .eq('user_id', userId)
+          .eq('role', role)
+          .order('ticket_id', { ascending: true })
+          .range(from, from + BATCH_SIZE - 1);
+        if (error) throw error;
+        (data || []).forEach(row => ids.add(row.ticket_id));
+        if (!data || data.length < BATCH_SIZE) break;
+      }
+      scopedIds = Array.from(ids);
+      if (scopedIds.length === 0) return [];
+    }
+
+    if (constrainToTicketIds) {
+      if (scopedIds === null) return Array.from(new Set(constrainToTicketIds));
+      const allowed = new Set(constrainToTicketIds);
+      return scopedIds.filter(id => allowed.has(id));
+    }
+
+    return scopedIds;
+  }
+
+  /**
+   * Apply scope + list filters (everything except the status tab) to a tickets query.
+   * Date filtering uses `submitted_at` (not `created_at` as Admin does) for resolver/approver pages;
+   * the range is widened to the start of the `from` day and end of the `to` day (inclusive).
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private static applyRoleTicketFilters(query: any, scopeIds: string[] | null, filters: RoleTicketListFilters): any {
+    let q = query.eq('deleted', false);
+
+    if (scopeIds !== null) {
+      q = q.in('id', scopeIds);
+    }
+
+    if (filters.searchQuery) {
+      const searchTerms = filters.searchQuery.split(',').map(term => term.trim()).filter(term => term.length > 0);
+      if (searchTerms.length > 0) {
+        const orConditions = searchTerms.map(term =>
+          `ticket_number.ilike.%${term}%,issue_description.ilike.%${term}%,city.ilike.%${term}%,centre_code.ilike.%${term}%`
+        );
+        q = q.or(orConditions.join(','));
+      }
+    }
+    if (filters.severityFilter && filters.severityFilter !== 'all') {
+      q = q.eq('severity', filters.severityFilter);
+    }
+    if (filters.categoryFilter && filters.categoryFilter !== 'all') {
+      q = q.eq('issue_category', filters.categoryFilter);
+    }
+    if (filters.cityFilter && filters.cityFilter !== 'all') {
+      q = q.eq('city', filters.cityFilter);
+    }
+    if (filters.resourceIdFilter && filters.resourceIdFilter.length > 0) {
+      q = q.in('resource_id', filters.resourceIdFilter);
+    }
+    if (filters.dateRange?.from) {
+      const fromDate = new Date(filters.dateRange.from);
+      fromDate.setHours(0, 0, 0, 0);
+      const toDate = new Date(filters.dateRange.to ?? filters.dateRange.from);
+      toDate.setHours(23, 59, 59, 999);
+      q = q.gte('submitted_at', fromDate.toISOString()).lte('submitted_at', toDate.toISOString());
+    }
+
+    return q;
+  }
+
+  private static async countRoleTickets(
+    scopeIds: string[] | null,
+    filters: RoleTicketListFilters,
+    status: Issue['status'] | 'all'
+  ): Promise<number> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query: any = supabase.from('tickets').select('id', { count: 'exact', head: true });
+    query = TicketService.applyRoleTicketFilters(query, scopeIds, filters);
+    if (status !== 'all') {
+      query = query.eq('status', status);
+    }
+    const { count, error } = await query;
+    if (error) throw error;
+    return count || 0;
+  }
+
+  /**
+   * One page of tickets for a resolver / approver / super admin, newest submitted first.
+   * `total` reflects scope + filters + status tab. Rows are hydrated through getTicketByNumber
+   * (same as AdminService.getAllTickets) so comments/modal data stay intact.
+   */
+  static async getRoleTicketPage(params: {
+    role: RoleTicketRole;
+    userId: string;
+    statusTab: ResolverStatusTab | ApproverStatusTab;
+    filters: RoleTicketListFilters;
+    page?: number;
+    limit?: number;
+  }): Promise<{ tickets: Issue[]; total: number }> {
+    const { role, userId, statusTab, filters, page = 1, limit = 50 } = params;
+    try {
+      const scopeIds = await TicketService.resolveRoleTicketScope(role, userId, filters.constrainToTicketIds);
+      if (scopeIds !== null && scopeIds.length === 0) {
+        return { tickets: [], total: 0 };
+      }
+
+      const status = role === 'approver'
+        ? approverTabToStatus(statusTab as ApproverStatusTab)
+        : resolverTabToStatus(statusTab as ResolverStatusTab);
+
+      const total = await TicketService.countRoleTickets(scopeIds, filters, status);
+      if (total === 0) {
+        return { tickets: [], total: 0 };
+      }
+
+      const { from, to } = pageRange(page, limit);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let listQuery: any = supabase.from('tickets').select('ticket_number');
+      listQuery = TicketService.applyRoleTicketFilters(listQuery, scopeIds, filters);
+      if (status !== 'all') {
+        listQuery = listQuery.eq('status', status);
+      }
+      const { data: rows, error } = await listQuery
+        .order('submitted_at', { ascending: false })
+        .range(from, to);
+      if (error) throw error;
+
+      const hydrated = await Promise.all(
+        ((rows || []) as { ticket_number: string }[]).map(row => TicketService.getTicketByNumber(row.ticket_number))
+      );
+      const tickets = hydrated.filter((ticket): ticket is Issue => ticket !== null);
+
+      return { tickets, total };
+    } catch (error) {
+      console.error('Error in getRoleTicketPage:', error);
+      return { tickets: [], total: 0 };
+    }
+  }
+
+  /**
+   * Per-status counts for the tab badges. Scope + filters apply, the status tab does not.
+   * Runs one head count per status plus `all`, in parallel.
+   */
+  static async getRoleTicketStatusCounts(params: {
+    role: RoleTicketRole;
+    userId: string;
+    panel: 'resolver' | 'approver';
+    filters: RoleTicketListFilters;
+  }): Promise<ResolverStatusCountMap | ApproverStatusCountMap> {
+    const { role, userId, panel, filters } = params;
+    const empty = panel === 'approver' ? emptyApproverCounts() : emptyResolverCounts();
+    try {
+      const scopeIds = await TicketService.resolveRoleTicketScope(role, userId, filters.constrainToTicketIds);
+      if (scopeIds !== null && scopeIds.length === 0) {
+        return empty;
+      }
+
+      const tabs = Object.keys(empty) as (ResolverStatusTab | ApproverStatusTab)[];
+      const counts = await Promise.all(
+        tabs.map(tab => {
+          const status = panel === 'approver'
+            ? approverTabToStatus(tab as ApproverStatusTab)
+            : resolverTabToStatus(tab as ResolverStatusTab);
+          return TicketService.countRoleTickets(scopeIds, filters, status);
+        })
+      );
+
+      const result: Record<string, number> = { ...empty };
+      tabs.forEach((tab, index) => {
+        result[tab] = counts[index];
+      });
+      return result as ResolverStatusCountMap | ApproverStatusCountMap;
+    } catch (error) {
+      console.error('Error in getRoleTicketStatusCounts:', error);
+      return empty;
     }
   }
 }
