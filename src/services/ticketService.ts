@@ -1609,7 +1609,8 @@ export class TicketService {
         return { tickets: [], total: 0 };
       }
 
-      const status = role === 'approver'
+      // `approval_pending` only exists on the approver panel, which super admins also use.
+      const status = role === 'approver' || statusTab === 'approval_pending'
         ? approverTabToStatus(statusTab as ApproverStatusTab)
         : resolverTabToStatus(statusTab as ResolverStatusTab);
 
