@@ -21,7 +21,7 @@ import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
 import { WhatsAppTestComponent } from '@/components/admin/WhatsAppTestComponent';
 import { ActivityLog } from '@/components/admin/ActivityLog';
-import { addDays, format, subMonths } from "date-fns";
+import { addDays, format } from "date-fns";
 import { Switch } from '@/components/ui/switch';
 import { MultiSelect } from '@/components/ui/multi-select';
 import {
@@ -44,23 +44,6 @@ import {
 import { getStatusLabel } from '@/utils/status';
 
 type IssueWithAssignees = Issue & { assignees?: { user_id: string; role: string }[] };
-
-function isArchivedTicket(submittedAt: Date | string | null | undefined, now = new Date()): boolean {
-  if (!submittedAt) return false;
-  const submitted = submittedAt instanceof Date ? submittedAt : new Date(submittedAt);
-  if (Number.isNaN(submitted.getTime())) return false;
-  const cutoff = subMonths(new Date(now.getFullYear(), now.getMonth(), now.getDate()), 6);
-  return submitted.getTime() < cutoff.getTime();
-}
-
-function applyArchiveView<T extends { submittedAt?: Date | string | null }>(
-  tickets: T[],
-  showArchived: boolean
-): T[] {
-  return tickets.filter((ticket) =>
-    showArchived ? isArchivedTicket(ticket.submittedAt) : !isArchivedTicket(ticket.submittedAt)
-  );
-}
 
 export const AdminPage: React.FC = () => {
   const { user, logout, loading, isTicketAdmin, isSuperAdmin } = useAuth();
@@ -242,10 +225,7 @@ export const AdminPage: React.FC = () => {
       
       if (isTicketAdmin && user?.id) {
         // For ticket admin, only load assigned tickets
-        const assignedTickets = applyArchiveView(
-          await AdminService.getTicketsAssignedToAdmin(user.id),
-          showArchived
-        );
+        const assignedTickets = await AdminService.getTicketsAssignedToAdmin(user.id);
         result = {
           tickets: assignedTickets,
           total: assignedTickets.length,
@@ -257,24 +237,22 @@ export const AdminPage: React.FC = () => {
         
         if (hasFilters || onlyUnassignedResolver) {
           // Use unpaginated method when filters are applied to get ALL matching tickets
-          const allFilteredTickets = applyArchiveView(
-            await AdminService.getFilteredTicketsUnpaginated({
-              searchQuery,
-              statusFilter,
-              severityFilter,
-              categoryFilter,
-              cityFilter,
-              resolverFilter,
-              approverFilter,
-              resourceIdFilter,
-              dateRange: filterDateRange,
-              onlyUnassignedResolver,
-              lastStatusFilter,
-              lastCommentByInvigilator,
-              showDeleted
-            }),
-            showArchived
-          );
+          const allFilteredTickets = await AdminService.getFilteredTicketsUnpaginated({
+            searchQuery,
+            statusFilter,
+            severityFilter,
+            categoryFilter,
+            cityFilter,
+            resolverFilter,
+            approverFilter,
+            resourceIdFilter,
+            dateRange: filterDateRange,
+            onlyUnassignedResolver,
+            lastStatusFilter,
+            lastCommentByInvigilator,
+            showDeleted,
+            archiveStatus: showArchived
+          });
           
           // Store all filtered tickets for dropdown calculations
           setAllFilteredTickets(allFilteredTickets);
@@ -290,22 +268,15 @@ export const AdminPage: React.FC = () => {
             hasMore: endIndex < allFilteredTickets.length
           };
         } else {
-          // Live All Tickets count, then the same rows. Hide or show only those older than 6 months.
-          const liveCount = await AdminService.getAllTickets(showDeleted, 1, 1);
-          const liveRows = await AdminService.getAllTicketsUnpaginated({ showDeleted });
-          const liveTickets = applyArchiveView(
-            liveRows.slice(0, liveCount.total || liveRows.length),
-            showArchived
-          );
-          setAllFilteredTickets(liveTickets);
+          result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit, { archiveStatus: showArchived });
 
-          const startIndex = (reset ? 0 : (page - 1) * limit);
-          const endIndex = startIndex + limit;
-          result = {
-            tickets: liveTickets.slice(startIndex, endIndex),
-            total: liveTickets.length,
-            hasMore: endIndex < liveTickets.length
-          };
+          if (reset) {
+            const allTickets = await AdminService.getAllTicketsUnpaginated({
+              showDeleted,
+              archiveStatus: showArchived
+            });
+            setAllFilteredTickets(allTickets);
+          }
         }
       }
       
@@ -1382,6 +1353,7 @@ export const AdminPage: React.FC = () => {
                   </label>
                 </div>
 
+                      {!isTicketAdmin && (
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="show-archived"
@@ -1392,6 +1364,7 @@ export const AdminPage: React.FC = () => {
                           {showArchived ? 'View Archived Tickets' : 'Hide Archived Tickets'}
                         </label>
                       </div>
+                      )}
 
                       <div className="flex items-center gap-2">
                         {hasActiveFilters && (
@@ -1599,7 +1572,8 @@ export const AdminPage: React.FC = () => {
                               approverFilter,
                               resourceIdFilter,
                               dateRange: filterDateRange,
-                              onlyUnassignedResolver
+                              onlyUnassignedResolver,
+                              archiveStatus: showArchived
                             });
                             setSelectedTickets(ids);
                           }}

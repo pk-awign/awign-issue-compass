@@ -47,6 +47,7 @@ export interface TicketFilters {
   startDate?: Date;
   endDate?: Date;
   showDeleted?: boolean;
+  archiveStatus?: boolean;
   lastStatusFilter?: string;
   lastCommentByInvigilator?: boolean;
   // Show only tickets that are NOT assigned to any resolver
@@ -357,21 +358,30 @@ export class AdminService {
     }
   }
 
-  static async getAllTickets(includeDeleted: boolean = false, page: number = 1, limit: number = 50): Promise<any> {
+  static async getAllTickets(includeDeleted: boolean = false, page: number = 1, limit: number = 50, options?: { archiveStatus?: boolean }): Promise<any> {
     try {
+      const archiveStatus = options?.archiveStatus;
       // Get total count for analytics
       // @ts-ignore - Bypass complex type inference issue
-      const { count: totalCount, error: countError } = await supabase
+      let countQuery = supabase
         .from('tickets')
         .select('id', { count: 'exact', head: true })
         .eq('deleted', includeDeleted);
+      if (typeof archiveStatus === 'boolean') {
+        countQuery = countQuery.eq('archive_status', archiveStatus);
+      }
+      const { count: totalCount, error: countError } = await countQuery;
       if (countError) throw countError;
 
       // Get paginated ticket numbers
-      const { data: tickets, error } = await supabase
+      let listQuery = supabase
         .from('tickets')
         .select('ticket_number')
-        .eq('deleted', includeDeleted)
+        .eq('deleted', includeDeleted);
+      if (typeof archiveStatus === 'boolean') {
+        listQuery = listQuery.eq('archive_status', archiveStatus);
+      }
+      const { data: tickets, error } = await listQuery
         .order('created_at', { ascending: false })
         .range((page - 1) * limit, page * limit - 1);
       if (error) throw error;
@@ -395,7 +405,7 @@ export class AdminService {
     }
   }
 
-  static async getAllTicketsUnpaginated({ showDeleted = false, startDate, endDate }: { showDeleted?: boolean, startDate?: Date, endDate?: Date } = {}): Promise<Issue[]> {
+  static async getAllTicketsUnpaginated({ showDeleted = false, startDate, endDate, archiveStatus }: { showDeleted?: boolean, startDate?: Date, endDate?: Date, archiveStatus?: boolean } = {}): Promise<Issue[]> {
     const allTickets: Issue[] = [];
     let page = 1;
     const BATCH_SIZE = 1000;
@@ -409,6 +419,9 @@ export class AdminService {
       
       if (!showDeleted) {
         query = query.eq('deleted', false);
+      }
+      if (typeof archiveStatus === 'boolean') {
+        query = query.eq('archive_status', archiveStatus);
       }
       
       // Debug logging for ticket fetching
@@ -539,6 +552,9 @@ export class AdminService {
       }
       if (filters.showDeleted === false) {
         query = query.eq('deleted', false);
+      }
+      if (typeof filters.archiveStatus === 'boolean') {
+        query = query.eq('archive_status', filters.archiveStatus);
       }
       
       // Note: lastStatusFilter, lastCommentByInvigilator, resolverFilter, approverFilter, and onlyUnassignedResolver
@@ -1012,6 +1028,9 @@ export class AdminService {
           .from('tickets')
           .select('id')
           .eq('deleted', includeDeleted);
+        if (typeof filters.archiveStatus === 'boolean') {
+          q = q.eq('archive_status', filters.archiveStatus);
+        }
 
         if (filters.searchQuery) {
           const searchTerms = filters.searchQuery.split(',').map(term => term.trim()).filter(term => term.length > 0);

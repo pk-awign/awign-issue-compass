@@ -713,6 +713,7 @@ export type Database = {
       tickets: {
         Row: {
           approved_at: string | null
+          archive_status: boolean
           awign_app_ticket_id: string | null
           centre_code: string
           city: string
@@ -749,6 +750,7 @@ export type Database = {
         }
         Insert: {
           approved_at?: string | null
+          archive_status?: boolean
           awign_app_ticket_id?: string | null
           centre_code: string
           city: string
@@ -785,6 +787,7 @@ export type Database = {
         }
         Update: {
           approved_at?: string | null
+          archive_status?: boolean
           awign_app_ticket_id?: string | null
           centre_code?: string
           city?: string
