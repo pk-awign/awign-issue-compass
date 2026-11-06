@@ -7,6 +7,28 @@ function archiveStatusValue(showArchived: boolean): 'Yes' | 'No' {
   return showArchived ? 'Yes' : 'No';
 }
 
+export type TicketSortBy = 'created' | 'updated' | 'ticketNumber';
+export type TicketSortDir = 'asc' | 'desc';
+
+function resolveTicketSort(
+  sortBy: TicketSortBy = 'created',
+  sortDir: TicketSortDir = 'desc'
+): { column: 'submitted_at' | 'updated_at' | 'ticket_number'; ascending: boolean } {
+  const ascending = sortDir === 'asc';
+  switch (sortBy) {
+    case 'created':
+      return { column: 'submitted_at', ascending };
+    case 'updated':
+      return { column: 'updated_at', ascending };
+    case 'ticketNumber':
+      return { column: 'ticket_number', ascending };
+    default: {
+      const _exhaustive: never = sortBy;
+      throw new Error(`Unhandled sortBy: ${_exhaustive}`);
+    }
+  }
+}
+
 export interface TicketAnalytics {
   totalTickets: number;
   openTickets: number;
@@ -56,6 +78,8 @@ export interface TicketFilters {
   lastCommentByInvigilator?: boolean;
   // Show only tickets that are NOT assigned to any resolver
   onlyUnassignedResolver?: boolean;
+  sortBy?: TicketSortBy;
+  sortDir?: TicketSortDir;
 }
 
 export class AdminService {
@@ -362,9 +386,15 @@ export class AdminService {
     }
   }
 
-  static async getAllTickets(includeDeleted: boolean = false, page: number = 1, limit: number = 50, options?: { archiveStatus?: boolean }): Promise<any> {
+  static async getAllTickets(
+    includeDeleted: boolean = false,
+    page: number = 1,
+    limit: number = 50,
+    options?: { archiveStatus?: boolean; sortBy?: TicketSortBy; sortDir?: TicketSortDir }
+  ): Promise<any> {
     try {
       const archiveStatus = options?.archiveStatus;
+      const { column: sortColumn, ascending } = resolveTicketSort(options?.sortBy, options?.sortDir);
       // Get total count for analytics
       // @ts-ignore - Bypass complex type inference issue
       let countQuery = supabase
@@ -386,7 +416,7 @@ export class AdminService {
         listQuery = listQuery.eq('archive_status', archiveStatusValue(archiveStatus));
       }
       const { data: tickets, error } = await listQuery
-        .order('created_at', { ascending: false })
+        .order(sortColumn, { ascending })
         .range((page - 1) * limit, page * limit - 1);
       if (error) throw error;
 
@@ -409,16 +439,31 @@ export class AdminService {
     }
   }
 
-  static async getAllTicketsUnpaginated({ showDeleted = false, startDate, endDate, archiveStatus }: { showDeleted?: boolean, startDate?: Date, endDate?: Date, archiveStatus?: boolean } = {}): Promise<Issue[]> {
+  static async getAllTicketsUnpaginated({
+    showDeleted = false,
+    startDate,
+    endDate,
+    archiveStatus,
+    sortBy,
+    sortDir,
+  }: {
+    showDeleted?: boolean;
+    startDate?: Date;
+    endDate?: Date;
+    archiveStatus?: boolean;
+    sortBy?: TicketSortBy;
+    sortDir?: TicketSortDir;
+  } = {}): Promise<Issue[]> {
     const allTickets: Issue[] = [];
     let page = 1;
     const BATCH_SIZE = 1000;
+    const { column: sortColumn, ascending } = resolveTicketSort(sortBy, sortDir);
     
     while (true) {
       let query = supabase
         .from('tickets')
         .select(`*`)
-        .order('submitted_at', { ascending: false })
+        .order(sortColumn, { ascending })
         .range((page - 1) * BATCH_SIZE, page * BATCH_SIZE - 1);
       
       if (!showDeleted) {
@@ -498,12 +543,13 @@ export class AdminService {
     const allTickets: Issue[] = [];
     let page = 1;
     const BATCH_SIZE = 1000;
+    const { column: sortColumn, ascending } = resolveTicketSort(filters.sortBy, filters.sortDir);
     
     while (true) {
       let query = supabase
         .from('tickets')
         .select(`*`)
-        .order('submitted_at', { ascending: false })
+        .order(sortColumn, { ascending })
         .range((page - 1) * BATCH_SIZE, page * BATCH_SIZE - 1);
       
       // Apply filters
@@ -1476,9 +1522,13 @@ export class AdminService {
     }
   }
 
-  static async getTicketsAssignedToAdmin(adminId: string): Promise<Issue[]> {
+  static async getTicketsAssignedToAdmin(
+    adminId: string,
+    options?: { sortBy?: TicketSortBy; sortDir?: TicketSortDir }
+  ): Promise<Issue[]> {
     try {
       // console.log(`🔄 Getting tickets assigned to admin ${adminId}`);
+      const { column: sortColumn, ascending } = resolveTicketSort(options?.sortBy, options?.sortDir);
       
       // Get tickets assigned to this ticket admin using new system
       const { data: assignments, error: assignmentsError } = await supabase
@@ -1530,7 +1580,7 @@ export class AdminService {
           )
         `)
         .in('id', ticketIds)
-        .order('created_at', { ascending: false });
+        .order(sortColumn, { ascending });
 
       if (ticketsError) {
         console.error('❌ Error fetching assigned tickets:', ticketsError);
@@ -1594,7 +1644,8 @@ export class AdminService {
         reopenedBy: (ticket as any).reopened_by,
         statusChangedAt: (ticket as any).status_changed_at ? new Date((ticket as any).status_changed_at) : undefined,
         statusChangedBy: (ticket as any).status_changed_by,
-        deleted: (ticket as any).deleted || false
+        deleted: (ticket as any).deleted || false,
+        archiveStatus: (ticket as any).archive_status === true || (ticket as any).archive_status === 'Yes' ? 'Yes' : 'No',
       }));
 
       // console.log(`✅ Returning ${mappedTickets.length} tickets assigned to admin ${adminId}`);
@@ -1665,10 +1716,19 @@ export class AdminService {
     }
   }
 
-  static async getTicketAnalytics(): Promise<TicketAnalytics> {
+  static async getTicketAnalytics(options?: {
+    includeArchived?: boolean;
+    dateRange?: { from: Date; to?: Date };
+  }): Promise<TicketAnalytics> {
     try {
       // Fetch all non-deleted tickets in batches to avoid 1000-row caps
-      const tickets = await this.getAllTicketsUnpaginated({ showDeleted: false });
+      // Default: exclude archived. includeArchived=true means no archive filter.
+      const tickets = await this.getAllTicketsUnpaginated({
+        showDeleted: false,
+        archiveStatus: options?.includeArchived ? undefined : false,
+        startDate: options?.dateRange?.from,
+        endDate: options?.dateRange?.to ?? options?.dateRange?.from,
+      });
       if (!tickets || tickets.length === 0) return this.getEmptyAnalytics();
 
       // Get all users to map IDs to names
@@ -1898,12 +1958,34 @@ export class AdminService {
     }
   }
 
-  static async getTicketAnalyticsForAdmin(adminId: string): Promise<TicketAnalytics> {
+  static async getTicketAnalyticsForAdmin(
+    adminId: string,
+    options?: {
+      includeArchived?: boolean;
+      dateRange?: { from: Date; to?: Date };
+    }
+  ): Promise<TicketAnalytics> {
     try {
       // console.log(`🔄 Getting ticket analytics for admin ${adminId}...`);
       
       // Get tickets assigned to this admin
-      const assignedTickets = await this.getTicketsAssignedToAdmin(adminId);
+      let assignedTickets = await this.getTicketsAssignedToAdmin(adminId);
+
+      if (!options?.includeArchived) {
+        assignedTickets = assignedTickets.filter((t) => t.archiveStatus !== 'Yes');
+      }
+
+      if (options?.dateRange?.from) {
+        const fromTime = new Date(options.dateRange.from);
+        fromTime.setHours(0, 0, 0, 0);
+        const toSource = options.dateRange.to ?? options.dateRange.from;
+        const toTime = new Date(toSource);
+        toTime.setHours(23, 59, 59, 999);
+        assignedTickets = assignedTickets.filter((t) => {
+          const submitted = new Date(t.submittedAt).getTime();
+          return submitted >= fromTime.getTime() && submitted <= toTime.getTime();
+        });
+      }
       
       if (!assignedTickets || assignedTickets.length === 0) {
         // console.log('ℹ️ No tickets assigned to this admin');

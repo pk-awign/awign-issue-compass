@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,11 +7,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingUp, Users, AlertCircle, CheckCircle, Clock, MapPin, Building, UserCheck, RefreshCw, UserCog, FileText, BarChart3, Activity, Zap, Target, AlertTriangle, XCircle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { AdminService, type TicketAnalytics } from '@/services/adminService';
 import { UserManagementModal } from './UserManagementModal';
+import { AnalyticsDateFilter } from './AnalyticsDateFilter';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DateRange } from 'react-day-picker';
+import { DateRangePresetId } from '@/utils/dateRangePresets';
 
 interface UserAssignment {
   userId: string;
@@ -20,7 +23,23 @@ interface UserAssignment {
   count: number;
 }
 
-export const AdvancedAnalytics: React.FC = () => {
+interface AdvancedAnalyticsProps {
+  includeArchived?: boolean;
+  onIncludeArchivedChange?: (checked: boolean) => void;
+  dateRange?: DateRange | undefined;
+  onDateRangeChange?: (range: DateRange | undefined) => void;
+  datePreset?: DateRangePresetId;
+  onDatePresetChange?: (preset: DateRangePresetId) => void;
+}
+
+export const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
+  includeArchived: includeArchivedProp,
+  onIncludeArchivedChange,
+  dateRange: dateRangeProp,
+  onDateRangeChange,
+  datePreset: datePresetProp,
+  onDatePresetChange,
+}) => {
   const [analytics, setAnalytics] = useState<TicketAnalytics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,20 +48,36 @@ export const AdvancedAnalytics: React.FC = () => {
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'count' | 'role'>('count');
   const [roleFilter, setRoleFilter] = useState<'all' | 'resolver' | 'approver' | 'ticket_admin'>('all');
+  const [localIncludeArchived, setLocalIncludeArchived] = useState(false);
+  const [localDateRange, setLocalDateRange] = useState<DateRange | undefined>();
+  const [localDatePreset, setLocalDatePreset] = useState<DateRangePresetId>('all');
   const navigate = useNavigate();
   const { user, isTicketAdmin } = useAuth();
 
-  const loadAnalytics = async () => {
+  const includeArchived = includeArchivedProp ?? localIncludeArchived;
+  const dateRange = dateRangeProp ?? localDateRange;
+  const datePreset = datePresetProp ?? localDatePreset;
+  const setIncludeArchived = onIncludeArchivedChange ?? setLocalIncludeArchived;
+  const setDateRange = onDateRangeChange ?? setLocalDateRange;
+  const setDatePreset = onDatePresetChange ?? setLocalDatePreset;
+
+  const loadAnalytics = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
+      const analyticsOptions = {
+        includeArchived,
+        dateRange: dateRange?.from
+          ? { from: dateRange.from, to: dateRange.to }
+          : undefined,
+      };
       let data;
       if (isTicketAdmin && user?.id) {
         // For ticket admin, load filtered analytics
-        data = await AdminService.getTicketAnalyticsForAdmin(user.id);
+        data = await AdminService.getTicketAnalyticsForAdmin(user.id, analyticsOptions);
       } else {
         // For super admin, load all analytics
-        data = await AdminService.getTicketAnalytics();
+        data = await AdminService.getTicketAnalytics(analyticsOptions);
       }
       setAnalytics(data);
     } catch (err) {
@@ -51,7 +86,7 @@ export const AdvancedAnalytics: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [includeArchived, dateRange, isTicketAdmin, user?.id]);
 
   const handleViewTickets = () => {
     // Navigate to the appropriate page based on user role
@@ -66,6 +101,9 @@ export const AdvancedAnalytics: React.FC = () => {
 
   useEffect(() => {
     loadAnalytics();
+  }, [loadAnalytics]);
+
+  useEffect(() => {
     loadUserAssignments();
   }, []);
 
@@ -150,44 +188,9 @@ export const AdvancedAnalytics: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
-          <p>Loading analytics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center p-8">
-        <p className="text-red-600 mb-4">{error}</p>
-        <Button onClick={loadAnalytics}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
-  if (!analytics) {
-    return (
-      <div className="text-center p-8">
-        <p>No analytics data available</p>
-        <Button onClick={loadAnalytics} className="mt-4">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
   const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
 
-  const statusData = [
+  const statusData = analytics ? [
     { name: 'Open', value: analytics.openTickets, color: '#ef4444' },
     { name: 'In Progress', value: analytics.inProgressTickets, color: '#f97316' },
     { name: 'User Dependency', value: analytics.userDependencyTickets, color: '#8b5cf6' },
@@ -196,38 +199,99 @@ export const AdvancedAnalytics: React.FC = () => {
     { name: 'Send for Approval', value: analytics.sendForApprovalTickets, color: '#3b82f6' },
     { name: 'Resolved', value: analytics.resolvedTickets, color: '#22c55e' },
     { name: 'Closed', value: analytics.closedTickets, color: '#6b7280' },
-  ].filter(item => item.value > 0); // Only show non-zero values
+  ].filter(item => item.value > 0) : []; // Only show non-zero values
 
-  const severityData = [
+  const severityData = analytics ? [
     { name: 'SEV1', value: analytics.sev1Tickets, color: '#ef4444' },
     { name: 'SEV2', value: analytics.sev2Tickets, color: '#f97316' },
     { name: 'SEV3', value: analytics.sev3Tickets, color: '#22c55e' },
-  ].filter(item => item.value > 0); // Only show non-zero values
+  ].filter(item => item.value > 0) : []; // Only show non-zero values
 
-  const assignmentData = [
+  const assignmentData = analytics ? [
     { name: 'Assigned', value: analytics.assignedTickets },
     { name: 'Unassigned', value: analytics.unassignedTickets },
-  ];
+  ] : [];
 
   // Check if we have any data to display
-  const hasData = analytics.totalTickets > 0;
+  const hasData = !!analytics && analytics.totalTickets > 0;
 
   // Calculate additional metrics
-  const pendingActions = analytics.userDependencyTickets + analytics.opsInputRequiredTickets + 
-    analytics.opsUserDependencyTickets + analytics.sendForApprovalTickets;
-  const activeTickets = analytics.openTickets + analytics.inProgressTickets;
-  const resolutionRate = analytics.totalTickets > 0 
+  const pendingActions = analytics
+    ? analytics.userDependencyTickets + analytics.opsInputRequiredTickets +
+      analytics.opsUserDependencyTickets + analytics.sendForApprovalTickets
+    : 0;
+  const activeTickets = analytics
+    ? analytics.openTickets + analytics.inProgressTickets
+    : 0;
+  const resolutionRate = analytics && analytics.totalTickets > 0 
     ? Math.round((analytics.resolvedTickets / analytics.totalTickets) * 100) 
     : 0;
-  const assignmentRate = analytics.totalTickets > 0 
+  const assignmentRate = analytics && analytics.totalTickets > 0 
     ? Math.round((analytics.assignedTickets / analytics.totalTickets) * 100) 
     : 0;
-  const slaComplianceRate = analytics.totalTickets > 0
+  const slaComplianceRate = analytics && analytics.totalTickets > 0
     ? Math.round(((analytics.totalTickets - analytics.slaBreachedTickets) / analytics.totalTickets) * 100)
     : 0;
 
+  const filtersCard = (
+    <AnalyticsDateFilter
+      dateRange={dateRange}
+      onDateRangeChange={setDateRange}
+      preset={datePreset}
+      onPresetChange={setDatePreset}
+      includeArchived={includeArchived}
+      onIncludeArchivedChange={setIncludeArchived}
+      idPrefix="analytics"
+    />
+  );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        {filtersCard}
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
+            <p>Loading analytics...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        {filtersCard}
+        <div className="text-center p-8">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={loadAnalytics}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analytics) {
+    return (
+      <div className="space-y-6">
+        {filtersCard}
+        <div className="text-center p-8">
+          <p>No analytics data available</p>
+          <Button onClick={loadAnalytics} className="mt-4">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {filtersCard}
       {/* Key Metrics Cards - Enhanced Design */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="border-l-4 border-l-blue-500 hover:shadow-lg transition-shadow">

@@ -13,7 +13,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Issue } from '@/types/issue';
-import { AdminService } from '@/services/adminService';
+import { AdminService, TicketSortBy, TicketSortDir } from '@/services/adminService';
+import { AnalyticsDateFilter } from '@/components/admin/AnalyticsDateFilter';
+import { DateRangePresetId } from '@/utils/dateRangePresets';
 import { exportTicketsAsCSV, generateExportFilename } from '@/utils/ticketExport';
 import { UserManagementModal } from '@/components/admin/UserManagementModal';
 import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
@@ -95,6 +97,11 @@ export const AdminPage: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [lastStatusFilter, setLastStatusFilter] = useState('all');
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
+  const [sortBy, setSortBy] = useState<TicketSortBy>('created');
+  const [sortDir, setSortDir] = useState<TicketSortDir>('desc');
+  const [analyticsIncludeArchived, setAnalyticsIncludeArchived] = useState(false);
+  const [analyticsDateRange, setAnalyticsDateRange] = useState<DateRange | undefined>();
+  const [analyticsDatePreset, setAnalyticsDatePreset] = useState<DateRangePresetId>('all');
   
   // Track which tabs have been loaded to avoid reloading
   const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
@@ -225,7 +232,7 @@ export const AdminPage: React.FC = () => {
       
       if (isTicketAdmin && user?.id) {
         // For ticket admin, only load assigned tickets
-        const assignedTickets = await AdminService.getTicketsAssignedToAdmin(user.id);
+        const assignedTickets = await AdminService.getTicketsAssignedToAdmin(user.id, { sortBy, sortDir });
         result = {
           tickets: assignedTickets,
           total: assignedTickets.length,
@@ -251,7 +258,9 @@ export const AdminPage: React.FC = () => {
             lastStatusFilter,
             lastCommentByInvigilator,
             showDeleted,
-            archiveStatus: viewAllTickets ? undefined : false
+            archiveStatus: viewAllTickets ? undefined : false,
+            sortBy,
+            sortDir,
           });
           
           // Store all filtered tickets for dropdown calculations
@@ -268,12 +277,18 @@ export const AdminPage: React.FC = () => {
             hasMore: endIndex < allFilteredTickets.length
           };
         } else {
-          result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit, { archiveStatus: viewAllTickets ? undefined : false });
+          result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit, {
+            archiveStatus: viewAllTickets ? undefined : false,
+            sortBy,
+            sortDir,
+          });
 
           if (reset) {
             const allTickets = await AdminService.getAllTicketsUnpaginated({
               showDeleted,
-              archiveStatus: viewAllTickets ? undefined : false
+              archiveStatus: viewAllTickets ? undefined : false,
+              sortBy,
+              sortDir,
             });
             setAllFilteredTickets(allTickets);
           }
@@ -307,7 +322,7 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, viewAllTickets, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, isTicketAdmin, user?.id]);
+  }, [showDeleted, viewAllTickets, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, sortBy, sortDir, isTicketAdmin, user?.id]);
 
   // On initial load and when filters/search change, reset pagination and fetch fresh data
   // Only reload if tickets tab is active and loaded
@@ -320,7 +335,7 @@ export const AdminPage: React.FC = () => {
       loadTickets(true);
     }
     // eslint-disable-next-line
-  }, [showDeleted, viewAllTickets, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, activeTab, loadedTabs]);
+  }, [showDeleted, viewAllTickets, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, sortBy, sortDir, activeTab, loadedTabs]);
 
   // Fetch resolvers/approvers for filter dropdowns (only when tickets tab is active)
   useEffect(() => {
@@ -407,16 +422,22 @@ export const AdminPage: React.FC = () => {
     // eslint-disable-next-line
   }, [page]);
 
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     setIsLoadingAnalytics(true);
     try {
+      const analyticsOptions = {
+        includeArchived: analyticsIncludeArchived,
+        dateRange: analyticsDateRange?.from
+          ? { from: analyticsDateRange.from, to: analyticsDateRange.to }
+          : undefined,
+      };
       let data;
       if (isTicketAdmin && user?.id) {
         // For ticket admin, load filtered analytics
-        data = await AdminService.getTicketAnalyticsForAdmin(user.id);
+        data = await AdminService.getTicketAnalyticsForAdmin(user.id, analyticsOptions);
       } else {
         // For super admin, load all analytics
-        data = await AdminService.getTicketAnalytics();
+        data = await AdminService.getTicketAnalytics(analyticsOptions);
       }
       setAnalytics(data);
       // console.log('📊 Analytics refreshed:', data);
@@ -425,14 +446,14 @@ export const AdminPage: React.FC = () => {
     } finally {
       setIsLoadingAnalytics(false);
     }
-  };
+  }, [analyticsIncludeArchived, analyticsDateRange, isTicketAdmin, user?.id]);
 
-  // Refresh analytics when filters change (only if analytics/overview tab is active)
+  // Refresh analytics when overview/analytics filters change
   useEffect(() => {
     if ((activeTab === 'analytics' || activeTab === 'overview') && loadedTabs.has(activeTab)) {
       loadAnalytics();
     }
-  }, [statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, activeTab, loadedTabs]);
+  }, [analyticsIncludeArchived, analyticsDateRange, activeTab, loadedTabs, loadAnalytics]);
 
   const handleLogout = () => {
     logout();
@@ -926,6 +947,16 @@ export const AdminPage: React.FC = () => {
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
+              <AnalyticsDateFilter
+                dateRange={analyticsDateRange}
+                onDateRangeChange={setAnalyticsDateRange}
+                preset={analyticsDatePreset}
+                onPresetChange={setAnalyticsDatePreset}
+                includeArchived={analyticsIncludeArchived}
+                onIncludeArchivedChange={setAnalyticsIncludeArchived}
+                idPrefix="overview"
+              />
+
               {isLoadingAnalytics ? (
                 <div className="text-center py-12">
                   <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
@@ -1310,7 +1341,7 @@ export const AdminPage: React.FC = () => {
                     </div>
 
                     {/* Row 3: Resolver */}
-                    <div className="grid grid-cols-1 lg:grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                       <div>
                         <label className="text-sm font-medium mb-2 block">
                           Resolver {resolverFilter.length > 0 && (
@@ -1329,7 +1360,7 @@ export const AdminPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Row 4: Actions & Settings */}
+                    {/* Row 4: Actions, Settings & Sort */}
                     <div className="flex flex-wrap items-center gap-4 pt-2 border-t">
                       <div className="flex items-center space-x-2">
                         <Switch
@@ -1340,44 +1371,69 @@ export const AdminPage: React.FC = () => {
                         <label htmlFor="only-unassigned-resolver" className="text-sm font-medium">
                           Unassigned Tickets
                         </label>
-                  </div>
+                      </div>
 
-                      <div className="flex items-center space-x-2">
-                <Switch
-                  id="show-deleted"
-                  checked={showDeleted}
-                  onCheckedChange={(checked) => setShowDeleted(checked)}
-                />
-                <label htmlFor="show-deleted" className="text-sm font-medium">
-                  {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
-                  </label>
-                </div>
-
-                      {!isTicketAdmin && (
                       <div className="flex items-center space-x-2">
                         <Switch
-                          id="show-archived"
-                          checked={viewAllTickets}
-                          onCheckedChange={(checked) => setViewAllTickets(checked)}
+                          id="show-deleted"
+                          checked={showDeleted}
+                          onCheckedChange={(checked) => setShowDeleted(checked)}
                         />
-                        <label htmlFor="show-archived" className="text-sm font-medium">
-                          {viewAllTickets ? 'View All Tickets' : 'Hide Archived Tickets'}
+                        <label htmlFor="show-deleted" className="text-sm font-medium">
+                          {showDeleted ? 'Showing Deleted Tickets' : 'Hide Deleted Tickets'}
                         </label>
                       </div>
+
+                      {!isTicketAdmin && (
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="show-archived"
+                            checked={viewAllTickets}
+                            onCheckedChange={(checked) => setViewAllTickets(checked)}
+                          />
+                          <label htmlFor="show-archived" className="text-sm font-medium">
+                            {viewAllTickets ? 'View All Tickets' : 'Hide Archived Tickets'}
+                          </label>
+                        </div>
                       )}
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-3 ml-auto">
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm font-medium whitespace-nowrap">Sort by</label>
+                          <Select value={sortBy} onValueChange={(value) => setSortBy(value as TicketSortBy)}>
+                            <SelectTrigger className="h-9 w-[140px]">
+                              <SelectValue placeholder="Sort by" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="created">Created</SelectItem>
+                              <SelectItem value="updated">Updated</SelectItem>
+                              <SelectItem value="ticketNumber">Ticket#</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm font-medium whitespace-nowrap">Direction</label>
+                          <Select value={sortDir} onValueChange={(value) => setSortDir(value as TicketSortDir)}>
+                            <SelectTrigger className="h-9 w-[110px]">
+                              <SelectValue placeholder="Direction" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="desc">Desc</SelectItem>
+                              <SelectItem value="asc">Asc</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                         {hasActiveFilters && (
-                    <Button 
-                        variant="outline" 
-                        onClick={clearFilters}
+                          <Button
+                            variant="outline"
+                            onClick={clearFilters}
                             className="flex items-center gap-2"
-                    >
+                          >
                             <X className="h-4 w-4" />
-                        Clear Filters
-                    </Button>
+                            Clear Filters
+                          </Button>
                         )}
-                </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -1715,7 +1771,14 @@ export const AdminPage: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="analytics">
-              <AdvancedAnalytics />
+              <AdvancedAnalytics
+                includeArchived={analyticsIncludeArchived}
+                onIncludeArchivedChange={setAnalyticsIncludeArchived}
+                dateRange={analyticsDateRange}
+                onDateRangeChange={setAnalyticsDateRange}
+                datePreset={analyticsDatePreset}
+                onDatePresetChange={setAnalyticsDatePreset}
+              />
             </TabsContent>
 
             <TabsContent value="users">
