@@ -299,52 +299,33 @@ export class TicketService {
 
   static async getTicketTimeline(ticketId: string): Promise<TimelineEvent[]> {
     try {
-      // First try to get from ticket_timeline table
-      const { data: timelineData, error: timelineError } = await supabase
-        .from('ticket_timeline')
-        .select('*')
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: false });
-      
-      if (timelineError) {
-        console.error('Error fetching from ticket_timeline:', timelineError);
-      }
-      
-      // If we have timeline data, return it
-      if (timelineData && timelineData.length > 0) {
-        return timelineData.map((event: any) => ({
-          id: event.id,
-          eventType: event.event_type,
-          oldValue: event.old_value,
-          newValue: event.new_value,
-          performedBy: event.performed_by,
-          performedByName: event.performed_by_name,
-          performedByRole: event.performed_by_role,
-          details: event.details,
-          createdAt: new Date(event.created_at),
-        }));
-      }
-      
-      // Fallback: Get from ticket_history table and convert to TimelineEvent format
-      // console.log('No data in ticket_timeline, falling back to ticket_history');
+      // ticket_history is the source of truth (same as Admin Activity Log).
+      // ticket_timeline is a partial overlapping store and is not used for display.
       const { data: historyData, error: historyError } = await supabase
         .from('ticket_history')
         .select('*')
         .eq('ticket_id', ticketId)
         .order('performed_at', { ascending: false });
-      
+
       if (historyError) {
         console.error('Error fetching from ticket_history:', historyError);
         return [];
       }
-      
-      // Convert ticket_history format to TimelineEvent format
+
       return (historyData || []).map((event: any) => ({
         id: event.id,
-        eventType: event.action_type === 'status_change' ? 'status_changed' : 
-                  event.action_type === 'assignment' ? 'assigned' :
-                  event.action_type === 'comment_added' ? 'comment_added' :
-                  event.action_type === 'created' ? 'created' : 'status_changed',
+        eventType:
+          event.action_type === 'status_change'
+            ? 'status_changed'
+            : event.action_type === 'assignment'
+              ? 'assigned'
+              : event.action_type === 'comment_added'
+                ? 'comment_added'
+                : event.action_type === 'created'
+                  ? 'created'
+                  : event.action_type === 'reopened'
+                    ? 'reopened'
+                    : event.action_type,
         oldValue: event.old_value,
         newValue: event.new_value,
         performedBy: event.performed_by,
@@ -353,7 +334,6 @@ export class TicketService {
         details: event.details,
         createdAt: new Date(event.performed_at),
       }));
-      
     } catch (error) {
       console.error('Error fetching ticket timeline:', error);
       return [];
@@ -1016,20 +996,9 @@ export class TicketService {
 
       // console.log('Comment added successfully:', data);
       toast.success('Comment added successfully');
-      
-      // Log to ticket_history
-      await this.addTicketHistoryEvent({
-        ticketId,
-        actionType: 'comment_added',
-        oldValue: null,
-        newValue: commentData.content,
-        performedBy: commentData.author,
-        performedByRole: commentData.authorRole,
-        details: { 
-          is_internal: commentData.isInternal,
-          attachments_count: commentData.attachments?.length || 0
-        },
-      });
+
+      // ticket_history for comments is owned by DB trigger log_comment_history
+      // (do not also call addTicketHistoryEvent — that created soft duplicate rows).
 
       // Send WhatsApp notification for non-internal comments (only if NOT from ticket raiser)
       if (!commentData.isInternal) {

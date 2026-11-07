@@ -7,7 +7,9 @@ export function formatEventType(eventType: string): string {
   const eventTypeMap: Record<string, string> = {
     'created': 'Ticket Created',
     'status_changed': 'Status Changed',
+    'status_change': 'Status Changed',
     'assigned': 'Assignment Changed',
+    'assignment': 'Assignment Changed',
     'comment_added': 'Comment Added',
     'attachment_uploaded': 'Attachment Uploaded',
     'reopened': 'Ticket Reopened',

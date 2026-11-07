@@ -33,11 +33,11 @@ export interface BulkActivityGroup {
 
 export class ActivityLogService {
   /**
-   * Fetch all ticket activities from ticket_history and ticket_timeline
+   * Fetch admin Activity Log from ticket_history only (source of truth).
+   * ticket_timeline is a partial overlapping store and must not be merged here.
    */
   static async getAllActivities(limit: number = 500): Promise<ActivityLogEntry[]> {
     try {
-      // Fetch from ticket_history
       const { data: historyData, error: historyError } = await supabase
         .from('ticket_history')
         .select('*')
@@ -46,29 +46,12 @@ export class ActivityLogService {
 
       if (historyError) {
         console.error('Error fetching ticket_history:', historyError);
+        return [];
       }
 
-      // Fetch from ticket_timeline
-      const { data: timelineData, error: timelineError } = await supabase
-        .from('ticket_timeline')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (timelineError) {
-        console.error('Error fetching ticket_timeline:', timelineError);
-      }
-
-      // Get unique ticket IDs and fetch ticket numbers
       const ticketIds = new Set<string>();
-      if (historyData) {
-        historyData.forEach(entry => ticketIds.add(entry.ticket_id));
-      }
-      if (timelineData) {
-        timelineData.forEach(entry => ticketIds.add(entry.ticket_id));
-      }
+      (historyData || []).forEach((entry) => ticketIds.add(entry.ticket_id));
 
-      // Fetch ticket numbers
       const ticketNumberMap = new Map<string, string>();
       if (ticketIds.size > 0) {
         const { data: ticketsData } = await supabase
@@ -77,80 +60,25 @@ export class ActivityLogService {
           .in('id', Array.from(ticketIds));
 
         if (ticketsData) {
-          ticketsData.forEach(ticket => {
+          ticketsData.forEach((ticket) => {
             ticketNumberMap.set(ticket.id, ticket.ticket_number);
           });
         }
       }
 
-      // Combine and normalize data
-      const activities: ActivityLogEntry[] = [];
-
-      // Process ticket_history
-      if (historyData) {
-        for (const entry of historyData) {
-          activities.push({
-            id: entry.id,
-            ticketId: entry.ticket_id,
-            ticketNumber: ticketNumberMap.get(entry.ticket_id),
-            actionType: entry.action_type,
-            oldValue: entry.old_value,
-            newValue: entry.new_value,
-            performedBy: entry.performed_by,
-            performedByRole: entry.performed_by_role,
-            performedAt: new Date(entry.performed_at),
-            details: entry.details,
-            isBulk: false,
-          });
-        }
-      }
-
-      // Process ticket_timeline (avoid duplicates by checking if already exists)
-      // Use a more strict deduplication: same ticket, same action type, same values, within 2 seconds
-      if (timelineData) {
-        for (const entry of timelineData) {
-          // Check if a similar entry already exists in activities
-          // Match by: ticket_id, action_type/event_type, old_value, new_value, and time (within 2 seconds)
-          const exists = activities.some(a => {
-            const timeDiff = Math.abs(a.performedAt.getTime() - new Date(entry.created_at).getTime());
-            const actionMatches = 
-              (a.actionType === entry.event_type) ||
-              (a.actionType === 'status_change' && entry.event_type === 'status_changed') ||
-              (a.actionType === 'status_changed' && entry.event_type === 'status_change') ||
-              (a.actionType === 'assignment' && entry.event_type === 'assigned') ||
-              (a.actionType === 'assigned' && entry.event_type === 'assignment');
-            
-            return (
-              a.ticketId === entry.ticket_id &&
-              actionMatches &&
-              a.oldValue === entry.old_value &&
-              a.newValue === entry.new_value &&
-              timeDiff < 2000 // 2 seconds
-            );
-          });
-          
-          if (!exists) {
-            activities.push({
-              id: entry.id,
-              ticketId: entry.ticket_id,
-              ticketNumber: ticketNumberMap.get(entry.ticket_id),
-              actionType: entry.event_type,
-              oldValue: entry.old_value,
-              newValue: entry.new_value,
-              performedBy: entry.performed_by_name || 'System',
-              performedByRole: entry.performed_by_role || 'system',
-              performedAt: new Date(entry.created_at),
-              details: entry.details,
-              isBulk: false,
-            });
-          }
-        }
-      }
-
-      // Sort by performed_at descending
-      activities.sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
-
-      return activities;
+      return (historyData || []).map((entry) => ({
+        id: entry.id,
+        ticketId: entry.ticket_id,
+        ticketNumber: ticketNumberMap.get(entry.ticket_id),
+        actionType: entry.action_type,
+        oldValue: entry.old_value,
+        newValue: entry.new_value,
+        performedBy: entry.performed_by,
+        performedByRole: entry.performed_by_role,
+        performedAt: new Date(entry.performed_at),
+        details: entry.details,
+        isBulk: false,
+      }));
     } catch (error) {
       console.error('Error fetching activities:', error);
       return [];
