@@ -1,5 +1,6 @@
 import { supabase } from '../integrations/supabase/client';
 import { getStatusLabel } from '@/utils/status';
+import { displayUserLabel, fetchUserNameMap } from '@/utils/userDisplayNames';
 
 export interface ActivityLogEntry {
   id: string;
@@ -66,19 +67,30 @@ export class ActivityLogService {
         }
       }
 
-      return (historyData || []).map((entry) => ({
-        id: entry.id,
-        ticketId: entry.ticket_id,
-        ticketNumber: ticketNumberMap.get(entry.ticket_id),
-        actionType: entry.action_type,
-        oldValue: entry.old_value,
-        newValue: entry.new_value,
-        performedBy: entry.performed_by,
-        performedByRole: entry.performed_by_role,
-        performedAt: new Date(entry.performed_at),
-        details: entry.details,
-        isBulk: false,
-      }));
+      const nameIds: Array<string | null | undefined> = [];
+      (historyData || []).forEach((entry) => {
+        nameIds.push(entry.performed_by, entry.old_value, entry.new_value, entry.details?.user_id);
+      });
+      const nameById = await fetchUserNameMap(nameIds);
+
+      return (historyData || []).map((entry) => {
+        const isAssignment = entry.action_type === 'assignment' || entry.action_type === 'assigned';
+        const resolveId = (value: string | null) =>
+          value && nameById.has(value) ? nameById.get(value)! : value;
+        return {
+          id: entry.id,
+          ticketId: entry.ticket_id,
+          ticketNumber: ticketNumberMap.get(entry.ticket_id),
+          actionType: entry.action_type,
+          oldValue: isAssignment ? resolveId(entry.old_value) : entry.old_value,
+          newValue: isAssignment ? resolveId(entry.new_value) : entry.new_value,
+          performedBy: displayUserLabel(entry.performed_by, nameById, entry.performed_by || 'System'),
+          performedByRole: entry.performed_by_role,
+          performedAt: new Date(entry.performed_at),
+          details: entry.details,
+          isBulk: false,
+        };
+      });
     } catch (error) {
       console.error('Error fetching activities:', error);
       return [];
@@ -177,11 +189,17 @@ export class ActivityLogService {
       
       case 'assignment':
       case 'assigned':
-        const assignee = activity.newValue || 'N/A';
+        const assignee = activity.newValue || 'Unassigned';
         return `${ticketRef} ${isBulk ? 'were' : 'was'} assigned to ${assignee} by ${activity.performedBy}`;
       
-      case 'comment_added':
+      case 'comment_added': {
+        const raw = activity.newValue?.trim();
+        if (raw) {
+          const preview = raw.length > 100 ? `${raw.slice(0, 100)}…` : raw;
+          return `Comment added to ${ticketRef} by ${activity.performedBy}: "${preview}"`;
+        }
         return `Comment added to ${ticketRef} by ${activity.performedBy}`;
+      }
       
       case 'resolved':
         return `${ticketRef} ${isBulk ? 'were' : 'was'} resolved by ${activity.performedBy}`;
@@ -225,19 +243,30 @@ export class ActivityLogService {
         }
       }
 
-      return (data || []).map((entry: any) => ({
-        id: entry.id,
-        ticketId: entry.ticket_id,
-        ticketNumber: ticketNumberMap.get(entry.ticket_id),
-        actionType: entry.action_type,
-        oldValue: entry.old_value,
-        newValue: entry.new_value,
-        performedBy: entry.performed_by,
-        performedByRole: entry.performed_by_role,
-        performedAt: new Date(entry.performed_at),
-        details: entry.details,
-        isBulk: false,
-      }));
+      const nameIds: Array<string | null | undefined> = [];
+      (data || []).forEach((entry: any) => {
+        nameIds.push(entry.performed_by, entry.old_value, entry.new_value, entry.details?.user_id);
+      });
+      const nameById = await fetchUserNameMap(nameIds);
+
+      return (data || []).map((entry: any) => {
+        const isAssignment = entry.action_type === 'assignment' || entry.action_type === 'assigned';
+        const resolveId = (value: string | null) =>
+          value && nameById.has(value) ? nameById.get(value)! : value;
+        return {
+          id: entry.id,
+          ticketId: entry.ticket_id,
+          ticketNumber: ticketNumberMap.get(entry.ticket_id),
+          actionType: entry.action_type,
+          oldValue: isAssignment ? resolveId(entry.old_value) : entry.old_value,
+          newValue: isAssignment ? resolveId(entry.new_value) : entry.new_value,
+          performedBy: displayUserLabel(entry.performed_by, nameById, entry.performed_by || 'System'),
+          performedByRole: entry.performed_by_role,
+          performedAt: new Date(entry.performed_at),
+          details: entry.details,
+          isBulk: false,
+        };
+      });
     } catch (error) {
       console.error('Error fetching bulk action details:', error);
       return [];

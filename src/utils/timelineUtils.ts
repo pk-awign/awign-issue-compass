@@ -82,7 +82,11 @@ export function formatEventDetails(event: TimelineEvent): string {
       return `Assignment changed from ${oldAssignment} to ${newAssignment}`;
     
     case 'comment_added':
-      return 'A comment was added';
+      if (newValue?.trim()) {
+        const preview = newValue.trim().length > 140 ? `${newValue.trim().slice(0, 140)}…` : newValue.trim();
+        return `added a comment: "${preview}"`;
+      }
+      return 'added a comment';
     
     case 'attachment_uploaded':
       return 'An attachment was uploaded';

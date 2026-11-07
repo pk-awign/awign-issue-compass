@@ -18,6 +18,7 @@ import {
   type RoleTicketListFilters,
   type RoleTicketRole,
 } from './roleTicketQuery';
+import { displayUserLabel, fetchUserNameMap } from '@/utils/userDisplayNames';
 
 export class TicketService {
   static async createTicket(issueData: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'> & { issueEvidence?: File[] }, userId?: string): Promise<string> {
@@ -312,9 +313,14 @@ export class TicketService {
         return [];
       }
 
-      return (historyData || []).map((event: any) => ({
-        id: event.id,
-        eventType:
+      const nameIds: Array<string | null | undefined> = [];
+      (historyData || []).forEach((event: any) => {
+        nameIds.push(event.performed_by, event.old_value, event.new_value, event.details?.user_id);
+      });
+      const nameById = await fetchUserNameMap(nameIds);
+
+      return (historyData || []).map((event: any) => {
+        const eventType =
           event.action_type === 'status_change'
             ? 'status_changed'
             : event.action_type === 'assignment'
@@ -325,15 +331,29 @@ export class TicketService {
                   ? 'created'
                   : event.action_type === 'reopened'
                     ? 'reopened'
-                    : event.action_type,
-        oldValue: event.old_value,
-        newValue: event.new_value,
-        performedBy: event.performed_by,
-        performedByName: event.performed_by,
-        performedByRole: event.performed_by_role,
-        details: event.details,
-        createdAt: new Date(event.performed_at),
-      }));
+                    : event.action_type;
+
+        const resolveId = (value: string | null) =>
+          value && nameById.has(value) ? nameById.get(value)! : value;
+
+        return {
+          id: event.id,
+          eventType,
+          oldValue:
+            eventType === 'assigned' || event.action_type === 'assignment'
+              ? resolveId(event.old_value)
+              : event.old_value,
+          newValue:
+            eventType === 'assigned' || event.action_type === 'assignment'
+              ? resolveId(event.new_value)
+              : event.new_value,
+          performedBy: event.performed_by,
+          performedByName: displayUserLabel(event.performed_by, nameById, 'System'),
+          performedByRole: event.performed_by_role,
+          details: event.details,
+          createdAt: new Date(event.performed_at),
+        };
+      });
     } catch (error) {
       console.error('Error fetching ticket timeline:', error);
       return [];
@@ -847,23 +867,26 @@ export class TicketService {
     }
     
     if (!error) {
+      const assigneeDetails = await this.getUserDetails(userId);
+      const assigneeName = assigneeDetails?.name || userId;
+
       await this.addTimelineEvent({
         ticketId,
         eventType: 'assigned',
         performedBy,
         performedByName,
         performedByRole,
-        details: { action: 'added', user_id: userId, role },
+        details: { action: 'added', user_id: userId, user_name: assigneeName, role },
       });
-      // Log to ticket_history
+      // Log to ticket_history (store display names; keep user_id in details)
       await this.addTicketHistoryEvent({
         ticketId,
         actionType: 'assignment',
         oldValue: null,
-        newValue: userId,
-        performedBy,
+        newValue: assigneeName,
+        performedBy: performedByName || performedBy,
         performedByRole: performedByRole,
-        details: { action: 'added', user_id: userId, role },
+        details: { action: 'added', user_id: userId, user_name: assigneeName, role },
       });
 
       // Auto-move to in_progress when a resolver is assigned (only if ticket is in OPEN status)
@@ -900,23 +923,25 @@ export class TicketService {
 
     const { error } = await supabase.from('ticket_assignees').delete().match({ ticket_id: ticketId, user_id: userId, role });
     if (!error) {
+      const assigneeDetails = await this.getUserDetails(userId);
+      const assigneeName = assigneeDetails?.name || userId;
+
       await this.addTimelineEvent({
         ticketId,
         eventType: 'assigned',
         performedBy,
         performedByName,
         performedByRole,
-        details: { action: 'removed', user_id: userId, role },
+        details: { action: 'removed', user_id: userId, user_name: assigneeName, role },
       });
-      // Log to ticket_history
       await this.addTicketHistoryEvent({
         ticketId,
         actionType: 'assignment',
-        oldValue: userId,
+        oldValue: assigneeName,
         newValue: null,
-        performedBy,
+        performedBy: performedByName || performedBy,
         performedByRole: performedByRole,
-        details: { action: 'removed', user_id: userId, role },
+        details: { action: 'removed', user_id: userId, user_name: assigneeName, role },
       });
     }
     return { error };
