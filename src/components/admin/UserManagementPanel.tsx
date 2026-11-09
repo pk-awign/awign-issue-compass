@@ -14,12 +14,18 @@ import { toast } from 'sonner';
 import { AdminService } from '@/services/adminService';
 import { User } from '@/types/issue';
 import { cn } from '@/lib/utils';
+import {
+  cardMetaRowClass,
+  cardTitleMobileClass,
+  modalViewportClass,
+} from '@/components/layout/mobileLayout';
 
 interface UserManagementPanelProps {
   className?: string;
 }
 
 type UserRoleFilter = 'all' | User['role'];
+type UserActiveFilter = 'all' | 'active' | 'inactive';
 
 const roleLabels: Record<User['role'], string> = {
   invigilator: 'Invigilator',
@@ -94,6 +100,7 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
   const [activeTab, setActiveTab] = useState('users');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRoleFilter>('all');
+  const [activeFilter, setActiveFilter] = useState<UserActiveFilter>('all');
 
   const [formData, setFormData] = useState(emptyForm());
 
@@ -117,12 +124,14 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
     const term = searchTerm.trim().toLowerCase();
     return users.filter(user => {
       if (roleFilter !== 'all' && user.role !== roleFilter) return false;
+      if (activeFilter === 'active' && !user.isActive) return false;
+      if (activeFilter === 'inactive' && user.isActive) return false;
       if (!term) return true;
       return [user.name, user.mobile, user.email, user.city, user.centreCode]
         .filter(Boolean)
         .some(value => String(value).toLowerCase().includes(term));
     });
-  }, [users, searchTerm, roleFilter]);
+  }, [users, searchTerm, roleFilter, activeFilter]);
 
   const activeUserCount = users.filter(user => user.isActive).length;
 
@@ -350,7 +359,7 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <div className="relative flex-1 sm:max-w-xs">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -377,13 +386,27 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
                     <SelectItem value="super_admin">Super Admin</SelectItem>
                   </SelectContent>
                 </Select>
-                {(searchTerm || roleFilter !== 'all') && (
+                <Select
+                  value={activeFilter}
+                  onValueChange={value => setActiveFilter(value as UserActiveFilter)}
+                >
+                  <SelectTrigger className="w-full sm:w-40" aria-label="Filter by active status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+                {(searchTerm || roleFilter !== 'all' || activeFilter !== 'all') && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
                       setSearchTerm('');
                       setRoleFilter('all');
+                      setActiveFilter('all');
                     }}
                   >
                     <X className="mr-1 h-3 w-3" />
@@ -401,12 +424,14 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
               ) : (
                 <>
                   {/* Phones get one card per user; the table needs md and up. */}
-                  <div className="space-y-3 md:hidden">
+                  <div className="space-y-2 md:hidden">
                     {filteredUsers.map(user => (
-                      <div key={`${user.id}-card`} className="rounded-lg border p-3">
+                      <div key={`${user.id}-card`} className="min-w-0 rounded-lg border p-2.5">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{user.name}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className={cardTitleMobileClass} title={user.name}>
+                              {user.name}
+                            </p>
                             <div className="mt-1 flex flex-wrap items-center gap-1">
                               <Badge variant={getRoleBadgeVariant(user.role)} className="text-[10px]">
                                 {roleLabels[user.role]}
@@ -421,7 +446,7 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
                           </div>
                           {renderRowActions(user)}
                         </div>
-                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                        <div className={cn(cardMetaRowClass, 'mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-xs sm:text-sm')}>
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <Phone className="h-3 w-3 shrink-0" />
                             <span className="truncate">{user.mobile || 'No mobile'}</span>
@@ -561,7 +586,9 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
                         className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="min-w-0">
-                          <div className="font-medium">{user.name}</div>
+                          <div className={cn(cardTitleMobileClass, 'font-medium')} title={user.name}>
+                            {user.name}
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             Primary role: {roleLabels[user.role]}
                           </div>
@@ -618,7 +645,7 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
 
       {/* Add user */}
       <Dialog open={isAddingUser} onOpenChange={setIsAddingUser}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className={cn(modalViewportClass, 'gap-4 overflow-y-auto p-4 sm:max-w-lg sm:p-6')}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Key className="h-4 w-4" />
@@ -724,9 +751,9 @@ export const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ classN
 
       {/* Edit user */}
       <Dialog open={isEditingUser} onOpenChange={setIsEditingUser}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className={cn(modalViewportClass, 'gap-4 overflow-y-auto p-4 sm:max-w-lg sm:p-6')}>
           <DialogHeader>
-            <DialogTitle>Edit {selectedUser?.name ?? 'user'}</DialogTitle>
+            <DialogTitle className="truncate">Edit {selectedUser?.name ?? 'user'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

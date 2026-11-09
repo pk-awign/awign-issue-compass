@@ -14,6 +14,7 @@ import { TicketService } from '@/services/ticketService';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 interface TicketTrackerProps {
   initialSearchTerm?: string;
@@ -301,7 +302,7 @@ export const TicketTracker: React.FC<TicketTrackerProps> = ({ initialSearchTerm 
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       {/* Mobile: Show either list or details */}
       <div className="lg:hidden">
         {!showDetails ? (

@@ -11,8 +11,9 @@ import { Issue, TimelineEvent, StatusTransition } from '../../types/issue';
 import { TicketService } from '../../services/ticketService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
-import { formatRole, getTimelineDescription } from '../../utils/timelineUtils';
+import { formatRole, getTimelineDescription, getHistoryEventHighlightClass } from '../../utils/timelineUtils';
 import { getStatusLabel } from '../../utils/status';
+import { cn } from '@/lib/utils';
 import { 
   Clock, 
   User, 
@@ -321,8 +322,13 @@ export const EnhancedTicketManagement: React.FC<EnhancedTicketManagementProps> =
                   <p className="text-gray-500 text-center py-4">No timeline events yet</p>
                 ) : (
                   timeline.map((event) => (
-                    <div key={event.id} className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                    <div
+                      key={event.id}
+                      className={cn(
+                        'flex items-start gap-3',
+                        getHistoryEventHighlightClass(event.eventType)
+                      )}
+                    >
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-sm">

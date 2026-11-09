@@ -49,20 +49,19 @@ import {
   TooManyAdvancedMatchesError,
   TOO_MANY_ADVANCED_MATCHES_MESSAGE
 } from '@/services/roleTicketAdvancedFilters';
+import { PageShell } from '@/components/layout/PageShell';
+import {
+  cardMetaRowClass,
+  cardTitleMobileClass,
+  pageFooterClass,
+  tabTriggerClass,
+  tabsListClass,
+} from '@/components/layout/mobileLayout';
+import { cn } from '@/lib/utils';
 
 const PAGE_LIMIT = 50;
 const SEARCH_DEBOUNCE_MS = 400;
 const SEVERITY_OPTIONS = ['sev1', 'sev2', 'sev3'];
-
-/**
- * Status tab styling shared by every trigger.
- *
- * Phones and tablets use a grid (2 then 4 columns) so labels wrap inside their
- * cell and every status stays visible. From xl up the triggers size to their
- * content on a single line.
- */
-const filterTabTriggerClass =
-  "w-full shrink-0 rounded-lg py-3 text-center data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow xl:w-auto xl:flex-none xl:min-w-fit xl:whitespace-nowrap xl:px-2";
 
 const APPROVER_TABS: { value: ApproverStatusTab; label: string; emptyTitle: string; emptyHint: string }[] = [
   { value: 'all', label: 'All', emptyTitle: 'No tickets found', emptyHint: 'No tickets assigned to you' },
@@ -520,16 +519,20 @@ export const ResolutionApproverPage: React.FC = () => {
 
   const renderApprovalCard = (ticket: Issue) => {
     const resolutionTime = getResolutionTime(ticket);
-    
+
     return (
-      <Card key={ticket.id} className="hover:shadow-md transition-shadow border-l-4 border-l-orange-400">
-        <CardContent className="p-4">
-          <div className="space-y-4">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-semibold text-sm">{ticket.ticketNumber}</span>
-                <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+      <Card
+        key={ticket.id}
+        className="min-w-0 border-l-4 border-l-orange-400 transition-shadow hover:shadow-md"
+      >
+        <CardContent className="p-3 sm:p-4">
+          <div className="space-y-2 sm:space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <span className="truncate font-mono text-sm font-semibold" title={ticket.ticketNumber}>
+                  {ticket.ticketNumber}
+                </span>
+                <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
                   <Badge className={getSeverityColor(ticket.severity)}>
                     {ticket.severity.toUpperCase()}
                   </Badge>
@@ -542,46 +545,47 @@ export const ResolutionApproverPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => handleViewTicket(ticket)}
-                className="flex items-center gap-1"
+                className="h-8 shrink-0 gap-1 px-2"
               >
                 <Eye className="h-3 w-3" />
-                Review
+                <span className="hidden sm:inline">Review</span>
               </Button>
             </div>
 
-            {/* Issue Info */}
-            <div>
-              <h3 className="font-medium text-sm mb-1">{formatCategory(ticket.issueCategory)}</h3>
-              <p className="text-xs text-muted-foreground line-clamp-2">{ticket.issueDescription}</p>
+            <div className="min-w-0">
+              <h3 className={cn(cardTitleMobileClass, 'mb-1 text-sm')}>
+                {formatCategory(ticket.issueCategory)}
+              </h3>
+              <p className="line-clamp-2 text-xs text-muted-foreground">{ticket.issueDescription}</p>
             </div>
 
-            {/* Resolution Preview */}
             {ticket.resolutionNotes && (
-              <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-300">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle className="h-3 w-3 text-blue-600" />
-                  <span className="text-xs font-medium text-blue-800">Resolution Provided:</span>
+              <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                <div className="mb-1 flex items-center gap-2">
+                  <CheckCircle className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="text-xs font-medium">Resolution Provided</span>
                 </div>
-                <p className="text-xs text-blue-700 line-clamp-2">{ticket.resolutionNotes}</p>
+                <p className="line-clamp-2 text-xs text-muted-foreground">{ticket.resolutionNotes}</p>
               </div>
             )}
 
-            {/* Assignment & Timeline Info */}
             {user?.role !== 'approver' && (
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="space-y-1">
+              <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2 sm:gap-3">
+                <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-1 text-muted-foreground">
-                    <UserCheck className="h-3 w-3" />
-                    <span>Resolved by:</span>
+                    <UserCheck className="h-3 w-3 shrink-0" />
+                    <span>Resolved by</span>
                   </div>
-                  <div>Assigned Resolvers: {getResolverIdList(ticket)}</div>
+                  <div className="truncate" title={getResolverIdList(ticket)}>
+                    {getResolverIdList(ticket)}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1 text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    <span>Resolution Time:</span>
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>Resolution Time</span>
                   </div>
-                  <p className="font-medium">
+                  <p className="font-medium tabular-nums">
                     {resolutionTime ? `${resolutionTime}h` : 'N/A'}
                     {resolutionTime && resolutionTime > 24 && (
                       <Badge variant="destructive" className="ml-1 text-xs">
@@ -593,45 +597,41 @@ export const ResolutionApproverPage: React.FC = () => {
               </div>
             )}
 
-            {/* Action Buttons for Approvers */}
-            {user?.role === 'approver' && (
-              <div className="border-t pt-3">
-                <div className="flex gap-2">
-                  {/* Quick Action Buttons */}
-                  {ticket.status === 'send_for_approval' && (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={() => handleStatusChange(ticket.id, 'approved')}
-                      disabled={isUpdating}
-                      className="text-xs flex-1"
-                    >
-                      <ThumbsUp className="h-3 w-3 mr-1" />
-                      Approve
-                    </Button>
-                  )}
-                  {ticket.status === 'send_for_approval' && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => handleStatusChange(ticket.id, 'in_progress')}
-                      disabled={isUpdating}
-                      className="text-xs flex-1"
-                    >
-                      <ThumbsDown className="h-3 w-3 mr-1" />
-                      Send back to CX
-                    </Button>
-                  )}
-                </div>
+            {user?.role === 'approver' && ticket.status === 'send_for_approval' && (
+              <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => handleStatusChange(ticket.id, 'approved')}
+                  disabled={isUpdating}
+                  className="flex-1 text-xs"
+                >
+                  <ThumbsUp className="mr-1 h-3 w-3" />
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => handleStatusChange(ticket.id, 'in_progress')}
+                  disabled={isUpdating}
+                  className="flex-1 text-xs"
+                >
+                  <ThumbsDown className="mr-1 h-3 w-3" />
+                  Send back to CX
+                </Button>
               </div>
             )}
 
-            {/* Meta Info */}
-            <div className="flex flex-wrap items-center justify-between gap-y-1 text-xs text-muted-foreground pt-2 border-t">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <div className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  {ticket.city}
+            <div
+              className={cn(
+                cardMetaRowClass,
+                'justify-between border-t pt-2 text-xs text-muted-foreground'
+              )}
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <div className="flex min-w-0 items-center gap-1">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{ticket.city}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <FileText className="h-3 w-3" />
@@ -649,9 +649,9 @@ export const ResolutionApproverPage: React.FC = () => {
                 </div>
               </div>
               {ticket.comments.length > 0 && (
-                <div className="flex items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1 tabular-nums">
                   <MessageSquare className="h-3 w-3" />
-                  {ticket.comments.length} comments
+                  {ticket.comments.length}
                 </div>
               )}
             </div>
@@ -662,14 +662,16 @@ export const ResolutionApproverPage: React.FC = () => {
   };
 
   const renderTicketCard = (ticket: Issue) => (
-    <Card key={ticket.id} className={"hover:shadow-md transition-shadow"}>
-      <CardContent className="p-4">
-        <div className="space-y-3">
+    <Card key={ticket.id} className="min-w-0 transition-shadow hover:shadow-md">
+      <CardContent className="p-3 sm:p-4">
+        <div className="space-y-2 sm:space-y-3">
           {/* Header */}
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                <span className="font-mono font-semibold text-sm">{ticket.ticketNumber}</span>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                <span className="truncate font-mono text-sm font-semibold" title={ticket.ticketNumber}>
+                  {ticket.ticketNumber}
+                </span>
                 <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
                   <Badge className={getSeverityColor(ticket.severity)}>
                     {ticket.severity.toUpperCase()}
@@ -684,16 +686,16 @@ export const ResolutionApproverPage: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={() => handleViewTicket(ticket)}
-              className="flex items-center gap-1"
+              className="h-8 shrink-0 gap-1 px-2"
             >
               <Eye className="h-3 w-3" />
-              View
+              <span className="hidden sm:inline">View</span>
             </Button>
           </div>
 
           {/* Issue Info */}
-          <div>
-            <h3 className="font-medium text-sm mb-1">{formatCategory(ticket.issueCategory)}</h3>
+          <div className="min-w-0">
+            <h3 className={cn(cardTitleMobileClass, 'mb-1 text-sm')}>{formatCategory(ticket.issueCategory)}</h3>
             <p className="text-xs text-muted-foreground line-clamp-2">{ticket.issueDescription}</p>
           </div>
 
@@ -713,11 +715,11 @@ export const ResolutionApproverPage: React.FC = () => {
           )}
 
           {/* Meta Info */}
-          <div className="flex flex-wrap items-center justify-between gap-y-1 text-xs text-muted-foreground">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                {ticket.city}
+          <div className={cn(cardMetaRowClass, 'justify-between text-xs text-muted-foreground')}>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="flex min-w-0 items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{ticket.city}</span>
               </div>
               <div className="flex items-center gap-1">
                 <FileText className="h-3 w-3" />
@@ -767,14 +769,14 @@ export const ResolutionApproverPage: React.FC = () => {
             </div>
           </div>
         </header>
-        <main className="container mx-auto px-4 py-8">
+        <PageShell>
           <Card>
             <CardContent className="py-8 text-center">
               <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600">Please login to access the approver dashboard</p>
             </CardContent>
           </Card>
-        </main>
+        </PageShell>
       </div>
     );
   }
@@ -855,8 +857,7 @@ export const ResolutionApproverPage: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Header onLogout={handleLogout} panelName="Approver Panel" />
 
-      <main className="container mx-auto px-4 py-4 md:py-8">
-        <div className="space-y-6">
+      <PageShell>
           {/* Page Header hidden per request (keeping only the top header) */}
           {/* Hidden stats and header summary */}
           <div className="hidden" />
@@ -914,9 +915,9 @@ export const ResolutionApproverPage: React.FC = () => {
 
           {/* Tickets Tabs */}
           <Tabs value={activeTab} onValueChange={value => { if (isApproverTab(value)) setActiveTab(value); }}>
-            <TabsList className="grid w-full grid-cols-2 gap-3 rounded-xl border bg-white p-2 shadow-md my-4 z-10 md:grid-cols-4 xl:flex xl:flex-row xl:flex-nowrap xl:gap-1 xl:overflow-x-auto">
+            <TabsList className={cn(tabsListClass, 'z-10 md:grid-cols-4')}>
               {APPROVER_TABS.map(tab => (
-                <TabsTrigger key={tab.value} value={tab.value} className={filterTabTriggerClass}>
+                <TabsTrigger key={tab.value} value={tab.value} className={tabTriggerClass}>
                   {tab.label}
                   <Badge variant="secondary" className="ml-2">{statusCounts[tab.value] ?? 0}</Badge>
                 </TabsTrigger>
@@ -930,8 +931,7 @@ export const ResolutionApproverPage: React.FC = () => {
               </TabsContent>
             ))}
           </Tabs>
-        </div>
-      </main>
+      </PageShell>
 
       {/* Ticket Details Modal */}
       <TicketDetailsModal
@@ -943,7 +943,7 @@ export const ResolutionApproverPage: React.FC = () => {
       />
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
-        <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
+        <div className={pageFooterClass}>
           <p>© 2025 Awign Enterprises Pvt. Ltd.</p>
           <p className="mt-1">Escalation Management System for TCS Examination Operations.</p>
         </div>

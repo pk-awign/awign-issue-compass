@@ -86,6 +86,129 @@ export interface TicketFilters {
 }
 
 export class AdminService {
+  static readonly AUTO_CLOSE_COMMENT =
+    'This ticket is autoclosed due to no response.';
+
+  static isAutoCloseComment(content?: string | null): boolean {
+    return (content || '').trim() === AdminService.AUTO_CLOSE_COMMENT;
+  }
+
+  /** Newest comment is invigilator/anonymous or the ticket creator. */
+  static isCommentFromRaiserSide(
+    comment: { author?: string | null; authorRole?: string | null; author_role?: string | null },
+    submittedBy?: string | null
+  ): boolean {
+    const role = (comment.authorRole || comment.author_role || '').toLowerCase();
+    const author = (comment.author || '').trim();
+    if (role === 'invigilator' || role === 'anonymous') return true;
+    if (author.toLowerCase() === 'anonymous') return true;
+    if (submittedBy && author && author.toLowerCase() === submittedBy.trim().toLowerCase()) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Attach comment counts + raiser-side last-comment flag for list rows.
+   * Safe for page-sized batches (chunks of 200 ticket ids).
+   */
+  static async attachCommentCounts(tickets: Issue[]): Promise<Issue[]> {
+    if (!tickets.length) return tickets;
+
+    const counts = new Map<string, number>();
+    const lastCommentByTicket = new Map<
+      string,
+      { author: string; author_role: string; content: string }
+    >();
+    const ids = tickets.map((t) => t.id).filter(Boolean);
+    const chunkSize = 200;
+
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const { data, error } = await supabase
+        .from('comments')
+        .select('ticket_id, author, author_role, content, created_at')
+        .in('ticket_id', chunk)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching comment counts:', error);
+        continue;
+      }
+
+      (data || []).forEach(
+        (row: {
+          ticket_id: string;
+          author: string | null;
+          author_role: string | null;
+          content: string | null;
+          created_at: string;
+        }) => {
+          counts.set(row.ticket_id, (counts.get(row.ticket_id) || 0) + 1);
+          if (!lastCommentByTicket.has(row.ticket_id)) {
+            lastCommentByTicket.set(row.ticket_id, {
+              author: row.author || '',
+              author_role: row.author_role || '',
+              content: row.content || '',
+            });
+          }
+        }
+      );
+    }
+
+    return tickets.map((ticket) => {
+      let commentCount = ticket.commentCount;
+      if (typeof commentCount !== 'number') {
+        commentCount =
+          ticket.comments && ticket.comments.length > 0
+            ? ticket.comments.length
+            : counts.get(ticket.id) || 0;
+      }
+
+      let lastCommentFromRaiserSide = ticket.lastCommentFromRaiserSide;
+      let lastCommentIsAutoClose = ticket.lastCommentIsAutoClose;
+
+      if (
+        typeof lastCommentFromRaiserSide !== 'boolean' ||
+        typeof lastCommentIsAutoClose !== 'boolean'
+      ) {
+        if (ticket.comments && ticket.comments.length > 0) {
+          const newest = [...ticket.comments].sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          )[0];
+          if (typeof lastCommentIsAutoClose !== 'boolean') {
+            lastCommentIsAutoClose = AdminService.isAutoCloseComment(newest.content);
+          }
+          if (typeof lastCommentFromRaiserSide !== 'boolean') {
+            lastCommentFromRaiserSide = lastCommentIsAutoClose
+              ? false
+              : AdminService.isCommentFromRaiserSide(newest, ticket.submittedBy);
+          }
+        } else {
+          const last = lastCommentByTicket.get(ticket.id);
+          if (typeof lastCommentIsAutoClose !== 'boolean') {
+            lastCommentIsAutoClose = last
+              ? AdminService.isAutoCloseComment(last.content)
+              : false;
+          }
+          if (typeof lastCommentFromRaiserSide !== 'boolean') {
+            lastCommentFromRaiserSide =
+              last && !lastCommentIsAutoClose
+                ? AdminService.isCommentFromRaiserSide(last, ticket.submittedBy)
+                : false;
+          }
+        }
+      }
+
+      return {
+        ...ticket,
+        commentCount,
+        lastCommentFromRaiserSide,
+        lastCommentIsAutoClose,
+      };
+    });
+  }
+
   static async initializeSampleUsers(): Promise<boolean> {
     try {
       // Check if sample users already exist
@@ -2238,6 +2361,148 @@ export class AdminService {
     } catch (error) {
       console.error('❌ Error in getTicketAnalyticsForAdmin:', error);
       return this.getEmptyAnalytics();
+    }
+  }
+
+  /**
+   * Calendar-day counts for the Overview "Recent Activity" card.
+   * Closed = tickets with resolved_at today (status label CLOSED).
+   */
+  static async getRecentActivityCounts(options?: {
+    adminId?: string;
+  }): Promise<{
+    newTicketsToday: number;
+    commentsToday: number;
+    updatedToday: number;
+    resolvedToday: number;
+    closedToday: number;
+  }> {
+    const empty = {
+      newTicketsToday: 0,
+      commentsToday: 0,
+      updatedToday: 0,
+      resolvedToday: 0,
+      closedToday: 0,
+    };
+
+    try {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const startIso = startOfToday.toISOString();
+
+      if (options?.adminId) {
+        const { data: assignments, error: assignmentsError } = await supabase
+          .from('ticket_assignees')
+          .select('ticket_id')
+          .eq('user_id', options.adminId)
+          .eq('role', 'ticket_admin');
+
+        if (assignmentsError) {
+          console.error('Error fetching admin assignments for recent activity:', assignmentsError);
+          return empty;
+        }
+
+        const ticketIds = [...new Set((assignments || []).map((a) => a.ticket_id))];
+        if (!ticketIds.length) return empty;
+
+        const TICKET_BATCH = 200;
+        let newTicketsToday = 0;
+        let updatedToday = 0;
+        let resolvedToday = 0;
+        let commentsToday = 0;
+
+        for (let i = 0; i < ticketIds.length; i += TICKET_BATCH) {
+          const batch = ticketIds.slice(i, i + TICKET_BATCH);
+          const [newRes, updatedRes, resolvedRes, commentsRes] = await Promise.all([
+            supabase
+              .from('tickets')
+              .select('id', { count: 'exact', head: true })
+              .in('id', batch)
+              .eq('deleted', false)
+              .eq('archive_status', 'No')
+              .gte('submitted_at', startIso),
+            supabase
+              .from('tickets')
+              .select('id', { count: 'exact', head: true })
+              .in('id', batch)
+              .eq('deleted', false)
+              .eq('archive_status', 'No')
+              .gte('updated_at', startIso),
+            supabase
+              .from('tickets')
+              .select('id', { count: 'exact', head: true })
+              .in('id', batch)
+              .eq('deleted', false)
+              .eq('archive_status', 'No')
+              .gte('resolved_at', startIso),
+            supabase
+              .from('comments')
+              .select('id', { count: 'exact', head: true })
+              .in('ticket_id', batch)
+              .gte('created_at', startIso),
+          ]);
+
+          if (newRes.error) console.error('Error counting new tickets today for admin:', newRes.error);
+          if (updatedRes.error) console.error('Error counting updated tickets today for admin:', updatedRes.error);
+          if (resolvedRes.error) console.error('Error counting resolved tickets today for admin:', resolvedRes.error);
+          if (commentsRes.error) console.error('Error counting comments today for admin:', commentsRes.error);
+
+          newTicketsToday += newRes.count ?? 0;
+          updatedToday += updatedRes.count ?? 0;
+          resolvedToday += resolvedRes.count ?? 0;
+          commentsToday += commentsRes.count ?? 0;
+        }
+
+        return {
+          newTicketsToday,
+          commentsToday,
+          updatedToday,
+          resolvedToday,
+          closedToday: resolvedToday,
+        };
+      }
+
+      const [newRes, updatedRes, resolvedRes, commentsRes] = await Promise.all([
+        supabase
+          .from('tickets')
+          .select('id', { count: 'exact', head: true })
+          .eq('deleted', false)
+          .eq('archive_status', 'No')
+          .gte('submitted_at', startIso),
+        supabase
+          .from('tickets')
+          .select('id', { count: 'exact', head: true })
+          .eq('deleted', false)
+          .eq('archive_status', 'No')
+          .gte('updated_at', startIso),
+        supabase
+          .from('tickets')
+          .select('id', { count: 'exact', head: true })
+          .eq('deleted', false)
+          .eq('archive_status', 'No')
+          .gte('resolved_at', startIso),
+        supabase
+          .from('comments')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', startIso),
+      ]);
+
+      if (newRes.error) console.error('Error counting new tickets today:', newRes.error);
+      if (updatedRes.error) console.error('Error counting updated tickets today:', updatedRes.error);
+      if (resolvedRes.error) console.error('Error counting resolved tickets today:', resolvedRes.error);
+      if (commentsRes.error) console.error('Error counting comments today:', commentsRes.error);
+
+      const resolvedToday = resolvedRes.count ?? 0;
+      return {
+        newTicketsToday: newRes.count ?? 0,
+        commentsToday: commentsRes.count ?? 0,
+        updatedToday: updatedRes.count ?? 0,
+        resolvedToday,
+        closedToday: resolvedToday,
+      };
+    } catch (error) {
+      console.error('Error in getRecentActivityCounts:', error);
+      return empty;
     }
   }
 

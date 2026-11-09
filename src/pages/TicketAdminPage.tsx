@@ -33,6 +33,17 @@ import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PageShell } from '@/components/layout/PageShell';
+import {
+  cardMetaRowClass,
+  cardTitleMobileClass,
+  metricGridClass,
+  metricLabelClass,
+  metricValueClass,
+  pageFooterClass,
+  tabTriggerClass,
+  tabsListClass,
+} from '@/components/layout/mobileLayout';
 
 type BadgeVariant = 'default' | 'destructive' | 'secondary' | 'outline';
 
@@ -491,22 +502,21 @@ export const TicketAdminPage: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Header onLogout={handleLogout} panelName="Ticket Admin Panel" />
 
-      <main className="container mx-auto px-4 py-4 md:py-8">
-        <div className="space-y-4 md:space-y-6">
+      <PageShell stackClassName="space-y-4 md:space-y-6">
           <div className="text-center space-y-2 md:space-y-4">
             <h2 className="text-2xl md:text-3xl font-bold">Ticket Admin Dashboard</h2>
             <p className="text-muted-foreground">Manage your assigned tickets and analytics</p>
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="flex flex-col items-center gap-2 w-full p-2 bg-muted rounded-xl border shadow-md my-4 md:grid md:grid-cols-3 md:gap-0 md:p-1">
-              <TabsTrigger value="overview" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Overview</TabsTrigger>
-              <TabsTrigger value="tickets" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Escalated Tickets</TabsTrigger>
-              <TabsTrigger value="analytics" className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center">Analytics</TabsTrigger>
+            <TabsList className={cn(tabsListClass, 'md:grid-cols-3')}>
+              <TabsTrigger value="overview" className={tabTriggerClass}>Overview</TabsTrigger>
+              <TabsTrigger value="tickets" className={tabTriggerClass}>Escalated Tickets</TabsTrigger>
+              <TabsTrigger value="analytics" className={tabTriggerClass}>Analytics</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <Card>
                   <CardHeader>
                     <CardTitle>Quick Actions</CardTitle>
@@ -544,22 +554,22 @@ export const TicketAdminPage: React.FC = () => {
                     <CardTitle>Ticket Summary</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span>Total Assigned:</span>
-                        <Badge variant="secondary">{totalTickets}</Badge>
+                    <div className={metricGridClass}>
+                      <div className="rounded-lg border p-3 text-center">
+                        <div className={metricValueClass}>{totalTickets}</div>
+                        <div className={metricLabelClass}>Total assigned</div>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Open:</span>
-                        <Badge variant="destructive">{tickets.filter(t => t.status === 'open').length}</Badge>
+                      <div className="rounded-lg border p-3 text-center">
+                        <div className={metricValueClass}>{tickets.filter(t => t.status === 'open').length}</div>
+                        <div className={metricLabelClass}>Open</div>
                       </div>
-                      <div className="flex justify-between">
-                        <span>In Progress:</span>
-                        <Badge variant="default">{tickets.filter(t => t.status === 'in_progress').length}</Badge>
+                      <div className="rounded-lg border p-3 text-center">
+                        <div className={metricValueClass}>{tickets.filter(t => t.status === 'in_progress').length}</div>
+                        <div className={metricLabelClass}>In progress</div>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Resolved:</span>
-                        <Badge variant="secondary">{tickets.filter(t => t.status === 'resolved').length}</Badge>
+                      <div className="rounded-lg border p-3 text-center">
+                        <div className={metricValueClass}>{tickets.filter(t => t.status === 'resolved').length}</div>
+                        <div className={metricLabelClass}>Resolved</div>
                       </div>
                     </div>
                   </CardContent>
@@ -634,37 +644,45 @@ export const TicketAdminPage: React.FC = () => {
                       <p className="py-10 text-center text-sm text-muted-foreground">No tickets found.</p>
                     ) : (
                       filteredTickets.map((ticket) => (
-                        <div key={`${ticket.id}-card`} className="rounded-lg border p-3">
+                        <div key={`${ticket.id}-card`} className="min-w-0 rounded-lg border p-2.5">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="whitespace-nowrap font-mono text-sm font-semibold">
-                                {ticket.ticketNumber}
-                              </p>
-                              <div className="mt-1 flex flex-wrap items-center gap-1">
-                                <Badge variant="outline" className="text-[10px]">
-                                  {ticket.issueCategory.replace('_', ' ')}
-                                </Badge>
-                                <Badge variant={getStatusVariant(ticket.status)} className="text-[10px]">
-                                  {getStatusLabel(ticket.status as any)}
-                                </Badge>
-                                <Badge variant={getSeverityVariant(ticket.severity)} className="text-[10px]">
-                                  {ticket.severity.toUpperCase()}
-                                </Badge>
-                              </div>
-                            </div>
+                            <span
+                              className="truncate font-mono text-sm font-semibold"
+                              title={ticket.ticketNumber}
+                            >
+                              {ticket.ticketNumber}
+                            </span>
                             <Button
                               variant="outline"
                               size="sm"
-                              className="shrink-0"
+                              className="h-8 w-8 shrink-0 p-0"
                               onClick={() => handleViewTicket(ticket)}
                               aria-label={`View ticket ${ticket.ticketNumber}`}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
                           </div>
-                          <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
-                            <span>{ticket.city}</span>
-                            <span>{format(new Date(ticket.submittedAt), 'dd MMM yyyy')}</span>
+                          <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                            <Badge variant={getStatusVariant(ticket.status)} className="text-[10px]">
+                              {getStatusLabel(ticket.status as any)}
+                            </Badge>
+                            <Badge variant={getSeverityVariant(ticket.severity)} className="text-[10px]">
+                              {ticket.severity.toUpperCase()}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px]">
+                              {ticket.issueCategory.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                          <p className={cn(cardTitleMobileClass, 'mt-2 line-clamp-2 text-sm font-normal')}>
+                            {ticket.issueDescription}
+                          </p>
+                          <div className={cn(cardMetaRowClass, 'mt-2 justify-between text-xs text-muted-foreground')}>
+                            <span className="truncate" title={ticket.city}>
+                              {ticket.city}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              {format(new Date(ticket.submittedAt), 'dd MMM yyyy')}
+                            </span>
                           </div>
                         </div>
                       ))
@@ -753,8 +771,14 @@ export const TicketAdminPage: React.FC = () => {
               <AdvancedAnalytics />
             </TabsContent>
           </Tabs>
+      </PageShell>
+
+      <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
+        <div className={pageFooterClass}>
+          <p>© 2025 Awign Enterprises Pvt. Ltd.</p>
+          <p className="mt-1">Escalation Management System for TCS Examination Operations.</p>
         </div>
-      </main>
+      </footer>
 
       {/* Modals */}
       <TicketDetailsModal

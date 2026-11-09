@@ -15,6 +15,8 @@ import { format } from 'date-fns';
 import { Clock, User, MapPin, FileText, MessageSquare, History, AlertTriangle, Paperclip, Download, X, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { TicketService } from '@/services/ticketService';
+import { cn } from '@/lib/utils';
+import { modalViewportClass } from '@/components/layout/mobileLayout';
 
 interface TicketDetailsModalProps {
   ticket: Issue | null;
@@ -145,15 +147,20 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-xs sm:max-w-2xl w-full max-h-[90vh] overflow-hidden p-2 sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Ticket Details - {ticket.ticketNumber}
+      <DialogContent
+        className={cn(
+          modalViewportClass,
+          'w-[min(96vw,42rem)] gap-3 p-3 sm:max-w-2xl sm:gap-4 sm:p-6'
+        )}
+      >
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="flex min-w-0 items-center gap-2 text-base sm:text-lg">
+            <FileText className="h-5 w-5 shrink-0" />
+            <span className="truncate">Ticket Details - {ticket.ticketNumber}</span>
           </DialogTitle>
         </DialogHeader>
         
-        <ScrollArea className="max-h-[70vh]">
+        <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-6 p-1">
             {/* Ticket Header */}
             <Card>

@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SignUpForm } from './SignUpForm';
 import { BrandLogo } from '@/components/BrandLogo';
+import { pageShellClass } from '@/components/layout/mobileLayout';
+import { cn } from '@/lib/utils';
 
 export const LoginForm: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
@@ -95,7 +97,7 @@ export const LoginForm: React.FC = () => {
   // Styled header to match PublicIssueForm, with Back to Home button on the right
   const header = (
     <header className="bg-white border-b shadow-sm">
-      <div className="container mx-auto px-3 py-3 sm:px-6 sm:py-4">
+      <div className={cn(pageShellClass, 'py-3 sm:py-4')}>
         <div className="flex w-full items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <BrandLogo />
@@ -118,9 +120,9 @@ export const LoginForm: React.FC = () => {
 
   if (activeTab === 'signup') {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen overflow-x-hidden bg-background">
         {header}
-        <div className="flex items-center justify-center px-4 py-8" style={{ minHeight: 'calc(100dvh - 5rem)' }}>
+        <div className="flex min-w-0 items-center justify-center px-3 py-8 sm:px-4" style={{ minHeight: 'calc(100dvh - 5rem)' }}>
           <SignUpForm 
             onSuccess={handleSignUpSuccess}
             onBackToLogin={() => setActiveTab('login')}
@@ -131,10 +133,10 @@ export const LoginForm: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen overflow-x-hidden bg-background">
       {header}
-      <div className="flex items-center justify-center px-4 py-8" style={{ minHeight: 'calc(100dvh - 5rem)' }}>
-        <Card className="w-full max-w-md">
+      <div className="flex min-w-0 items-center justify-center px-3 py-8 sm:px-4" style={{ minHeight: 'calc(100dvh - 5rem)' }}>
+        <Card className="w-full min-w-0 max-w-md">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
               <AlertTriangle className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />

@@ -37,8 +37,12 @@ import { TicketService } from '@/services/ticketService';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatRole, getTimelineDescription, formatEventType } from '@/utils/timelineUtils';
+import { formatRole, getTimelineDescription, formatEventType, getHistoryEventHighlightClass } from '@/utils/timelineUtils';
 import { getStatusLabel } from '@/utils/status';
+import { cn } from '@/lib/utils';
+import { modalViewportClass } from '@/components/layout/mobileLayout';
+
+export type TicketDetailsTab = 'details' | 'management' | 'timeline' | 'comments';
 
 interface TicketDetailsModalProps {
   isOpen: boolean;
@@ -51,6 +55,8 @@ interface TicketDetailsModalProps {
    * Admin All Tickets keeps the full chrome by default.
    */
   hideHeaderActionsAndBadges?: boolean;
+  /** Tab to open when the dialog opens (defaults to details). */
+  initialTab?: TicketDetailsTab;
 }
 
 export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
@@ -59,6 +65,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
   ticket,
   onTicketUpdate,
   hideHeaderActionsAndBadges = false,
+  initialTab = 'details',
 }) => {
   const { user } = useAuth();
   const [resolvers, setResolvers] = useState<UserType[]>([]);
@@ -96,13 +103,15 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
       loadStatusTransitions();
       if (hideHeaderActionsAndBadges) {
         setActiveTab('details');
+      } else {
+        setActiveTab(initialTab);
       }
     }
     if (isOpen && ticket?.id) {
       loadAssignees();
       loadAllUsers();
     }
-  }, [isOpen, ticket?.id, hideHeaderActionsAndBadges]);
+  }, [isOpen, ticket?.id, hideHeaderActionsAndBadges, initialTab]);
 
   useEffect(() => {
     if (activeTab === 'timeline' && ticket) {
@@ -443,16 +452,20 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent
+        className={cn(modalViewportClass, 'max-w-6xl gap-4 p-4 sm:p-6')}
+      >
+        <DialogHeader className="shrink-0 space-y-0">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <DialogTitle className="flex min-w-0 flex-wrap items-center gap-2 text-base sm:text-lg">
               <span className="whitespace-nowrap">Ticket Details</span>
-              <span className="font-mono text-sm text-muted-foreground">{ticket?.ticketNumber}</span>
               {ticket && !hideHeaderActionsAndBadges && (
                 <Badge variant={getStatusColor(ticket.status)}>
                   {getStatusLabel(ticket.status)}
                 </Badge>
+              )}
+              {ticket && hideHeaderActionsAndBadges && (
+                <span className="font-mono text-sm text-muted-foreground">{ticket.ticketNumber}</span>
               )}
             </DialogTitle>
             <div className="flex items-center gap-2 mr-8">
@@ -482,9 +495,9 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
           </div>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Header with badges — Ticket Center shows category only (ID already in title) */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          {/* Ticket number (primary) + category; status stays in the dialog title */}
+          <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               {!hideHeaderActionsAndBadges && (
                 <h2 className="text-xl font-bold">{ticket.ticketNumber}</h2>
@@ -501,9 +514,6 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                     Re-Opened ({ticket.reopenCount})
                   </Badge>
                 )}
-                <Badge className={getStatusColor(ticket.status)}>
-                  {getStatusLabel(ticket.status)}
-                </Badge>
                 <Badge className={getSeverityColor(ticket.severity)}>
                   {ticket.severity.toUpperCase()}
                 </Badge>
@@ -513,7 +523,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
 
           {/* Tab Navigation — not shown in Ticket Center */}
           {!hideHeaderActionsAndBadges && (
-          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-1 border-b">
+          <div className="flex shrink-0 flex-col space-y-2 border-b sm:flex-row sm:space-x-1 sm:space-y-0">
             <Button
               variant={activeTab === 'details' ? 'default' : 'ghost'}
               size="sm"
@@ -549,6 +559,15 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
           </div>
           )}
 
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden pr-1">
+            <div
+              className={cn(
+                'min-h-0 flex-1',
+                activeTab === 'timeline' || activeTab === 'comments'
+                  ? 'flex flex-col overflow-hidden'
+                  : 'overflow-y-auto'
+              )}
+            >
           {/* Details Tab (always shown in Ticket Center) */}
           {(activeTab === 'details' || hideHeaderActionsAndBadges) && (
             <div className="space-y-6">
@@ -956,28 +975,31 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
 
           {/* Timeline Tab */}
           {!hideHeaderActionsAndBadges && activeTab === 'timeline' && (
-            <Card>
-              <CardHeader>
+            <Card className="flex min-h-0 flex-1 flex-col">
+              <CardHeader className="shrink-0">
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="w-5 h-5" />
                   Ticket History
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="min-h-0 flex-1 overflow-y-auto">
                 {isTimelineLoading ? (
                   <div className="text-center py-8">Loading...</div>
                 ) : timeline.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">No history events yet.</div>
                 ) : (
-                  <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
+                  <div className="space-y-4 pr-1">
                     {timeline.map(event => {
                       const isTimelineEvent = 'performedByName' in event;
                       if (isTimelineEvent) {
                         return (
-                          <div key={event.id} className="border-l-2 border-blue-500 pl-4">
+                          <div
+                            key={event.id}
+                            className={cn(getHistoryEventHighlightClass(event.eventType))}
+                          >
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
                               <span className="font-medium text-sm">{event.performedByName || 'System'}</span>
-                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              <span className="text-xs text-gray-500 bg-white/70 px-2 py-1 rounded">
                                 {formatEventType(event.eventType)}
                               </span>
                               <span className="text-xs text-gray-400 sm:ml-auto">{formatDate(new Date(event.createdAt))}</span>
@@ -991,10 +1013,13 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                         // For raw ticket_history events, use correct field names
                         const raw = event as any;
                         return (
-                          <div key={raw.id} className="border-l-2 border-blue-500 pl-4">
+                          <div
+                            key={raw.id}
+                            className={cn(getHistoryEventHighlightClass(raw.action_type))}
+                          >
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
                               <span className="font-medium text-sm">{raw.performed_by || 'System'}</span>
-                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              <span className="text-xs text-gray-500 bg-white/70 px-2 py-1 rounded">
                                 {formatEventType(raw.action_type || '')}
                               </span>
                               <span className="text-xs text-gray-400 sm:ml-auto">{formatDate(new Date(raw.performed_at))}</span>
@@ -1017,21 +1042,36 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
 
           {/* Comments Tab */}
           {!hideHeaderActionsAndBadges && activeTab === 'comments' && (
-            <Card>
-              <CardHeader>
+            <Card className="flex min-h-0 flex-1 flex-col">
+              <CardHeader className="shrink-0">
                 <CardTitle className="flex items-center gap-2">
                   <MessageSquare className="w-5 h-5" />
                   Comments ({ticket.comments.length})
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
                 {ticket.comments.length > 0 ? (
                   <div className="space-y-3">
-                    {[...ticket.comments].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((comment) => (
-                      <div key={comment.id} className="border-l-4 border-blue-200 bg-blue-50 p-3 rounded-r-md">
+                    {[...ticket.comments].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((comment) => {
+                      const isAutoClose = AdminService.isAutoCloseComment(comment.content);
+                      return (
+                      <div
+                        key={comment.id}
+                        className={cn(
+                          'rounded-r-md border-l-4 p-3',
+                          isAutoClose
+                            ? 'border-red-400 bg-red-50 text-red-900'
+                            : 'border-blue-200 bg-blue-50'
+                        )}
+                      >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{comment.author} ({comment.authorRole})</span>
+                            {isAutoClose && (
+                              <Badge variant="destructive" className="text-xs">
+                                Auto-closed
+                              </Badge>
+                            )}
                             {comment.isInternal && (
                               <Badge variant="secondary" className="text-xs">
                                 Internal
@@ -1055,7 +1095,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                             })()}
                           </span>
                         </div>
-                        <p className="text-sm">{comment.content}</p>
+                        <p className={cn('text-sm', isAutoClose && 'font-medium text-red-800')}>{comment.content}</p>
                         {/* Comment Attachments */}
                         {comment.attachments && comment.attachments.length > 0 && (
                           <div className="mt-2">
@@ -1079,7 +1119,8 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
                           </div>
                         )}
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-4">
@@ -1196,6 +1237,8 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
               </CardContent>
             </Card>
           )}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

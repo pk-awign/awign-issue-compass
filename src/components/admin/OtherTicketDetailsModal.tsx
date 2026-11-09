@@ -9,6 +9,8 @@ import {
   type TicketOccurrence,
 } from '@/services/combinedTicketsService';
 import { getStatusLabel } from '@/utils/status';
+import { modalViewportClass } from '@/components/layout/mobileLayout';
+import { cn } from '@/lib/utils';
 
 interface OtherTicketDetailsModalProps {
   isOpen: boolean;
@@ -238,11 +240,17 @@ export const OtherTicketDetailsModal: React.FC<OtherTicketDetailsModalProps> = (
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent
+        className={cn(
+          modalViewportClass,
+          'max-w-4xl gap-4 overflow-hidden p-4 sm:p-6'
+        )}
+      >
+        <DialogHeader className="shrink-0">
           <DialogTitle>Ticket Details - {ticket.ticketNumber}</DialogTitle>
         </DialogHeader>
 
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <div className="space-y-6">
           {categorySubtitle && <p className="text-gray-600">{categorySubtitle}</p>}
 
@@ -404,6 +412,7 @@ export const OtherTicketDetailsModal: React.FC<OtherTicketDetailsModalProps> = (
               </CardContent>
             </Card>
           )}
+        </div>
         </div>
       </DialogContent>
     </Dialog>

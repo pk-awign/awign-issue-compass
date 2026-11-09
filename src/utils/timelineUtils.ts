@@ -1,6 +1,42 @@
 import { TimelineEvent } from '@/types/issue';
 
 /**
+ * Soft background highlight per history action type.
+ * `created` stays on the original plain left-border style.
+ */
+export function getHistoryEventHighlightClass(eventType: string | null | undefined): string {
+  const panel = 'rounded-md border pl-3 pr-3 py-2 border-l-4';
+
+  switch (eventType) {
+    case 'created':
+      return 'border-l-2 border-blue-500 pl-4';
+    case 'comment_added':
+      return `${panel} border-amber-200 bg-amber-50/90 border-l-amber-500`;
+    case 'status_changed':
+    case 'status_change':
+      return `${panel} border-sky-200 bg-sky-50/90 border-l-sky-500`;
+    case 'assigned':
+    case 'assignment':
+      return `${panel} border-emerald-200 bg-emerald-50/90 border-l-emerald-500`;
+    case 'reopened':
+      return `${panel} border-orange-200 bg-orange-50/90 border-l-orange-500`;
+    case 'resolved':
+    case 'approved':
+      return `${panel} border-teal-200 bg-teal-50/90 border-l-teal-500`;
+    case 'attachment_uploaded':
+      return `${panel} border-indigo-200 bg-indigo-50/90 border-l-indigo-500`;
+    case 'escalated':
+      return `${panel} border-rose-200 bg-rose-50/90 border-l-rose-500`;
+    case 'sla_breached':
+      return `${panel} border-red-200 bg-red-50/90 border-l-red-500`;
+    case 'severity_change':
+      return `${panel} border-fuchsia-200 bg-fuchsia-50/90 border-l-fuchsia-500`;
+    default:
+      return `${panel} border-slate-200 bg-slate-50/90 border-l-slate-400`;
+  }
+}
+
+/**
  * Format event type for human-readable display
  */
 export function formatEventType(eventType: string): string {

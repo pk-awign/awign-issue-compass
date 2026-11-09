@@ -65,6 +65,18 @@ import { getStatusLabel } from '@/utils/status';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
+import { PageShell } from '@/components/layout/PageShell';
+import {
+  cardMetaRowClass,
+  cardTitleMobileClass,
+  metricGridClass,
+  metricLabelClass,
+  metricValueClass,
+  pageFooterClass,
+  tabTriggerClass,
+  tabsListClass,
+} from '@/components/layout/mobileLayout';
+import { verticalBarMargin } from '@/components/charts/chartMobile';
 
 type TicketStatus = Issue['status'];
 type IssueCategory = Issue['issueCategory'];
@@ -652,8 +664,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Header onLogout={handleLogout} panelName="Ticket Center" />
 
-      <main className="container mx-auto px-4 py-4 md:py-8">
-        <div className="space-y-4 md:space-y-6">
+      <PageShell stackClassName="space-y-4 md:space-y-6">
           {error && (
             <Card className="border-destructive">
               <CardContent className="p-4 flex items-start gap-3 text-destructive">
@@ -670,17 +681,11 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
           )}
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 gap-2 p-2 bg-muted rounded-xl border shadow-md my-4 md:gap-0 md:p-1">
-              <TabsTrigger
-                value="overview"
-                className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center"
-              >
+            <TabsList className={cn(tabsListClass, 'md:grid-cols-2')}>
+              <TabsTrigger value="overview" className={tabTriggerClass}>
                 Overview
               </TabsTrigger>
-              <TabsTrigger
-                value="tickets"
-                className="w-full rounded-lg px-4 py-2 data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow text-center"
-              >
+              <TabsTrigger value="tickets" className={tabTriggerClass}>
                 All Tickets
               </TabsTrigger>
             </TabsList>
@@ -694,83 +699,75 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                   <p className="text-muted-foreground">Loading tickets...</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className={cn(metricGridClass, 'md:grid-cols-3 lg:grid-cols-6')}>
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="flex items-center justify-center mb-2">
-                        <AlertCircle className="h-8 w-8 text-blue-500" />
+                    <CardContent className="p-3 text-center sm:p-4">
+                      <div className="mb-1 flex items-center justify-center">
+                        <AlertCircle className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
                       </div>
-                      <div className="text-2xl font-bold">{overviewStats.total}</div>
-                      <div className="text-sm text-muted-foreground">Total Tickets</div>
+                      <div className={metricValueClass}>{overviewStats.total}</div>
+                      <div className={metricLabelClass}>Total Tickets</div>
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="flex items-center justify-center mb-2">
-                        <AlertCircle className="h-8 w-8 text-red-500" />
+                    <CardContent className="p-3 text-center sm:p-4">
+                      <div className="mb-1 flex items-center justify-center">
+                        <AlertCircle className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
                       </div>
-                      <div className="text-2xl font-bold">
-                        {overviewStats.byStatus.open || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Open</div>
+                      <div className={metricValueClass}>{overviewStats.byStatus.open || 0}</div>
+                      <div className={metricLabelClass}>Open</div>
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="flex items-center justify-center mb-2">
-                        <Clock className="h-8 w-8 text-yellow-500" />
+                    <CardContent className="p-3 text-center sm:p-4">
+                      <div className="mb-1 flex items-center justify-center">
+                        <Clock className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
                       </div>
-                      <div className="text-2xl font-bold">
-                        {overviewStats.byStatus.in_progress || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Pending on CX</div>
+                      <div className={metricValueClass}>{overviewStats.byStatus.in_progress || 0}</div>
+                      <div className={metricLabelClass}>Pending on CX</div>
                     </CardContent>
                   </Card>
 
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="flex items-center justify-center mb-2">
-                        <Settings className="h-8 w-8 text-purple-500" />
+                  <Card className="col-span-2 md:col-span-1">
+                    <CardContent className="p-3 text-center sm:p-4">
+                      <div className="mb-1 flex items-center justify-center">
+                        <Settings className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
                       </div>
-                      <div className="text-2xl font-bold">
+                      <div className={metricValueClass}>
                         {(overviewStats.byStatus.user_dependency || 0) +
                           (overviewStats.byStatus.ops_input_required || 0) +
                           (overviewStats.byStatus.ops_user_dependency || 0) +
                           (overviewStats.byStatus.send_for_approval || 0)}
                       </div>
-                      <div className="text-sm text-muted-foreground">Pending Actions</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        <div>User: {overviewStats.byStatus.user_dependency || 0}</div>
-                        <div>Ops: {overviewStats.byStatus.ops_input_required || 0}</div>
-                        <div>Ops + User: {overviewStats.byStatus.ops_user_dependency || 0}</div>
-                        <div>Approver: {overviewStats.byStatus.send_for_approval || 0}</div>
+                      <div className={metricLabelClass}>Pending Actions</div>
+                      <div className="mt-1 space-y-0.5 text-[10px] text-muted-foreground sm:text-xs">
+                        <div className="truncate">User: {overviewStats.byStatus.user_dependency || 0}</div>
+                        <div className="truncate">Ops: {overviewStats.byStatus.ops_input_required || 0}</div>
+                        <div className="truncate">Ops + User: {overviewStats.byStatus.ops_user_dependency || 0}</div>
+                        <div className="truncate">Approver: {overviewStats.byStatus.send_for_approval || 0}</div>
                       </div>
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="flex items-center justify-center mb-2">
-                        <CheckCircle2 className="h-8 w-8 text-green-500" />
+                    <CardContent className="p-3 text-center sm:p-4">
+                      <div className="mb-1 flex items-center justify-center">
+                        <CheckCircle2 className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
                       </div>
-                      <div className="text-2xl font-bold">
-                        {overviewStats.byStatus.approved || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Approved</div>
+                      <div className={metricValueClass}>{overviewStats.byStatus.approved || 0}</div>
+                      <div className={metricLabelClass}>Approved</div>
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="flex items-center justify-center mb-2">
-                        <CheckCircle className="h-8 w-8 text-emerald-500" />
+                    <CardContent className="p-3 text-center sm:p-4">
+                      <div className="mb-1 flex items-center justify-center">
+                        <CheckCircle className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
                       </div>
-                      <div className="text-2xl font-bold">
-                        {overviewStats.byStatus.resolved || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Closed</div>
+                      <div className={metricValueClass}>{overviewStats.byStatus.resolved || 0}</div>
+                      <div className={metricLabelClass}>Closed</div>
                     </CardContent>
                   </Card>
                 </div>
@@ -801,12 +798,7 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                             <BarChart
                               data={categoryChartData}
                               layout="vertical"
-                              margin={{
-                                top: 8,
-                                right: isMobile ? 8 : 56,
-                                left: isMobile ? 0 : 16,
-                                bottom: isMobile ? 24 : 36,
-                              }}
+                              margin={verticalBarMargin(isMobile)}
                             >
                               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                               <XAxis
@@ -884,7 +876,10 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart
                               data={createdByDateChartData}
-                              margin={{ top: 8, right: 24, left: 16, bottom: 36 }}
+                              margin={{
+                                ...verticalBarMargin(isMobile),
+                                bottom: isMobile ? 28 : 36,
+                              }}
                             >
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis
@@ -962,28 +957,19 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                           paginatedTickets.map((ticket) => (
                             <div
                               key={`${ticket.source}-${ticket.id}-card`}
-                              className="rounded-lg border p-3"
+                              className="min-w-0 rounded-lg border p-2.5"
                             >
                               <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <p className="whitespace-nowrap font-mono text-sm font-semibold">
-                                    {ticket.ticketNumber}
-                                  </p>
-                                  <div className="mt-1 flex flex-wrap items-center gap-1">
-                                    <Badge variant="outline" className="text-[10px]">
-                                      {formatCategory(ticket.issueCategory).toUpperCase()}
-                                    </Badge>
-                                    <span className="text-xs text-muted-foreground">
-                                      {ticket.createdAt
-                                        ? format(new Date(ticket.createdAt), 'dd MMM yyyy')
-                                        : 'N/A'}
-                                    </span>
-                                  </div>
-                                </div>
+                                <span
+                                  className="truncate font-mono text-sm font-semibold"
+                                  title={ticket.ticketNumber}
+                                >
+                                  {ticket.ticketNumber}
+                                </span>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="shrink-0"
+                                  className="h-8 w-8 shrink-0 p-0"
                                   onClick={() => void handleViewTicket(ticket)}
                                   disabled={isOpeningView}
                                   aria-label={`View ${ticket.ticketNumber}`}
@@ -991,18 +977,27 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
                                   <Eye className="h-4 w-4" />
                                 </Button>
                               </div>
-                              <p className="mt-2 line-clamp-2 text-sm">
+                              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                                <Badge variant="outline" className="text-[10px]">
+                                  {formatCategory(ticket.issueCategory).toUpperCase()}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className={cn('text-[10px] font-medium', getStatusBadgeClass(ticket.status))}
+                                >
+                                  {getStatusLabel(ticket.status)}
+                                </Badge>
+                              </div>
+                              <p className={cn(cardTitleMobileClass, 'mt-2 line-clamp-2 text-sm font-normal')}>
                                 {ticket.description || '—'}
                               </p>
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  'mt-2 text-xs font-medium',
-                                  getStatusBadgeClass(ticket.status)
-                                )}
-                              >
-                                {getStatusLabel(ticket.status)}
-                              </Badge>
+                              <div className={cn(cardMetaRowClass, 'mt-2 justify-end text-xs text-muted-foreground')}>
+                                <span className="shrink-0 tabular-nums">
+                                  {ticket.createdAt
+                                    ? format(new Date(ticket.createdAt), 'dd MMM yyyy')
+                                    : 'N/A'}
+                                </span>
+                              </div>
                             </div>
                           ))
                         )}
@@ -1109,11 +1104,10 @@ export const CombinedTicketsDashboardPage: React.FC = () => {
               )}
             </TabsContent>
           </Tabs>
-        </div>
-      </main>
+      </PageShell>
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
-        <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
+        <div className={pageFooterClass}>
           <p>© 2025 Awign Enterprises Pvt. Ltd.</p>
           <p className="mt-1">Escalation Management System for TCS Examination Operations.</p>
         </div>

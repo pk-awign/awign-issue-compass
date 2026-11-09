@@ -29,8 +29,8 @@ export const WorkforcePage: React.FC = () => {
   // Overlay Step 1: Welcome
   if (step === 1) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white bg-opacity-95 p-2 sm:p-6 overflow-auto">
-        <div className="w-full max-w-lg sm:max-w-lg bg-white rounded-lg shadow-lg p-4 sm:p-8 text-center mx-auto">
+      <div className="fixed inset-0 z-50 flex min-w-0 flex-col items-center justify-center overflow-x-hidden overflow-y-auto bg-white bg-opacity-95 p-2 sm:p-6">
+        <div className="mx-auto w-full min-w-0 max-w-lg rounded-lg bg-white p-4 text-center shadow-lg sm:p-8">
           <h1 className="text-2xl font-bold mb-2">Awign Escalation Portal</h1>
           <h2 className="text-base sm:text-lg font-semibold mb-4 text-gray-700">For Exam Invigilators only</h2>
           <div className="mb-4 text-left text-sm sm:text-base">

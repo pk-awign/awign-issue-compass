@@ -15,10 +15,15 @@ import { toast } from 'sonner';
 import { Issue } from '@/types/issue';
 import { AdminService, TicketAnalytics, TicketSortBy, TicketSortDir } from '@/services/adminService';
 import { AnalyticsDateFilter } from '@/components/admin/AnalyticsDateFilter';
-import { DateRangePresetId } from '@/utils/dateRangePresets';
+import {
+  DATE_RANGE_PRESET_OPTIONS,
+  DateRangePresetId,
+  getDateRangeForPreset,
+} from '@/utils/dateRangePresets';
 import { exportTicketsAsCSV, generateExportFilename } from '@/utils/ticketExport';
 import { UserManagementPanel } from '@/components/admin/UserManagementPanel';
-import { TicketDetailsModal } from '@/components/admin/TicketDetailsModal';
+import { TicketDetailsModal, TicketDetailsTab } from '@/components/admin/TicketDetailsModal';
+import { TicketService } from '@/services/ticketService';
 import { AdvancedAnalytics } from '@/components/admin/AdvancedAnalytics';
 import { EnhancedUserAssignment } from '@/components/admin/EnhancedUserAssignment';
 import { WhatsAppTestComponent } from '@/components/admin/WhatsAppTestComponent';
@@ -45,6 +50,16 @@ import {
 } from "@/components/ui/popover";
 import { getStatusLabel } from '@/utils/status';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { PageShell } from '@/components/layout/PageShell';
+import {
+  denseStripClass,
+  denseStripItemClass,
+  metricLabelClass,
+  metricValueClass,
+  pageFooterClass,
+  tabTriggerClass,
+  tabsListClass,
+} from '@/components/layout/mobileLayout';
 import {
   Bar,
   BarChart,
@@ -106,34 +121,49 @@ function formatOverviewCategory(category: string): string {
     .join(' ');
 }
 
-/**
- * Tab strip styling shared by every trigger.
- *
- * The strip never scrolls or hides a tab: it is a grid at every width, so all
- * sections stay visible and tappable. Labels stay on one line thanks to
- * the column counts (2 on phones, 3–4 on tablets, 6 from lg up for super admin)
- * chosen so the longest label ("User Management") fits its cell.
- */
-const tabTriggerClass =
-  "w-full whitespace-nowrap rounded-lg px-2 py-2 text-center data-[state=active]:bg-white data-[state=active]:font-bold data-[state=active]:shadow lg:px-3";
+const INTEGRATIONS_ALLOWLIST_MOBILE = '9897700777';
+
+function normalizeMobileDigits(mobile?: string | null): string {
+  const digits = (mobile || '').replace(/\D/g, '');
+  if (digits.length > 10 && (digits.startsWith('91') || digits.startsWith('0'))) {
+    return digits.slice(-10);
+  }
+  return digits.slice(-10);
+}
+
+function resolveAdminTab(
+  tabParam: string | null,
+  canAccessIntegrations: boolean
+): string {
+  if (tabParam === 'tickets') return 'tickets';
+  if (
+    tabParam === 'whatsapp' ||
+    tabParam === 'settings' ||
+    tabParam === 'integrations'
+  ) {
+    return canAccessIntegrations ? 'integrations' : 'overview';
+  }
+  if (
+    tabParam &&
+    ['overview', 'analytics', 'users', 'activity'].includes(tabParam)
+  ) {
+    return tabParam;
+  }
+  return 'overview';
+}
 
 export const AdminPage: React.FC = () => {
   const { user, logout, loading, isTicketAdmin, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
-  
+
+  const canAccessIntegrations =
+    normalizeMobileDigits(user?.mobile) === INTEGRATIONS_ALLOWLIST_MOBILE;
+
   // Get the tab parameter from URL
   const tabParam = searchParams.get('tab');
-  const defaultTab =
-    tabParam === 'tickets'
-      ? 'tickets'
-      : tabParam === 'whatsapp' || tabParam === 'settings'
-        ? 'settings'
-        : tabParam &&
-            ['overview', 'analytics', 'users', 'activity'].includes(tabParam)
-          ? tabParam
-          : 'overview';
+  const defaultTab = resolveAdminTab(tabParam, canAccessIntegrations);
   
   // State management
   const [tickets, setTickets] = useState<Issue[]>([]);
@@ -148,6 +178,13 @@ export const AdminPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [analytics, setAnalytics] = useState<TicketAnalytics | null>(null);
+  const [recentActivity, setRecentActivity] = useState<{
+    newTicketsToday: number;
+    commentsToday: number;
+    updatedToday: number;
+    resolvedToday: number;
+    closedToday: number;
+  } | null>(null);
   const [resolverFilterSingle, setResolverFilterSingle] = useState<string>('all');
   const [resolverFilter, setResolverFilter] = useState<string[]>([]);
   const [resolvers, setResolvers] = useState<{ id: string; name: string }[]>([]);
@@ -159,6 +196,7 @@ export const AdminPage: React.FC = () => {
   // Modal states
   const [showTicketDetails, setShowTicketDetails] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Issue | null>(null);
+  const [detailsInitialTab, setDetailsInitialTab] = useState<TicketDetailsTab>('details');
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
   const [viewAllTickets, setViewAllTickets] = useState(false);
@@ -170,6 +208,7 @@ export const AdminPage: React.FC = () => {
     to: new Date(),
   });
   const [filterDateRange, setFilterDateRange] = useState<DateRange | undefined>();
+  const [filterDatePreset, setFilterDatePreset] = useState<DateRangePresetId>('all');
   const [onlyUnassignedResolver, setOnlyUnassignedResolver] = useState<boolean>(false);
   const [downloadAll, setDownloadAll] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -207,34 +246,36 @@ export const AdminPage: React.FC = () => {
 
   // Pagination states
   const [page, setPage] = useState(1);
-  const limit = 50;
+  const [pageSize, setPageSize] = useState<25 | 50 | 100>(25);
   const [hasMore, setHasMore] = useState(false);
   const [totalTickets, setTotalTickets] = useState(0);
 
   // Update active tab when URL changes
   useEffect(() => {
-    const newTabParam = searchParams.get('tab');
-    const newDefaultTab =
-      newTabParam === 'tickets'
-        ? 'tickets'
-        : newTabParam === 'whatsapp' || newTabParam === 'settings'
-          ? 'settings'
-          : newTabParam &&
-              ['overview', 'analytics', 'users', 'activity'].includes(newTabParam)
-            ? newTabParam
-            : 'overview';
+    const newDefaultTab = resolveAdminTab(
+      searchParams.get('tab'),
+      canAccessIntegrations
+    );
     setActiveTab(newDefaultTab);
-    // console.log('🔄 URL changed, setting active tab to:', newDefaultTab);
-  }, [searchParams]);
+    if (
+      (searchParams.get('tab') === 'integrations' ||
+        searchParams.get('tab') === 'settings' ||
+        searchParams.get('tab') === 'whatsapp') &&
+      !canAccessIntegrations
+    ) {
+      navigate('/admin?tab=overview', { replace: true });
+    }
+  }, [searchParams, canAccessIntegrations, navigate]);
 
   // Handle tab changes and update URL
   const handleTabChange = (newTab: string) => {
-    setActiveTab(newTab);
-    if (newTab === 'tickets') {
-      navigate('/admin?tab=tickets', { replace: true });
-    } else {
-      navigate('/admin', { replace: true });
+    if (newTab === 'integrations' && !canAccessIntegrations) {
+      setActiveTab('overview');
+      navigate('/admin?tab=overview', { replace: true });
+      return;
     }
+    setActiveTab(newTab);
+    navigate(`/admin?tab=${newTab}`, { replace: true });
   };
 
   // Initialize sample users only (no data loading)
@@ -262,7 +303,7 @@ export const AdminPage: React.FC = () => {
         setLoadedTabs(prev => new Set(prev).add('overview'));
         break;
       case 'tickets':
-        loadTickets(true);
+        // Filter/page effects load once loadedTabs includes tickets
         setLoadedTabs(prev => new Set(prev).add('tickets'));
         break;
       case 'analytics':
@@ -277,9 +318,9 @@ export const AdminPage: React.FC = () => {
         // ActivityLog component handles its own data loading
         setLoadedTabs(prev => new Set(prev).add('activity'));
         break;
-      case 'settings':
-        // WhatsApp tools live under Settings; component loads its own data
-        setLoadedTabs(prev => new Set(prev).add('settings'));
+      case 'integrations':
+        // WhatsApp tools live under Integrations; component loads its own data
+        setLoadedTabs(prev => new Set(prev).add('integrations'));
         break;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,27 +350,42 @@ export const AdminPage: React.FC = () => {
 
   // Removed initializeSystem - data loading is now handled by tab-based lazy loading
 
-  // Update loadTickets to support pagination and filtering
-  const loadTickets = useCallback(async (reset = false) => {
+  // Page-based load: always replace the current page (never append).
+  const loadTickets = useCallback(async (pageOverride?: number) => {
+    const pageToFetch = pageOverride ?? page;
     setIsLoading(true);
     try {
       let result;
-      
+
       if (isTicketAdmin && user?.id) {
         // For ticket admin, only load assigned tickets
-        const assignedTickets = await AdminService.getTicketsAssignedToAdmin(user.id, { sortBy, sortDir });
+        const assignedTickets = await AdminService.getTicketsAssignedToAdmin(user.id, {
+          sortBy,
+          sortDir,
+        });
         result = {
           tickets: assignedTickets,
           total: assignedTickets.length,
-          hasMore: false
+          hasMore: false,
         };
       } else {
         // For super admin, load all tickets with filters
-        const hasFilters = searchQuery || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all' || cityFilter !== 'all' || resolverFilter.length > 0 || approverFilter.length > 0 || resourceIdFilter.length > 0 || filterDateRange?.from || lastStatusFilter !== 'all' || lastCommentByInvigilator;
-        
+        const hasFilters =
+          searchQuery ||
+          statusFilter !== 'all' ||
+          severityFilter !== 'all' ||
+          categoryFilter !== 'all' ||
+          cityFilter !== 'all' ||
+          resolverFilter.length > 0 ||
+          approverFilter.length > 0 ||
+          resourceIdFilter.length > 0 ||
+          filterDateRange?.from ||
+          lastStatusFilter !== 'all' ||
+          lastCommentByInvigilator;
+
         if (hasFilters || onlyUnassignedResolver) {
           // Use unpaginated method when filters are applied to get ALL matching tickets
-          const allFilteredTickets = await AdminService.getFilteredTicketsUnpaginated({
+          const allMatching = await AdminService.getFilteredTicketsUnpaginated({
             searchQuery,
             statusFilter,
             severityFilter,
@@ -347,28 +403,28 @@ export const AdminPage: React.FC = () => {
             sortBy,
             sortDir,
           });
-          
+
           // Store all filtered tickets for dropdown calculations
-          setAllFilteredTickets(allFilteredTickets);
-          
-          // Apply client-side pagination
-          const startIndex = (reset ? 0 : (page - 1) * limit);
-          const endIndex = startIndex + limit;
-          const paginatedTickets = allFilteredTickets.slice(startIndex, endIndex);
-          
+          setAllFilteredTickets(allMatching);
+
+          // Apply client-side pagination for the requested page only
+          const startIndex = (pageToFetch - 1) * pageSize;
+          const endIndex = startIndex + pageSize;
+          const paginatedTickets = allMatching.slice(startIndex, endIndex);
+
           result = {
             tickets: paginatedTickets,
-            total: allFilteredTickets.length,
-            hasMore: endIndex < allFilteredTickets.length
+            total: allMatching.length,
+            hasMore: endIndex < allMatching.length,
           };
         } else {
-          result = await AdminService.getAllTickets(showDeleted, reset ? 1 : page, limit, {
+          result = await AdminService.getAllTickets(showDeleted, pageToFetch, pageSize, {
             archiveStatus: viewAllTickets ? undefined : false,
             sortBy,
             sortDir,
           });
 
-          if (reset) {
+          if (pageToFetch === 1) {
             // Slim meta for status cards / filter dropdowns — not full Issue rows.
             const meta = await AdminService.getTicketListMetaUnpaginated({
               showDeleted,
@@ -378,70 +434,94 @@ export const AdminPage: React.FC = () => {
           }
         }
       }
-      
-      const { tickets: newTickets, total, hasMore: more } = result;
+
+      const { tickets: rawTickets, total, hasMore: more } = result;
+      const newTickets = await AdminService.attachCommentCounts(rawTickets);
       setTotalTickets(total);
       setHasMore(more);
-      if (reset) {
-        setTickets(newTickets);
-        setFilteredTickets(newTickets);
-        setPage(1);
-      } else {
-        setTickets(prev => {
-          const merged = [...prev, ...newTickets].filter(
-            (ticket, index, self) => index === self.findIndex(t => t.id === ticket.id)
-          );
-          return merged;
-        });
-        setFilteredTickets(prev => {
-          const merged = [...prev, ...newTickets].filter(
-            (ticket, index, self) => index === self.findIndex(t => t.id === ticket.id)
-          );
-          return merged;
-        });
-      }
+      setTickets(newTickets);
+      setFilteredTickets(newTickets);
     } catch (error) {
       console.error('❌ Error loading tickets:', error);
       toast.error('Failed to load tickets');
     } finally {
       setIsLoading(false);
     }
-  }, [showDeleted, viewAllTickets, page, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, sortBy, sortDir, isTicketAdmin, user?.id]);
+  }, [
+    showDeleted,
+    viewAllTickets,
+    page,
+    pageSize,
+    searchQuery,
+    statusFilter,
+    severityFilter,
+    categoryFilter,
+    cityFilter,
+    resolverFilter,
+    approverFilter,
+    resourceIdFilter,
+    filterDateRange,
+    onlyUnassignedResolver,
+    lastStatusFilter,
+    lastCommentByInvigilator,
+    sortBy,
+    sortDir,
+    isTicketAdmin,
+    user?.id,
+  ]);
 
-  // On initial load and when filters/search change, reset pagination and fetch fresh data
-  // Only reload if tickets tab is active and loaded
+  // Filters/sort/page-size change: jump to page 1 (page effect loads) or reload if already on page 1
   useEffect(() => {
     if (activeTab === 'tickets' && loadedTabs.has('tickets')) {
-      // Reset pagination and fetch fresh data when filters change
-      setPage(1);
       setTickets([]);
       setFilteredTickets([]);
-      loadTickets(true);
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        loadTickets(1);
+      }
     }
-    // eslint-disable-next-line
-  }, [showDeleted, viewAllTickets, searchQuery, statusFilter, severityFilter, categoryFilter, cityFilter, resolverFilter, approverFilter, resourceIdFilter, filterDateRange, onlyUnassignedResolver, lastStatusFilter, lastCommentByInvigilator, sortBy, sortDir, activeTab, loadedTabs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    showDeleted,
+    viewAllTickets,
+    pageSize,
+    searchQuery,
+    statusFilter,
+    severityFilter,
+    categoryFilter,
+    cityFilter,
+    resolverFilter,
+    approverFilter,
+    resourceIdFilter,
+    filterDateRange,
+    onlyUnassignedResolver,
+    lastStatusFilter,
+    lastCommentByInvigilator,
+    sortBy,
+    sortDir,
+    activeTab,
+    loadedTabs,
+  ]);
 
   // Fetch resolvers/approvers for filter dropdowns (only when tickets tab is active)
   useEffect(() => {
     if (activeTab === 'tickets' && loadedTabs.has('tickets')) {
       const fetchResolvers = async () => {
         const users = await AdminService.getUsersByRole('resolver');
-        setResolvers(users.map(u => ({ id: u.id, name: u.name })));
+        setResolvers(users.map((u) => ({ id: u.id, name: u.name })));
       };
       const fetchApprovers = async () => {
         const users = await AdminService.getUsersByRole('approver');
         // Show only active approvers in filters
-        setApprovers(users.filter(u => u.isActive).map(u => ({ id: u.id, name: u.name })));
+        setApprovers(
+          users.filter((u) => u.isActive).map((u) => ({ id: u.id, name: u.name }))
+        );
       };
       fetchResolvers();
       fetchApprovers();
     }
   }, [activeTab, loadedTabs]);
-
-  // Fix handleLoadMore to be a no-arg function
-  const handleLoadMore = useCallback(() => {
-    setPage(prev => prev + 1);
-  }, []);
 
   // Clear filters function
   const clearFilters = () => {
@@ -454,6 +534,7 @@ export const AdminPage: React.FC = () => {
     setApproverFilter([]);
     setResourceIdFilter([]);
     setFilterDateRange(undefined);
+    setFilterDatePreset('all');
     setOnlyUnassignedResolver(false);
     setLastStatusFilter('all');
     setLastCommentByInvigilator(false);
@@ -501,12 +582,12 @@ export const AdminPage: React.FC = () => {
   ].filter(Boolean).length;
   const hasActiveFilters = activeTicketFiltersCount > 0;
 
-  // When page changes (and not reset), load next page
+  // Prev/Next: replace table with that page's rows
   useEffect(() => {
-    if (page > 1) {
-      loadTickets();
+    if (activeTab === 'tickets' && loadedTabs.has('tickets') && page >= 1) {
+      loadTickets(page);
     }
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const loadAnalytics = useCallback(async () => {
@@ -518,6 +599,9 @@ export const AdminPage: React.FC = () => {
           ? { from: analyticsDateRange.from, to: analyticsDateRange.to }
           : undefined,
       };
+      const recentActivityPromise = AdminService.getRecentActivityCounts(
+        isTicketAdmin && user?.id ? { adminId: user.id } : undefined
+      );
       let data;
       if (isTicketAdmin && user?.id) {
         // For ticket admin, load filtered analytics
@@ -527,6 +611,7 @@ export const AdminPage: React.FC = () => {
         data = await AdminService.getTicketAnalytics(analyticsOptions);
       }
       setAnalytics(data);
+      setRecentActivity(await recentActivityPromise);
       // console.log('📊 Analytics refreshed:', data);
     } catch (err) {
       console.error('Error loading analytics:', err);
@@ -590,9 +675,28 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const handleViewTicket = (ticket: Issue) => {
+  const getTicketCommentCount = (ticket: Issue) =>
+    ticket.commentCount ?? ticket.comments?.length ?? 0;
+
+  const handleViewTicket = async (ticket: Issue, tab: TicketDetailsTab = 'details') => {
+    setDetailsInitialTab(tab);
     setSelectedTicket(ticket);
     setShowTicketDetails(true);
+
+    // List rows may omit full comments; refresh when opening Comments (or when empty).
+    if (tab === 'comments' || !ticket.comments?.length) {
+      try {
+        const full = await TicketService.getTicketById(ticket.id);
+        if (full) {
+          setSelectedTicket({
+            ...full,
+            commentCount: full.comments?.length ?? ticket.commentCount,
+          });
+        }
+      } catch (error) {
+        console.error('Error loading full ticket for details modal:', error);
+      }
+    }
   };
 
   const handleAssignmentComplete = () => {
@@ -643,67 +747,39 @@ export const AdminPage: React.FC = () => {
     setResourceIds(uniqueResourceIds.map(id => ({ value: id, label: id })));
   }, [allFilteredTickets]);
 
-  // Calculate System Health metrics
-  const calculateSLACompliance = () => {
-    const resolvedTickets = tickets.filter(ticket => 
-      ticket.status === 'resolved' && ticket.resolvedAt && ticket.submittedAt
-    );
-    
-    if (resolvedTickets.length === 0) return 100; // If no resolved tickets, consider 100% compliance
-    
-    const now = new Date();
-    const slaBreachedTickets = resolvedTickets.filter(ticket => {
-      const submittedAt = new Date(ticket.submittedAt);
-      const resolvedAt = new Date(ticket.resolvedAt);
-      const resolutionTime = resolvedAt.getTime() - submittedAt.getTime();
-      const resolutionHours = resolutionTime / (1000 * 60 * 60);
-      
-      // Define SLA based on severity
-      let slaHours = 24; // Default SLA
-      if (ticket.severity === 'sev1') slaHours = 4;  // 4 hours for SEV1
-      if (ticket.severity === 'sev2') slaHours = 8;  // 8 hours for SEV2
-      if (ticket.severity === 'sev3') slaHours = 24; // 24 hours for SEV3
-      
-      return resolutionHours > slaHours;
-    });
-    
-    const complianceRate = ((resolvedTickets.length - slaBreachedTickets.length) / resolvedTickets.length) * 100;
-    return Math.round(complianceRate);
-  };
+  // System Health — same analytics payload as Overview / Analytics tab
+  const slaCompliance =
+    analytics && analytics.totalTickets > 0
+      ? Math.round(
+          ((analytics.totalTickets - analytics.slaBreachedTickets) /
+            analytics.totalTickets) *
+            100
+        )
+      : null;
+  const avgResolutionTime = analytics
+    ? Math.round(analytics.avgResolutionHours * 10) / 10
+    : null;
+  const activeResolvers = analytics
+    ? analytics.resolverBreakdown.length
+    : null;
 
-  const calculateAvgResolutionTime = () => {
-    const resolvedTickets = tickets.filter(ticket => 
-      ticket.status === 'resolved' && ticket.resolvedAt && ticket.submittedAt
-    );
-    
-    if (resolvedTickets.length === 0) return 0;
-    
-    const totalResolutionTime = resolvedTickets.reduce((total, ticket) => {
-      const submittedAt = new Date(ticket.submittedAt);
-      const resolvedAt = new Date(ticket.resolvedAt);
-      const resolutionTime = resolvedAt.getTime() - submittedAt.getTime();
-      return total + resolutionTime;
-    }, 0);
-    
-    const avgResolutionTimeHours = totalResolutionTime / (resolvedTickets.length * 1000 * 60 * 60);
-    return Math.round(avgResolutionTimeHours * 10) / 10; // Round to 1 decimal place
-  };
+  const resolverNameById = useMemo(
+    () => new Map(resolvers.map((r) => [r.id, r.name])),
+    [resolvers]
+  );
+  const approverNameById = useMemo(
+    () => new Map(approvers.map((a) => [a.id, a.name])),
+    [approvers]
+  );
 
-  const calculateActiveUsers = () => {
-    // Count unique assigned resolvers
-    const uniqueResolvers = new Set<string>();
-    tickets.forEach(ticket => {
-      if (ticket.assignedResolver) {
-        uniqueResolvers.add(ticket.assignedResolver);
-      }
-    });
-    return uniqueResolvers.size;
+  const getAssigneeNames = (ticket: Issue, role: 'resolver' | 'approver') => {
+    const nameById = role === 'resolver' ? resolverNameById : approverNameById;
+    const names = getAllAssignees(ticket)
+      .filter((a) => a.role === role)
+      .map((a) => nameById.get(a.user_id) || a.user_id)
+      .filter(Boolean);
+    return names.length > 0 ? names.join(', ') : '—';
   };
-
-  // Calculate System Health metrics
-  const slaCompliance = calculateSLACompliance();
-  const avgResolutionTime = calculateAvgResolutionTime();
-  const activeUsers = calculateActiveUsers();
 
   const handleDeleteTicket = async (ticket: Issue) => {
     if (!window.confirm(`Are you sure you want to delete ticket ${ticket.ticketNumber}? This action cannot be undone and will delete all related data (comments, attachments, etc.).`)) {
@@ -1033,17 +1109,15 @@ export const AdminPage: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Header onLogout={handleLogout} panelName="Admin Panel" />
 
-      <main className="container mx-auto px-4 py-4 md:py-8">
-        <div className="space-y-4 md:space-y-6">
-          <div className="text-center space-y-2 md:space-y-4">
-            <h2 className="text-2xl md:text-3xl font-bold"></h2>
-            <p className="text-muted-foreground"></p>
-          </div>
-
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+      <PageShell>
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
             <TabsList
-              className={`my-4 grid w-full grid-cols-2 gap-1.5 rounded-xl border bg-muted p-1.5 shadow-md md:gap-0 md:p-1 ${
-                isTicketAdmin ? 'md:grid-cols-3' : 'md:grid-cols-3 lg:grid-cols-6'
+              className={`${tabsListClass} ${
+                isTicketAdmin
+                  ? 'md:grid-cols-3'
+                  : canAccessIntegrations
+                    ? 'md:grid-cols-3 lg:grid-cols-6'
+                    : 'md:grid-cols-3 lg:grid-cols-5'
               }`}
             >
               <TabsTrigger value="overview" className={tabTriggerClass}>Overview</TabsTrigger>
@@ -1055,7 +1129,11 @@ export const AdminPage: React.FC = () => {
                 <>
                   <TabsTrigger value="users" className={tabTriggerClass}>User Management</TabsTrigger>
                   <TabsTrigger value="activity" className={tabTriggerClass}>Activity Log</TabsTrigger>
-                  <TabsTrigger value="settings" className={tabTriggerClass}>Settings</TabsTrigger>
+                  {canAccessIntegrations && (
+                    <TabsTrigger value="integrations" className={tabTriggerClass}>
+                      Integrations
+                    </TabsTrigger>
+                  )}
                 </>
               )}
             </TabsList>
@@ -1079,51 +1157,43 @@ export const AdminPage: React.FC = () => {
               ) : (
                 <>
                   {/* Stats Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <AlertCircle className="h-8 w-8 text-blue-500" />
-                    </div>
-                    <div className="text-2xl font-bold">{analytics ? analytics.totalTickets : '-'}</div>
-                    <div className="text-sm text-muted-foreground">Total Tickets</div>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-6">
+                <Card className="min-w-0">
+                  <CardContent className="p-3 text-center sm:p-4">
+                    <AlertCircle className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground sm:mb-2 sm:h-5 sm:w-5" />
+                    <div className={metricValueClass}>{analytics ? analytics.totalTickets : '-'}</div>
+                    <div className={metricLabelClass}>Total Tickets</div>
                   </CardContent>
                 </Card>
                 
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <AlertCircle className="h-8 w-8 text-red-500" />
-                    </div>
-                    <div className="text-2xl font-bold">{analytics ? analytics.openTickets : '-'}</div>
-                    <div className="text-sm text-muted-foreground">Open</div>
+                <Card className="min-w-0">
+                  <CardContent className="p-3 text-center sm:p-4">
+                    <AlertCircle className="mx-auto mb-1.5 h-4 w-4 text-destructive sm:mb-2 sm:h-5 sm:w-5" />
+                    <div className={metricValueClass}>{analytics ? analytics.openTickets : '-'}</div>
+                    <div className={metricLabelClass}>Open</div>
                   </CardContent>
                 </Card>
                 
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <Clock className="h-8 w-8 text-yellow-500" />
-                    </div>
-                    <div className="text-2xl font-bold">{analytics ? analytics.inProgressTickets : '-'}</div>
-                    <div className="text-sm text-muted-foreground">Pending on CX</div>
+                <Card className="min-w-0">
+                  <CardContent className="p-3 text-center sm:p-4">
+                    <Clock className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground sm:mb-2 sm:h-5 sm:w-5" />
+                    <div className={metricValueClass}>{analytics ? analytics.inProgressTickets : '-'}</div>
+                    <div className={metricLabelClass}>Pending on CX</div>
                   </CardContent>
                 </Card>
                 
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <Settings className="h-8 w-8 text-purple-500" />
-                    </div>
-                    <div className="text-2xl font-bold">
+                <Card className="min-w-0">
+                  <CardContent className="p-3 text-center sm:p-4">
+                    <Settings className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground sm:mb-2 sm:h-5 sm:w-5" />
+                    <div className={metricValueClass}>
                       {(analytics ? analytics.userDependencyTickets : 0) + 
                        (analytics ? analytics.opsInputRequiredTickets : 0) + 
                        (analytics ? analytics.opsUserDependencyTickets : 0) + 
                        (analytics ? analytics.sendForApprovalTickets : 0)}
                     </div>
-                    <div className="text-sm text-muted-foreground">Pending Actions</div>
+                    <div className={metricLabelClass}>Pending Actions</div>
                     {analytics && (
-                      <div className="text-xs text-muted-foreground mt-1">
+                      <div className="mt-1 space-y-0.5 text-[10px] text-muted-foreground sm:text-xs">
                         <div>User: {analytics.userDependencyTickets}</div>
                         <div>Ops: {analytics.opsInputRequiredTickets}</div>
                         <div>Ops + User: {analytics.opsUserDependencyTickets}</div>
@@ -1133,23 +1203,19 @@ export const AdminPage: React.FC = () => {
                   </CardContent>
                 </Card>
                 
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <CheckCircle2 className="h-8 w-8 text-green-500" />
-                    </div>
-                    <div className="text-2xl font-bold">{analytics ? analytics.approvedTickets : '-'}</div>
-                    <div className="text-sm text-muted-foreground">Approved</div>
+                <Card className="min-w-0">
+                  <CardContent className="p-3 text-center sm:p-4">
+                    <CheckCircle2 className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground sm:mb-2 sm:h-5 sm:w-5" />
+                    <div className={metricValueClass}>{analytics ? analytics.approvedTickets : '-'}</div>
+                    <div className={metricLabelClass}>Approved</div>
                   </CardContent>
                 </Card>
                 
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <CheckCircle className="h-8 w-8 text-emerald-500" />
-                    </div>
-                    <div className="text-2xl font-bold">{analytics ? analytics.resolvedTickets : '-'}</div>
-                    <div className="text-sm text-muted-foreground">Closed</div>
+                <Card className="min-w-0">
+                  <CardContent className="p-3 text-center sm:p-4">
+                    <CheckCircle className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground sm:mb-2 sm:h-5 sm:w-5" />
+                    <div className={metricValueClass}>{analytics ? analytics.resolvedTickets : '-'}</div>
+                    <div className={metricLabelClass}>Closed</div>
                   </CardContent>
                 </Card>
               </div>
@@ -1169,9 +1235,12 @@ export const AdminPage: React.FC = () => {
                       </p>
                     ) : (
                       <div
-                        className="w-full"
+                        className="w-full min-w-0"
                         style={{
-                          height: Math.max(360, overviewCategoryChartData.length * 36 + 48),
+                          height: Math.max(
+                            isMobile ? 280 : 360,
+                            overviewCategoryChartData.length * (isMobile ? 32 : 36) + 48
+                          ),
                         }}
                       >
                         <ResponsiveContainer width="100%" height="100%">
@@ -1180,26 +1249,38 @@ export const AdminPage: React.FC = () => {
                             layout="vertical"
                             margin={{
                               top: 8,
-                              right: isMobile ? 8 : 56,
+                              right: isMobile ? 40 : 64,
                               left: isMobile ? 0 : 16,
-                              bottom: isMobile ? 24 : 36,
+                              bottom: isMobile ? 8 : 36,
                             }}
                           >
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis
                               type="number"
                               allowDecimals={false}
-                              label={{
-                                value: 'Number of Tickets',
-                                position: 'insideBottom',
-                                offset: -20,
-                                style: { fontSize: 12, fill: '#64748b' },
-                              }}
+                              domain={[
+                                0,
+                                (dataMax: number) =>
+                                  !Number.isFinite(dataMax) || dataMax <= 0
+                                    ? 1
+                                    : Math.ceil(dataMax * 1.22),
+                              ]}
+                              tick={{ fontSize: isMobile ? 10 : 12 }}
+                              label={
+                                isMobile
+                                  ? undefined
+                                  : {
+                                      value: 'Number of Tickets',
+                                      position: 'insideBottom',
+                                      offset: -20,
+                                      style: { fontSize: 12, fill: '#64748b' },
+                                    }
+                              }
                             />
                             <YAxis
                               type="category"
                               dataKey="category"
-                              width={isMobile ? 80 : 170}
+                              width={isMobile ? 72 : 170}
                               tick={{ fontSize: isMobile ? 10 : 12 }}
                               tickFormatter={(value: string) =>
                                 isMobile && value.length > 12 ? `${value.slice(0, 11)}…` : value
@@ -1222,18 +1303,45 @@ export const AdminPage: React.FC = () => {
                                 return [`${value} (${percent}%)`, 'Tickets'];
                               }}
                             />
-                            <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={22}>
+                            <Bar
+                              dataKey="count"
+                              radius={[0, 4, 4, 0]}
+                              barSize={22}
+                              isAnimationActive
+                              animationDuration={650}
+                              animationEasing="ease-out"
+                              label={(props) => {
+                                const { x = 0, y = 0, width = 0, height = 0, value } = props as {
+                                  x?: number;
+                                  y?: number;
+                                  width?: number;
+                                  height?: number;
+                                  value?: number | string;
+                                };
+                                if (value === undefined || value === null || value === '') {
+                                  return null;
+                                }
+                                return (
+                                  <text
+                                    x={Number(x) + Number(width) + (isMobile ? 6 : 8)}
+                                    y={Number(y) + Number(height) / 2}
+                                    fill="#0f172a"
+                                    fontSize={isMobile ? 11 : 13}
+                                    fontWeight={700}
+                                    dominantBaseline="middle"
+                                    textAnchor="start"
+                                  >
+                                    {value}
+                                  </text>
+                                );
+                              }}
+                            >
                               {overviewCategoryChartData.map((entry, index) => (
                                 <Cell
                                   key={entry.categoryKey}
                                   fill={getOverviewCategoryColor(entry.categoryKey, index)}
                                 />
                               ))}
-                              <LabelList
-                                dataKey="count"
-                                position="right"
-                                className="fill-foreground text-xs"
-                              />
                             </Bar>
                           </BarChart>
                         </ResponsiveContainer>
@@ -1257,34 +1365,49 @@ export const AdminPage: React.FC = () => {
                         No created-date data for the current filters.
                       </p>
                     ) : (
-                      <div className="w-full h-[360px]">
+                      <div className={`w-full min-w-0 ${isMobile ? 'h-[260px]' : 'h-[360px]'}`}>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart
                             data={overviewCreatedByDateChartData}
-                            margin={{ top: 8, right: 24, left: 16, bottom: 36 }}
+                            margin={{
+                              top: 8,
+                              right: isMobile ? 12 : 24,
+                              left: isMobile ? 0 : 16,
+                              bottom: isMobile ? 8 : 36,
+                            }}
                           >
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis
                               dataKey="date"
-                              tick={{ fontSize: 11 }}
+                              tick={{ fontSize: isMobile ? 10 : 11 }}
                               interval="preserveStartEnd"
-                              minTickGap={24}
-                              label={{
-                                value: 'Created Date',
-                                position: 'insideBottom',
-                                offset: -20,
-                                style: { fontSize: 12, fill: '#64748b' },
-                              }}
+                              minTickGap={isMobile ? 36 : 24}
+                              label={
+                                isMobile
+                                  ? undefined
+                                  : {
+                                      value: 'Created Date',
+                                      position: 'insideBottom',
+                                      offset: -20,
+                                      style: { fontSize: 12, fill: '#64748b' },
+                                    }
+                              }
                             />
                             <YAxis
                               allowDecimals={false}
-                              label={{
-                                value: 'Number of Tickets',
-                                angle: -90,
-                                position: 'insideLeft',
-                                offset: -4,
-                                style: { fontSize: 12, fill: '#64748b', textAnchor: 'middle' },
-                              }}
+                              width={isMobile ? 32 : 60}
+                              tick={{ fontSize: isMobile ? 10 : 12 }}
+                              label={
+                                isMobile
+                                  ? undefined
+                                  : {
+                                      value: 'Number of Tickets',
+                                      angle: -90,
+                                      position: 'insideLeft',
+                                      offset: -4,
+                                      style: { fontSize: 12, fill: '#64748b', textAnchor: 'middle' },
+                                    }
+                              }
                             />
                             <Tooltip
                               formatter={(value: number) => [value, 'Tickets']}
@@ -1295,9 +1418,21 @@ export const AdminPage: React.FC = () => {
                               dataKey="count"
                               stroke="#10b981"
                               strokeWidth={2}
-                              dot={{ r: 3 }}
+                              dot={{ r: 3, fill: '#10b981' }}
                               activeDot={{ r: 5 }}
-                            />
+                              isAnimationActive
+                              animationDuration={650}
+                              animationEasing="ease-out"
+                            >
+                              {overviewCreatedByDateChartData.length <= 14 && (
+                                <LabelList
+                                  dataKey="count"
+                                  position="top"
+                                  offset={8}
+                                  style={{ fill: '#0f172a', fontSize: 11, fontWeight: 600 }}
+                                />
+                              )}
+                            </Line>
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
@@ -1322,7 +1457,7 @@ export const AdminPage: React.FC = () => {
                       Manage Users
                     </Button>
                     <Button 
-                      onClick={() => loadTickets(true)}
+                      onClick={() => loadTickets()}
                       className="w-full justify-start" 
                       variant="outline"
                     >
@@ -1336,14 +1471,6 @@ export const AdminPage: React.FC = () => {
                     >
                       <FileText className="h-4 w-4 mr-2" />
                       View Tickets
-                    </Button>
-                    <Button 
-                      onClick={() => handleTabChange('settings')}
-                      className="w-full justify-start"
-                      variant="outline"
-                    >
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      WhatsApp / Settings
                     </Button>
                     {isSuperAdmin && (
                       <Button
@@ -1367,17 +1494,31 @@ export const AdminPage: React.FC = () => {
                       <div className="flex justify-between">
                         <span>New tickets today</span>
                         <Badge variant="secondary">
-                          {tickets.filter(t => 
-                            new Date(t.submittedAt).toDateString() === new Date().toDateString()
-                          ).length}
+                          {recentActivity ? recentActivity.newTicketsToday : '-'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Comments today</span>
+                        <Badge variant="secondary">
+                          {recentActivity ? recentActivity.commentsToday : '-'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Updated today</span>
+                        <Badge variant="secondary">
+                          {recentActivity ? recentActivity.updatedToday : '-'}
                         </Badge>
                       </div>
                       <div className="flex justify-between">
                         <span>Resolved today</span>
                         <Badge variant="secondary">
-                          {tickets.filter(t => 
-                            t.resolvedAt && new Date(t.resolvedAt).toDateString() === new Date().toDateString()
-                          ).length}
+                          {recentActivity ? recentActivity.resolvedToday : '-'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Closed today</span>
+                        <Badge variant="secondary">
+                          {recentActivity ? recentActivity.closedToday : '-'}
                         </Badge>
                       </div>
                       <div className="flex justify-between">
@@ -1396,15 +1537,21 @@ export const AdminPage: React.FC = () => {
                     <div className="space-y-3 text-sm">
                       <div className="flex justify-between">
                         <span>SLA Compliance</span>
-                        <Badge variant="default">{slaCompliance}%</Badge>
+                        <Badge variant="default">
+                          {slaCompliance === null ? '—' : `${slaCompliance}%`}
+                        </Badge>
                       </div>
                       <div className="flex justify-between">
                         <span>Avg Resolution</span>
-                        <Badge variant="outline">{avgResolutionTime}h</Badge>
+                        <Badge variant="outline">
+                          {avgResolutionTime === null ? '—' : `${avgResolutionTime}h`}
+                        </Badge>
                       </div>
                       <div className="flex justify-between">
-                        <span>Active Users</span>
-                        <Badge variant="secondary">{activeUsers}</Badge>
+                        <span>Active resolvers</span>
+                        <Badge variant="secondary">
+                          {activeResolvers === null ? '—' : activeResolvers}
+                        </Badge>
                       </div>
                     </div>
                   </CardContent>
@@ -1456,26 +1603,30 @@ export const AdminPage: React.FC = () => {
                   className={cn('p-4 pt-0', ticketFiltersOpen ? 'block' : 'hidden md:block')}
                 >
                   <div className="space-y-6">
-                    {/* Row 1: Search, Resource ID, Date Range, Severity */}
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                      {/* Search Bar */}
+                    {/* Row 1: Search, Resource ID, Ticket created (+ custom range as 4th) */}
+                    <div
+                      className={cn(
+                        'grid grid-cols-1 gap-4 md:grid-cols-3',
+                        filterDatePreset === 'custom' && 'lg:grid-cols-4'
+                      )}
+                    >
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Search</label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search tickets by number (comma-separated), description..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10 h-11"
-                      />
-                    </div>
-                    </div>
+                        <label className="mb-2 block text-sm font-medium">Search</label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            placeholder="Ticket #, description..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="h-11 pl-10"
+                          />
+                        </div>
+                      </div>
 
-                      {/* Resource ID */}
                       <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          Resource ID {resourceIdFilter.length > 0 && (
+                        <label className="mb-2 block text-sm font-medium">
+                          Resource ID{' '}
+                          {resourceIdFilter.length > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">
                               {resourceIdFilter.length} selected
                             </Badge>
@@ -1484,86 +1635,120 @@ export const AdminPage: React.FC = () => {
                         <MultiSelect
                           selected={resourceIdFilter}
                           onChange={setResourceIdFilter}
-                          placeholder="Enter Resource IDs (comma-separated)..."
+                          placeholder="Resource IDs (comma-separated)..."
                           className="w-full"
                         />
-                        {resourceIdFilter.length === 0 && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Enter comma-separated Resource IDs to filter tickets
-                          </p>
-                        )}
                       </div>
 
-                      {/* Date Range */}
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Ticket Created Date Range</label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal h-11",
-                                !filterDateRange && "text-muted-foreground"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {filterDateRange?.from ? (
-                                filterDateRange.to ? (
-                                  <>
-                                    {format(filterDateRange.from, "LLL dd, y")} - {format(filterDateRange.to, "LLL dd, y")}
-                                  </>
-                                ) : (
-                                  format(filterDateRange.from, "LLL dd, y")
-                                )
-                              ) : (
-                                "Pick a date range"
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              initialFocus
-                              mode="range"
-                              defaultMonth={filterDateRange?.from}
-                              selected={filterDateRange}
-                              onSelect={setFilterDateRange}
-                              numberOfMonths={2}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        {filterDateRange && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Filtering tickets created between {filterDateRange.from && format(filterDateRange.from, "MMM dd, yyyy")} {filterDateRange.to && ` and ${format(filterDateRange.to, "MMM dd, yyyy")}`}
-                          </p>
-                        )}
+                        <label className="mb-2 block text-sm font-medium">Ticket created</label>
+                        <Select
+                          value={filterDatePreset}
+                          onValueChange={(value) => {
+                            const nextPreset = value as DateRangePresetId;
+                            setFilterDatePreset(nextPreset);
+                            if (nextPreset === 'custom') return;
+                            setFilterDateRange(getDateRangeForPreset(nextPreset));
+                          }}
+                        >
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Date range" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DATE_RANGE_PRESET_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {filterDatePreset !== 'custom' &&
+                          filterDatePreset !== 'all' &&
+                          filterDateRange?.from && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {format(filterDateRange.from, 'MMM dd, yyyy')}
+                              {filterDateRange.to
+                                ? ` – ${format(filterDateRange.to, 'MMM dd, yyyy')}`
+                                : ''}
+                            </p>
+                          )}
                       </div>
 
-                      {/* Severity */}
+                      {filterDatePreset === 'custom' && (
+                        <div>
+                          <label className="mb-2 block text-sm font-medium">Custom range</label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  'h-11 w-full justify-start text-left font-normal',
+                                  !filterDateRange && 'text-muted-foreground'
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                <span className="truncate">
+                                  {filterDateRange?.from ? (
+                                    filterDateRange.to ? (
+                                      <>
+                                        {format(filterDateRange.from, 'LLL dd, y')} -{' '}
+                                        {format(filterDateRange.to, 'LLL dd, y')}
+                                      </>
+                                    ) : (
+                                      format(filterDateRange.from, 'LLL dd, y')
+                                    )
+                                  ) : (
+                                    'Pick a custom range'
+                                  )}
+                                </span>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={filterDateRange?.from}
+                                selected={filterDateRange}
+                                onSelect={(range) => {
+                                  setFilterDatePreset('custom');
+                                  setFilterDateRange(range);
+                                }}
+                                numberOfMonths={2}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Row 2: Severity, Status, Category, City */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Severity</label>
+                        <label className="mb-2 block text-sm font-medium">Severity</label>
                         <Select value={severityFilter} onValueChange={setSeverityFilter}>
                           <SelectTrigger className="h-11">
                             <SelectValue placeholder="Severity" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All Severity</SelectItem>
-                            {uniqueSeverities.map(severity => (
+                            {uniqueSeverities.map((severity) => (
                               <SelectItem key={severity} value={severity}>
-                                {severity === 'sev1' ? 'SEV1' :
-                                 severity === 'sev2' ? 'SEV2' :
-                                 severity === 'sev3' ? 'SEV3' :
-                                 (severity as string).charAt(0).toUpperCase() + (severity as string).slice(1)}
+                                {severity === 'sev1'
+                                  ? 'SEV1'
+                                  : severity === 'sev2'
+                                    ? 'SEV2'
+                                    : severity === 'sev3'
+                                      ? 'SEV3'
+                                      : (severity as string).charAt(0).toUpperCase() +
+                                        (severity as string).slice(1)}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
-                    
-                    {/* Row 2: Status, Category, City, Approver */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Status</label>
+                        <label className="mb-2 block text-sm font-medium">Status</label>
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
                           <SelectTrigger className="h-11">
                             <SelectValue placeholder="Status" />
@@ -1583,26 +1768,37 @@ export const AdminPage: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Category</label>
+                        <label className="mb-2 block text-sm font-medium">Category</label>
                         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                           <SelectTrigger className="h-11">
                             <SelectValue placeholder="Category" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All Categories</SelectItem>
-                            {uniqueCategories.map(category => (
+                            {uniqueCategories.map((category) => (
                               <SelectItem key={category} value={category}>
-                                {category === 'payment_delay' ? 'Payment Delay' :
-                                 category === 'partial_payment' ? 'Partial Payment' :
-                                 category === 'behavioral_complaint' ? 'Behavioral Complaint' :
-                                 category === 'improvement_request' ? 'Improvement Request' :
-                                 category === 'facility_issue' ? 'Facility Issue' :
-                                 category === 'penalty_issue' ? 'Penalty Issue' :
-                                 category === 'app_issue' ? 'App Issue' :
-                                 category === 'noc' ? 'NOC' :
-                                 category === 'posh' ? 'POSH' :
-                                 category === 'workplace_misconduct' ? 'Workplace Misconduct' :
-                                 category.charAt(0).toUpperCase() + category.slice(1)}
+                                {category === 'payment_delay'
+                                  ? 'Payment Delay'
+                                  : category === 'partial_payment'
+                                    ? 'Partial Payment'
+                                    : category === 'behavioral_complaint'
+                                      ? 'Behavioral Complaint'
+                                      : category === 'improvement_request'
+                                        ? 'Improvement Request'
+                                        : category === 'facility_issue'
+                                          ? 'Facility Issue'
+                                          : category === 'penalty_issue'
+                                            ? 'Penalty Issue'
+                                            : category === 'app_issue'
+                                              ? 'App Issue'
+                                              : category === 'noc'
+                                                ? 'NOC'
+                                                : category === 'posh'
+                                                  ? 'POSH'
+                                                  : category === 'workplace_misconduct'
+                                                    ? 'Workplace Misconduct'
+                                                    : category.charAt(0).toUpperCase() +
+                                                      category.slice(1)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1610,23 +1806,29 @@ export const AdminPage: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="text-sm font-medium mb-2 block">City</label>
+                        <label className="mb-2 block text-sm font-medium">City</label>
                         <Select value={cityFilter} onValueChange={setCityFilter}>
                           <SelectTrigger className="h-11">
                             <SelectValue placeholder="City" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All Cities</SelectItem>
-                            {uniqueCities.map(city => (
-                              <SelectItem key={city} value={city}>{city}</SelectItem>
+                            {uniqueCities.map((city) => (
+                              <SelectItem key={city} value={city}>
+                                {city}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
+                    </div>
 
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          Approver {approverFilter.length > 0 && (
+                    {/* Row 3: Approver (1) + Resolver (3) */}
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+                      <div className="rounded-md border border-border bg-muted/20 p-3">
+                        <label className="mb-2 block text-sm font-medium">
+                          Approver{' '}
+                          {approverFilter.length > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">
                               {approverFilter.length} selected
                             </Badge>
@@ -1637,16 +1839,13 @@ export const AdminPage: React.FC = () => {
                           onChange={setApproverFilter}
                           placeholder="Select approvers..."
                           className="w-full"
-                          options={approvers.map(a => ({ value: a.id, label: a.name }))}
+                          options={approvers.map((a) => ({ value: a.id, label: a.name }))}
                         />
                       </div>
-                    </div>
-
-                    {/* Row 3: Resolver */}
-                    <div className="grid grid-cols-1 gap-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          Resolver {resolverFilter.length > 0 && (
+                      <div className="rounded-md border border-border bg-muted/20 p-3 lg:col-span-3">
+                        <label className="mb-2 block text-sm font-medium">
+                          Resolver{' '}
+                          {resolverFilter.length > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">
                               {resolverFilter.length} selected
                             </Badge>
@@ -1657,7 +1856,7 @@ export const AdminPage: React.FC = () => {
                           onChange={setResolverFilter}
                           placeholder="Select resolvers..."
                           className="w-full"
-                          options={resolvers.map(r => ({ value: r.id, label: r.name }))}
+                          options={resolvers.map((r) => ({ value: r.id, label: r.name }))}
                         />
                       </div>
                     </div>
@@ -1742,60 +1941,60 @@ export const AdminPage: React.FC = () => {
               </Card>
 
               {/* Status Count Cards - Update based on filters */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-                <Card className="text-center">
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-blue-600">{allFilteredTickets.filter(t => t.status === 'open').length}</div>
-                    <div className="text-sm text-muted-foreground">Open</div>
+              <div className={`${denseStripClass} md:grid-cols-4 lg:grid-cols-8 md:gap-4`}>
+                <Card className={`${denseStripItemClass} text-center`}>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className={`${metricValueClass} text-blue-600`}>{allFilteredTickets.filter(t => t.status === 'open').length}</div>
+                    <div className={metricLabelClass}>Open</div>
                   </CardContent>
                 </Card>
                 
-                <Card className="text-center">
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-yellow-600">{allFilteredTickets.filter(t => t.status === 'in_progress').length}</div>
-                    <div className="text-sm text-muted-foreground">Pending on CX</div>
+                <Card className={`${denseStripItemClass} text-center`}>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className={`${metricValueClass} text-yellow-600`}>{allFilteredTickets.filter(t => t.status === 'in_progress').length}</div>
+                    <div className={metricLabelClass}>Pending on CX</div>
                   </CardContent>
                 </Card>
                 
-                <Card className="text-center">
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-orange-600">{allFilteredTickets.filter(t => t.status === 'user_dependency').length}</div>
-                    <div className="text-sm text-muted-foreground">User Dependency</div>
+                <Card className={`${denseStripItemClass} text-center`}>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className={`${metricValueClass} text-orange-600`}>{allFilteredTickets.filter(t => t.status === 'user_dependency').length}</div>
+                    <div className={metricLabelClass}>User Dependency</div>
                   </CardContent>
                 </Card>
                 
-                <Card className="text-center">
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-purple-600">{allFilteredTickets.filter(t => t.status === 'ops_input_required').length}</div>
-                    <div className="text-sm text-muted-foreground">Ops Dependency</div>
+                <Card className={`${denseStripItemClass} text-center`}>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className={`${metricValueClass} text-purple-600`}>{allFilteredTickets.filter(t => t.status === 'ops_input_required').length}</div>
+                    <div className={metricLabelClass}>Ops Dependency</div>
                   </CardContent>
                 </Card>
                 
-                <Card className="text-center">
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-indigo-600">{allFilteredTickets.filter(t => t.status === 'ops_user_dependency').length}</div>
-                    <div className="text-sm text-muted-foreground">Ops + User</div>
+                <Card className={`${denseStripItemClass} text-center`}>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className={`${metricValueClass} text-indigo-600`}>{allFilteredTickets.filter(t => t.status === 'ops_user_dependency').length}</div>
+                    <div className={metricLabelClass}>Ops + User</div>
                   </CardContent>
                 </Card>
                 
-                <Card className="text-center">
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-cyan-600">{allFilteredTickets.filter(t => t.status === 'send_for_approval').length}</div>
-                    <div className="text-sm text-muted-foreground">Send for Approval</div>
+                <Card className={`${denseStripItemClass} text-center`}>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className={`${metricValueClass} text-cyan-600`}>{allFilteredTickets.filter(t => t.status === 'send_for_approval').length}</div>
+                    <div className={metricLabelClass}>Send for Approval</div>
                   </CardContent>
                 </Card>
                 
-                <Card className="text-center">
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-green-600">{allFilteredTickets.filter(t => t.status === 'approved').length}</div>
-                    <div className="text-sm text-muted-foreground">Approved</div>
+                <Card className={`${denseStripItemClass} text-center`}>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className={`${metricValueClass} text-green-600`}>{allFilteredTickets.filter(t => t.status === 'approved').length}</div>
+                    <div className={metricLabelClass}>Approved</div>
                   </CardContent>
                 </Card>
                 
-                <Card className="text-center">
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-gray-600">{allFilteredTickets.filter(t => t.status === 'resolved').length}</div>
-                    <div className="text-sm text-muted-foreground">Closed</div>
+                <Card className={`${denseStripItemClass} text-center`}>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className={`${metricValueClass} text-gray-600`}>{allFilteredTickets.filter(t => t.status === 'resolved').length}</div>
+                    <div className={metricLabelClass}>Closed</div>
                   </CardContent>
                 </Card>
               </div>
@@ -1838,66 +2037,96 @@ export const AdminPage: React.FC = () => {
 
                     {/* Mobile Ticket Cards */}
                     {filteredTickets.map((ticket) => (
-                      <Card key={ticket.id} className={`p-4 ${viewAllTickets && ticket.archiveStatus === 'Yes' ? 'bg-red-50' : ''}`}>
-                        <div className="mb-3 flex items-start justify-between gap-2">
-                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <Card
+                        key={ticket.id}
+                        className={`min-w-0 p-3 sm:p-4 ${viewAllTickets && ticket.archiveStatus === 'Yes' ? 'bg-red-50' : ''}`}
+                      >
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
                             <Checkbox
                               checked={selectedTickets.includes(ticket.id)}
                               onCheckedChange={(checked) => handleTicketSelect(ticket.id, checked === true)}
                               aria-label={`Select ticket ${ticket.ticketNumber}`}
                             />
-                            <span className="whitespace-nowrap font-mono text-sm font-semibold">{ticket.ticketNumber}</span>
-                            {ticket.deleted && (
-                              <span title="This ticket is soft deleted">
-                                <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold gap-1">
-                                  <Trash2 className="h-3 w-3" />DELETED
-                                </span>
-                              </span>
-                            )}
-                            <Badge variant={getStatusColor(ticket.status)}>
-                              {getStatusLabel(ticket.status as any)}
-                            </Badge>
-                            <Badge variant={getSeverityColor(ticket.severity)}>
-                              {ticket.severity.toUpperCase()}
-                            </Badge>
+                            <span className="truncate font-mono text-sm font-semibold" title={ticket.ticketNumber}>
+                              {ticket.ticketNumber}
+                            </span>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="flex shrink-0 items-center gap-1.5">
                             <Button
                               variant="outline"
                               size="sm"
+                              className="h-8 w-8 p-0"
                               onClick={() => handleViewTicket(ticket)}
                               aria-label={`View ticket ${ticket.ticketNumber}`}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                'h-8 gap-1 px-2',
+                                ticket.lastCommentIsAutoClose
+                                  ? 'border-red-500 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800'
+                                  : ticket.lastCommentFromRaiserSide &&
+                                      'border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
+                              )}
+                              onClick={() => handleViewTicket(ticket, 'comments')}
+                              aria-label={`View comments for ticket ${ticket.ticketNumber}`}
+                              title={
+                                ticket.lastCommentIsAutoClose
+                                  ? 'Last comment is system auto-close'
+                                  : ticket.lastCommentFromRaiserSide
+                                    ? 'Last comment from invigilator or ticket creator'
+                                    : 'Open comments'
+                              }
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                              <span className="tabular-nums text-xs">{getTicketCommentCount(ticket)}</span>
+                            </Button>
                             {!ticket.deleted && (
                               <Button
                                 variant="destructive"
                                 size="sm"
+                                className="h-8 w-8 p-0"
                                 onClick={() => handleDeleteTicket(ticket)}
                                 disabled={deletingTicketId === ticket.id}
                                 aria-label={`Delete ticket ${ticket.ticketNumber}`}
                               >
                                 {deletingTicketId === ticket.id ? (
-                                  <>
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                    Deleting...
-                                  </>
+                                  <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
                                 ) : (
-                                  <>
-                                    <Trash2 className="h-4 w-4" />
-                                  </>
+                                  <Trash2 className="h-4 w-4" />
                                 )}
                               </Button>
                             )}
                           </div>
                         </div>
-                        
-                        <h3 className="font-medium mb-2">{ticket.issueDescription}</h3>
-                        
-                        <div className="flex items-center justify-between text-sm text-gray-500">
-                          <span>{ticket.city}</span>
-                          <span>{ticket.submittedAt ? format(new Date(ticket.submittedAt), 'dd MMM yyyy HH:mm:ss') : 'N/A'}</span>
+                        <div className="mb-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                          {ticket.deleted && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                              <Trash2 className="h-3 w-3" />
+                              DELETED
+                            </span>
+                          )}
+                          <Badge variant={getStatusColor(ticket.status)}>
+                            {getStatusLabel(ticket.status as any)}
+                          </Badge>
+                          <Badge variant={getSeverityColor(ticket.severity)}>
+                            {ticket.severity.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <h3 className="mb-2 line-clamp-2 text-sm font-medium leading-snug">
+                          {ticket.issueDescription}
+                        </h3>
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span className="min-w-0 truncate" title={ticket.city}>{ticket.city}</span>
+                          <span className="shrink-0 tabular-nums">
+                            {ticket.submittedAt
+                              ? format(new Date(ticket.submittedAt), 'dd MMM yyyy HH:mm')
+                              : 'N/A'}
+                          </span>
                         </div>
                       </Card>
                     ))}
@@ -1921,7 +2150,7 @@ export const AdminPage: React.FC = () => {
                             setSelectedTickets(filteredTickets.map(t => t.id));
                           }}
                         >
-                          Select 50 on this page
+                          Select {pageSize} on this page
                         </Button>
                         <Button
                           variant="outline"
@@ -1972,6 +2201,8 @@ export const AdminPage: React.FC = () => {
                             <TableHead>Status</TableHead>
                             <TableHead>Severity</TableHead>
                             <TableHead>City</TableHead>
+                            <TableHead>Resolver</TableHead>
+                            <TableHead>Approver</TableHead>
                             <TableHead>Created</TableHead>
                             <TableHead>Actions</TableHead>
                           </TableRow>
@@ -1979,7 +2210,7 @@ export const AdminPage: React.FC = () => {
                         <TableBody>
                           {filteredTickets.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={9} className="text-center">No tickets found.</TableCell>
+                              <TableCell colSpan={11} className="text-center">No tickets found.</TableCell>
                             </TableRow>
                           ) : (
                             filteredTickets.map((ticket) => (
@@ -2002,11 +2233,13 @@ export const AdminPage: React.FC = () => {
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="text-xs">
-                                    {ticket.issueCategory.replace('_', ' ').toUpperCase()}
+                                    {formatOverviewCategory(ticket.issueCategory)}
                                   </Badge>
                                 </TableCell>
-                                <TableCell className="max-w-xs truncate">
-                                  {ticket.issueDescription}
+                                <TableCell className="max-w-xs">
+                                  <p className="line-clamp-3 whitespace-normal">
+                                    {ticket.issueDescription}
+                                  </p>
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant={getStatusColor(ticket.status)}>
@@ -2019,6 +2252,12 @@ export const AdminPage: React.FC = () => {
                                   </Badge>
                                 </TableCell>
                                 <TableCell>{ticket.city}</TableCell>
+                                <TableCell className="max-w-[9rem] text-sm">
+                                  {getAssigneeNames(ticket, 'resolver')}
+                                </TableCell>
+                                <TableCell className="max-w-[9rem] text-sm">
+                                  {getAssigneeNames(ticket, 'approver')}
+                                </TableCell>
                                 <TableCell>
                                   {ticket.submittedAt ? format(new Date(ticket.submittedAt), 'dd MMM yyyy HH:mm:ss') : 'N/A'}
                                 </TableCell>
@@ -2028,8 +2267,32 @@ export const AdminPage: React.FC = () => {
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleViewTicket(ticket)}
+                                      aria-label={`View ticket ${ticket.ticketNumber}`}
                                     >
                                       <Eye className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className={cn(
+                                        'gap-1',
+                                        ticket.lastCommentIsAutoClose
+                                          ? 'border-red-500 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800'
+                                          : ticket.lastCommentFromRaiserSide &&
+                                              'border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
+                                      )}
+                                      onClick={() => handleViewTicket(ticket, 'comments')}
+                                      aria-label={`View comments for ticket ${ticket.ticketNumber}`}
+                                      title={
+                                        ticket.lastCommentIsAutoClose
+                                          ? 'Last comment is system auto-close'
+                                          : ticket.lastCommentFromRaiserSide
+                                            ? 'Last comment from invigilator or ticket creator'
+                                            : 'Open comments'
+                                      }
+                                    >
+                                      <MessageSquare className="h-4 w-4" />
+                                      <span className="tabular-nums text-xs">{getTicketCommentCount(ticket)}</span>
                                     </Button>
                                     {!ticket.deleted && (
                                       <Button
@@ -2065,9 +2328,32 @@ export const AdminPage: React.FC = () => {
               {/* Pagination Controls */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 my-4">
                 <div className="text-sm text-muted-foreground">
-                  Showing {filteredTickets.length} of {totalTickets} tickets
+                  {filteredTickets.length === 0
+                    ? `Showing 0 of ${totalTickets} tickets`
+                    : `Showing ${(page - 1) * pageSize + 1}–${(page - 1) * pageSize + filteredTickets.length} of ${totalTickets} tickets`}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">Per page</span>
+                    <Select
+                      value={String(pageSize)}
+                      onValueChange={(value) => {
+                        const next = Number(value);
+                        if (next === 25 || next === 50 || next === 100) {
+                          setPageSize(next);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[4.5rem]" aria-label="Tickets per page">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="25">25</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => setPage(p => Math.max(1, p - 1))}>
                     Prev
                   </Button>
@@ -2098,19 +2384,35 @@ export const AdminPage: React.FC = () => {
               <ActivityLog />
             </TabsContent>
 
-            <TabsContent value="settings" className="space-y-6">
-              <WhatsAppTestComponent />
-            </TabsContent>
+            {canAccessIntegrations && (
+              <TabsContent value="integrations" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Integrations</CardTitle>
+                    <CardDescription>
+                      Ops and test tooling for external integrations. Changes here can affect
+                      live messaging — use carefully.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <WhatsAppTestComponent />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
           </Tabs>
-        </div>
-      </main>
+      </PageShell>
 
       {/* Modals */}
       <TicketDetailsModal
         isOpen={showTicketDetails}
-        onClose={() => setShowTicketDetails(false)}
+        onClose={() => {
+          setShowTicketDetails(false);
+          setDetailsInitialTab('details');
+        }}
         ticket={selectedTicket}
         onTicketUpdate={loadTickets}
+        initialTab={detailsInitialTab}
       />
 
       <Dialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
@@ -2177,8 +2479,8 @@ export const AdminPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
-        <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
+      <footer className="mt-8 border-t bg-muted/50 py-4 md:mt-12 md:py-6">
+        <div className={pageFooterClass}>
           <p>© 2025 Awign Enterprises Pvt. Ltd.</p>
           <p className="mt-1">Escalation Management System for TCS Examination Operations.</p>
         </div>

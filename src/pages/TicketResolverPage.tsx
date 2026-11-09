@@ -35,20 +35,19 @@ import {
   emptyResolverCounts
 } from '@/services/roleTicketQuery';
 import { resolveAdvancedTicketIds, TooManyAdvancedMatchesError, TOO_MANY_ADVANCED_MATCHES_MESSAGE } from '@/services/roleTicketAdvancedFilters';
+import { PageShell } from '@/components/layout/PageShell';
+import {
+  cardMetaRowClass,
+  cardTitleMobileClass,
+  pageFooterClass,
+  tabTriggerClass,
+  tabsListClass,
+} from '@/components/layout/mobileLayout';
+import { cn } from '@/lib/utils';
 
 const PAGE_LIMIT = 50;
 const SEARCH_DEBOUNCE_MS = 400;
 const SEVERITY_OPTIONS = ['sev1', 'sev2', 'sev3'];
-
-/**
- * Status tab styling shared by every trigger.
- *
- * Phones and tablets use a grid (2 then 4 columns) so labels wrap inside their
- * cell and every status stays visible. From xl up the triggers size to their
- * content on a single line, where eight labels fit without scrolling.
- */
-const filterTabTriggerClass =
-  "w-full shrink-0 rounded-lg py-3 text-center data-[state=active]:bg-blue-100 data-[state=active]:font-bold data-[state=active]:shadow xl:w-auto xl:flex-none xl:min-w-fit xl:whitespace-nowrap xl:px-2";
 
 const RESOLVER_TABS: { value: ResolverStatusTab; label: string; emptyTitle: string; emptyHint: string }[] = [
   { value: 'all', label: 'All', emptyTitle: 'No tickets found', emptyHint: 'No tickets assigned to you' },
@@ -368,79 +367,78 @@ export const TicketResolverPage: React.FC = () => {
   };
 
   const renderTicketCard = (ticket: Issue) => (
-    <Card key={ticket.id} className={`hover:shadow-md transition-shadow ${ticket.comments[0]?.isFromInvigilator ? 'border border-green-400' : ''}`}>
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          {/* Header */}
-          <div className="flex items-start justify-between">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-              <span className="font-mono font-semibold text-sm">{ticket.ticketNumber}</span>
-              <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-                <Badge className={getSeverityColor(ticket.severity)}>
-                  {ticket.severity.toUpperCase()}
-                </Badge>
-                <Badge className={getStatusColor(ticket.status)}>
-                  {getStatusLabel(ticket.status)}
-                </Badge>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleViewTicket(ticket)}
-                className="flex items-center gap-1"
-              >
-                <Eye className="h-3 w-3" />
-                View
-              </Button>
-            </div>
+    <Card
+      key={ticket.id}
+      className={cn(
+        'min-w-0 p-3 transition-shadow hover:shadow-md sm:p-4',
+        ticket.comments[0]?.isFromInvigilator ? 'border border-green-400' : ''
+      )}
+    >
+      <CardContent className="p-0">
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <span className="truncate font-mono text-sm font-semibold" title={ticket.ticketNumber}>
+              {ticket.ticketNumber}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 gap-1 px-2"
+              onClick={() => handleViewTicket(ticket)}
+            >
+              <Eye className="h-3 w-3" />
+              <span className="hidden sm:inline">View</span>
+            </Button>
           </div>
-
-          {/* Issue Info */}
-          <div>
-            <h3 className="font-medium text-sm mb-1">{formatCategory(ticket.issueCategory)}</h3>
-            <p className="text-xs text-muted-foreground line-clamp-2">{ticket.issueDescription}</p>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <Badge className={getSeverityColor(ticket.severity)}>{ticket.severity.toUpperCase()}</Badge>
+            <Badge className={getStatusColor(ticket.status)}>{getStatusLabel(ticket.status)}</Badge>
           </div>
-
-          {/* Meta Info */}
-          <div className="flex flex-wrap items-center justify-between gap-y-1 text-xs text-muted-foreground">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                {ticket.city}
-              </div>
-              <div className="flex items-center gap-1">
-                <FileText className="h-3 w-3" />
+          <h3 className={cn(cardTitleMobileClass, 'text-sm')}>{formatCategory(ticket.issueCategory)}</h3>
+          <p className="line-clamp-2 text-xs text-muted-foreground">{ticket.issueDescription}</p>
+          <div className={cn(cardMetaRowClass, 'justify-between text-xs text-muted-foreground')}>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="flex min-w-0 items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{ticket.city}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <FileText className="h-3 w-3 shrink-0" />
                 {ticket.centreCode}
-              </div>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
+              </span>
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3 shrink-0" />
                 {format(ticket.submittedAt, 'MMM dd')}
-              </div>
+              </span>
             </div>
             {ticket.comments.length > 0 && (
-              <div className="flex items-center gap-1">
+              <span className="flex shrink-0 items-center gap-1">
                 <MessageSquare className="h-3 w-3" />
                 {ticket.comments.length}
-              </div>
+              </span>
             )}
           </div>
-
-          {/* Last Comment Info */}
           {ticket.comments.length > 0 && (
-            <div className="text-xs text-muted-foreground">
+            <p className="truncate text-xs text-muted-foreground">
               {(() => {
                 const lastComment = ticket.comments[0];
                 if (lastComment.isFromInvigilator) {
-                  return "Last comment added by: Invigilator";
-                } else if (lastComment.isInternal) {
-                  return "Internal comment added";
-                } else {
-                  return `Last comment added by: ${lastComment.author || 'Unknown'}`;
+                  return 'Last comment added by: Invigilator';
                 }
+                if (lastComment.isInternal) {
+                  return 'Internal comment added';
+                }
+                const author = lastComment.author || 'Unknown';
+                return (
+                  <>
+                    Last comment added by:{' '}
+                    <span className="font-medium" title={author}>
+                      {author}
+                    </span>
+                  </>
+                );
               })()}
-            </div>
+            </p>
           )}
 
           {/* Resolution Notes Preview */}
@@ -472,14 +470,14 @@ export const TicketResolverPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-background">
         <Header onLogout={handleLogout} />
-        <main className="container mx-auto px-4 py-8">
+        <PageShell>
           <Card>
             <CardContent className="py-8 text-center">
               <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600">Please login to access the resolver dashboard</p>
             </CardContent>
           </Card>
-        </main>
+        </PageShell>
       </div>
     );
   }
@@ -581,8 +579,7 @@ export const TicketResolverPage: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Header onLogout={handleLogout} onTicketClick={handleTicketClick} panelName="Resolver Panel" />
 
-      <main className="container mx-auto px-4 py-4 md:py-8">
-        <div className="space-y-6">
+      <PageShell>
           {/* Hide page header and stats per request (keep top header only) */}
           <div className="hidden" />
           <div className="hidden">
@@ -635,9 +632,14 @@ export const TicketResolverPage: React.FC = () => {
 
           {/* Tickets Tabs */}
           <Tabs value={activeTab} onValueChange={value => { if (isResolverTab(value)) setActiveTab(value); }}>
-            <TabsList className="grid w-full grid-cols-2 gap-3 rounded-xl border bg-white p-2 shadow-md my-4 z-10 md:grid-cols-4 xl:flex xl:flex-row xl:flex-nowrap xl:gap-1 xl:overflow-x-auto">
+            <TabsList
+              className={cn(
+                tabsListClass,
+                'z-10 md:grid-cols-4 xl:flex xl:flex-row xl:flex-nowrap xl:gap-1 xl:overflow-x-auto'
+              )}
+            >
               {RESOLVER_TABS.map(tab => (
-                <TabsTrigger key={tab.value} value={tab.value} className={filterTabTriggerClass}>
+                <TabsTrigger key={tab.value} value={tab.value} className={tabTriggerClass}>
                   {tab.label}
                   <Badge variant="secondary" className="ml-2">
                     {statusCounts[tab.value] ?? 0}
@@ -653,8 +655,7 @@ export const TicketResolverPage: React.FC = () => {
               </TabsContent>
             ))}
           </Tabs>
-        </div>
-      </main>
+      </PageShell>
 
       {/* Ticket Details Modal */}
       <TicketDetailsModal
@@ -666,7 +667,7 @@ export const TicketResolverPage: React.FC = () => {
       />
 
       <footer className="border-t bg-muted/50 py-4 md:py-6 mt-8 md:mt-12">
-        <div className="container mx-auto px-4 text-center text-xs md:text-sm text-muted-foreground">
+        <div className={pageFooterClass}>
           <p>© 2025 Awign Enterprises Pvt. Ltd.</p>
           <p className="mt-1">Escalation Management System for TCS Examination Operations.</p>
         </div>

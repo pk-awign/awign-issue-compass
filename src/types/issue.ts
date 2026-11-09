@@ -29,6 +29,15 @@ export interface Issue {
   assignedApproverDetails?: { name: string; role: string };
   assignedTicketAdminDetails?: { name: string; role: string };
   comments: Comment[];
+  /** Present on list rows when full comments are not loaded */
+  commentCount?: number;
+  /**
+   * True when the newest comment is from an invigilator/anonymous
+   * or matches the ticket creator (submittedBy). Used for list UI highlights.
+   */
+  lastCommentFromRaiserSide?: boolean;
+  /** True when the newest comment is the system auto-close message. */
+  lastCommentIsAutoClose?: boolean;
   attachments?: Attachment[];
   resolutionNotes?: string;
   resolvedAt?: Date;

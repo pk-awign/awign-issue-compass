@@ -57,22 +57,26 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
 
   return (
     <header className="bg-white border-b shadow-sm">
-      <div className="container mx-auto px-3 py-3 sm:px-6 sm:py-4">
+      <div className="container mx-auto w-full py-3 sm:py-4">
         <div className="flex w-full items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <BrandLogo />
             <div className="flex min-w-0 flex-col items-start">
-              <span className="text-sm sm:text-xl font-semibold text-gray-900">ESCALATION MANAGEMENT</span>
-              <span className="text-xs sm:text-sm text-gray-600 mt-1">{getPanelName()}</span>
+              <span className="truncate text-sm font-semibold text-gray-900 sm:text-xl">
+                ESCALATION MANAGEMENT
+              </span>
+              <span className="mt-0.5 truncate text-xs text-gray-600 sm:mt-1 sm:text-sm">
+                {getPanelName()}
+              </span>
             </div>
           </div>
           
           {/* Desktop Navigation */}
-          <div className="hidden sm:flex items-center gap-2 ml-4">
+          <div className="ml-4 hidden min-w-0 items-center gap-2 sm:flex">
             {/* Only show role switcher for Super Admin */}
             {user && showRoleSwitcher && isSuperAdmin && (
               <Select onValueChange={handleRoleSwitch}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-36 shrink-0 lg:w-40">
                   <SelectValue placeholder={getRoleDisplayName()} />
                 </SelectTrigger>
                 <SelectContent>
@@ -91,12 +95,16 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
                 {isResolver && onTicketClick && (
                   <NotificationBell onTicketClick={onTicketClick} />
                 )}
-                <div className="flex items-center gap-2">
-                  <RoleIcon className="h-5 w-5" />
-                  <span className="text-sm font-medium">{user.name}</span>
-                  <span className="px-2 py-0.5 rounded bg-gray-100 text-xs font-semibold text-gray-700 ml-1">{getRoleDisplayName()}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <RoleIcon className="h-5 w-5 shrink-0" />
+                  <span className="max-w-[8rem] truncate text-sm font-medium lg:max-w-[12rem]" title={user.name}>
+                    {user.name}
+                  </span>
+                  <span className="ml-1 shrink-0 rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                    {getRoleDisplayName()}
+                  </span>
                 </div>
-                <button onClick={onLogout} className="ml-2">
+                <button onClick={onLogout} className="ml-1 shrink-0" aria-label="Logout">
                   <LogOut className="h-5 w-5" />
                 </button>
               </>
@@ -150,10 +158,14 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, showRoleSwitcher = fal
             
             {user ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <RoleIcon className="h-4 w-4" />
-                  <span className="text-sm font-medium">{user.name}</span>
-                  <span className="px-2 py-0.5 rounded bg-gray-100 text-xs font-semibold text-gray-700 ml-1">{getRoleDisplayName()}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <RoleIcon className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 truncate text-sm font-medium" title={user.name}>
+                    {user.name}
+                  </span>
+                  <span className="ml-1 shrink-0 rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                    {getRoleDisplayName()}
+                  </span>
                 </div>
                 <Button variant="outline" size="sm" onClick={onLogout} className="w-full">
                   <LogOut className="h-4 w-4 mr-2" />

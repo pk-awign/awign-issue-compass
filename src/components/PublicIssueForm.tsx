@@ -26,6 +26,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '@/components/ui/command';
 import { supabase } from '@/integrations/supabase/client';
 import { AdminService } from '@/services/adminService';
+import { pageShellClass } from '@/components/layout/mobileLayout';
 
 interface PublicIssueFormProps {
   onSubmit: (issue: Omit<Issue, 'id' | 'ticketNumber' | 'severity' | 'status' | 'submittedAt' | 'comments'>) => Promise<string>;
@@ -386,11 +387,11 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden bg-gray-50">
       {/* Header */}
       {!hideHeader && (
         <header className="border-b bg-white shadow-sm">
-          <div className="container mx-auto flex items-center justify-between gap-3 px-3 py-2 sm:px-6 sm:py-4">
+          <div className={cn(pageShellClass, 'flex items-center justify-between gap-3 py-2 sm:py-4')}>
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <BrandLogo />
               <div className="flex min-w-0 flex-col items-start">
@@ -412,16 +413,16 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
           </div>
           {/* 5. After login, show 'Logged in as ...' below header */}
           {user && (
-            <div className="container mx-auto px-3 pb-2 text-right text-xs text-gray-700 sm:px-6">
-              Logged in as <span className="font-semibold">{user.name}</span>
+            <div className={cn(pageShellClass, 'pb-2 text-right text-xs text-gray-700')}>
+              Logged in as <span className="truncate font-semibold" title={user.name}>{user.name}</span>
             </div>
           )}
         </header>
       )}
 
       {/* Main Content */}
-      <main className="container mx-auto flex-1 px-3 py-4 sm:px-6 sm:py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full max-w-4xl mx-auto">
+      <main className={cn(pageShellClass, 'flex-1')}>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mx-auto w-full min-w-0 max-w-4xl">
           <TabsList className="grid w-full grid-cols-2 mb-8">
             <TabsTrigger value="report">Report Issue</TabsTrigger>
             <TabsTrigger value="track">Track Tickets</TabsTrigger>
@@ -777,7 +778,7 @@ export const PublicIssueForm: React.FC<PublicIssueFormProps> = ({
 
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent className="max-w-xs sm:max-w-md w-full overflow-y-auto">
+        <DialogContent className="max-h-[90dvh] w-[min(96vw,28rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-600">
               <CheckCircle className="h-6 w-6 text-green-600" />

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { useIssues } from '@/contexts/IssueContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { pageShellClass } from '@/components/layout/mobileLayout';
+import { cn } from '@/lib/utils';
 
 const TrackTicketContent = () => {
   const [searchParams] = useSearchParams();
@@ -24,8 +26,8 @@ const TrackTicketContent = () => {
   };
 
   return (
-    <div className="bg-gray-50">
-      <div className="container mx-auto px-3 pt-3 sm:px-6 sm:pt-4">
+    <div className="min-w-0 overflow-x-hidden bg-gray-50">
+      <div className={cn(pageShellClass, 'pt-3 sm:pt-4')}>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"

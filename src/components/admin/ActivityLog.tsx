@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Clock, CheckCircle, XCircle, AlertCircle, Activity, Eye, User, FileText, ArrowRight, Users } from 'lucide-react';
-import { format } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RefreshCw, Clock, CheckCircle, Activity, Eye, User, FileText, ArrowRight, Users, Search, X } from 'lucide-react';
+import { format, startOfDay, subDays } from 'date-fns';
 import { AutoResolutionService } from '@/services/autoResolutionService';
 import { ActivityLogService, ActivityLogEntry, BulkActivityGroup } from '@/services/activityLogService';
+import { getHistoryEventHighlightClass } from '@/utils/timelineUtils';
+import { cn } from '@/lib/utils';
+import { modalViewportClass } from '@/components/layout/mobileLayout';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -15,6 +20,15 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+
+type ActivityDateFilter = 'all' | 'today' | '7d';
+
+function formatActionTypeLabel(actionType: string): string {
+  return actionType
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
 
 interface AutoResolveActivity {
   id: string;
@@ -36,12 +50,66 @@ export const ActivityLog: React.FC = () => {
   const [selectedBulkAction, setSelectedBulkAction] = useState<BulkActivityGroup | null>(null);
   const [bulkDetails, setBulkDetails] = useState<ActivityLogEntry[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [actionTypeFilter, setActionTypeFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<ActivityDateFilter>('all');
 
   // Load activities on mount
   useEffect(() => {
     loadAllActivities();
     loadAutoResolveActivities();
   }, []);
+
+  const actionTypeOptions = useMemo(() => {
+    const types = new Set<string>();
+    allActivities.forEach((activity) => types.add(activity.actionType));
+    return Array.from(types).sort();
+  }, [allActivities]);
+
+  const filteredActivities = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    const todayStart = startOfDay(new Date());
+    const sevenDaysAgo = startOfDay(subDays(new Date(), 6));
+
+    return allActivities.filter((activity) => {
+      if (actionTypeFilter !== 'all' && activity.actionType !== actionTypeFilter) {
+        return false;
+      }
+
+      const performedAt = activity.performedAt;
+      if (dateFilter === 'today' && performedAt < todayStart) return false;
+      if (dateFilter === '7d' && performedAt < sevenDaysAgo) return false;
+
+      if (!term) return true;
+
+      const description = ActivityLogService.getActivityDescription(activity).toLowerCase();
+      const ticketNumbers =
+        'ticketNumbers' in activity && activity.ticketNumbers
+          ? activity.ticketNumbers.join(' ').toLowerCase()
+          : 'ticketNumber' in activity && activity.ticketNumber
+            ? activity.ticketNumber.toLowerCase()
+            : '';
+      const actor = (activity.performedBy || '').toLowerCase();
+
+      return (
+        description.includes(term) ||
+        ticketNumbers.includes(term) ||
+        actor.includes(term) ||
+        activity.actionType.toLowerCase().includes(term)
+      );
+    });
+  }, [allActivities, searchTerm, actionTypeFilter, dateFilter]);
+
+  const hasActiveFilters =
+    Boolean(searchTerm.trim()) ||
+    actionTypeFilter !== 'all' ||
+    dateFilter !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setActionTypeFilter('all');
+    setDateFilter('all');
+  };
 
   const loadAllActivities = async () => {
     setIsLoading(true);
@@ -291,13 +359,13 @@ export const ActivityLog: React.FC = () => {
       {/* Main Activity Log */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Activity className="h-5 w-5 shrink-0" />
                 Activity Log
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="mt-1">
                 All ticket activities and system actions
               </CardDescription>
             </div>
@@ -306,13 +374,59 @@ export const ActivityLog: React.FC = () => {
               variant="outline"
               size="sm"
               disabled={isLoading}
+              className="w-full shrink-0 sm:w-auto"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search ticket, actor, or action"
+                className="pl-9"
+                aria-label="Search activity log"
+              />
+            </div>
+            <Select value={actionTypeFilter} onValueChange={setActionTypeFilter}>
+              <SelectTrigger className="w-full sm:w-48" aria-label="Filter by action type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All actions</SelectItem>
+                {actionTypeOptions.map((actionType) => (
+                  <SelectItem key={actionType} value={actionType}>
+                    {formatActionTypeLabel(actionType)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={dateFilter}
+              onValueChange={(value) => setDateFilter(value as ActivityDateFilter)}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter by date">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dates</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X className="mr-1 h-3 w-3" />
+                Clear
+              </Button>
+            )}
+          </div>
+
           {isLoading ? (
             <div className="text-center py-8">
               <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
@@ -323,23 +437,35 @@ export const ActivityLog: React.FC = () => {
               <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No activities found</p>
             </div>
+          ) : filteredActivities.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No activities match these filters</p>
+            </div>
           ) : (
             <div className="space-y-3">
-              {allActivities.map((activity) => {
+              {filteredActivities.map((activity) => {
                 const isBulk = 'count' in activity;
                 const description = ActivityLogService.getActivityDescription(activity);
+
+                const isCreated = activity.actionType === 'created';
+                const highlight = isCreated
+                  ? 'border rounded-lg bg-background'
+                  : getHistoryEventHighlightClass(activity.actionType);
 
                 return (
                   <div
                     key={activity.id}
-                    className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                    className={cn(highlight, 'min-w-0 p-3 sm:p-4 hover:opacity-95 transition-colors')}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1">
-                        {getActionIcon(activity.actionType)}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="font-medium text-sm">{description}</span>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="flex min-w-0 items-start gap-3 flex-1">
+                        <span className="shrink-0">{getActionIcon(activity.actionType)}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
+                            <span className="line-clamp-2 text-sm font-medium" title={description}>
+                              {description}
+                            </span>
                             {isBulk && (
                               <Badge variant="outline" className="flex items-center gap-1">
                                 <Users className="h-3 w-3" />
@@ -364,6 +490,7 @@ export const ActivityLog: React.FC = () => {
                           onClick={() => handleViewBulkDetails(activity)}
                           variant="outline"
                           size="sm"
+                          className="w-full shrink-0 sm:w-auto"
                         >
                           <Eye className="h-3 w-3 mr-2" />
                           View Details
@@ -380,7 +507,7 @@ export const ActivityLog: React.FC = () => {
 
       {/* Bulk Action Details Dialog */}
       <Dialog open={selectedBulkAction !== null} onOpenChange={(open) => !open && setSelectedBulkAction(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className={cn(modalViewportClass, 'max-w-lg gap-4 p-4 sm:max-w-4xl sm:p-6')}>
           <DialogHeader>
             <DialogTitle>
               Bulk Action Details
