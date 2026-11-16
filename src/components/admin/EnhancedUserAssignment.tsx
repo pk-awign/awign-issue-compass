@@ -7,6 +7,8 @@ import { Users, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 import { AdminService } from '@/services/adminService';
 import { toast } from 'sonner';
 import { User } from '@/types/issue';
+import { summarizeAssignmentResult } from '@/utils/assignmentResult';
+import { getErrorMessage } from '@/utils/errorMessage';
 
 interface EnhancedUserAssignmentProps {
   ticketIds: string[];
@@ -78,40 +80,32 @@ export const EnhancedUserAssignment: React.FC<EnhancedUserAssignmentProps> = ({
     
     setLoading(true);
     try {
-      let resolverSuccess = true;
-      let approverSuccess = true;
-      
-      // If resolver is selected, assign resolver
+      const resolver = { attempted: Boolean(selectedResolver), success: true };
+      const approver = { attempted: Boolean(selectedApprover), success: true };
+
       if (selectedResolver) {
-        // console.log(`🔄 Assigning ${ticketIds.length} tickets to resolver ${selectedResolver}`);
-        resolverSuccess = await AdminService.bulkAssignTickets(ticketIds, selectedResolver);
-        // console.log(`Resolver assignment result: ${resolverSuccess ? 'SUCCESS' : 'FAILED'}`);
+        resolver.success = await AdminService.bulkAssignTickets(ticketIds, selectedResolver);
       }
-      
-      // If approver is selected, assign approver
+
       if (selectedApprover) {
-        // console.log(`🔄 Assigning ${ticketIds.length} tickets to approver ${selectedApprover}`);
-        const promises = ticketIds.map(ticketId => AdminService.assignToApprover(ticketId, selectedApprover));
-        const results = await Promise.all(promises);
-        approverSuccess = results.every(r => r);
-        // console.log(`Approver assignment results: ${results.filter(r => r).length}/${results.length} successful`);
+        const results = await Promise.all(
+          ticketIds.map(ticketId => AdminService.assignToApprover(ticketId, selectedApprover))
+        );
+        approver.success = results.every(Boolean);
       }
-      
-      if (resolverSuccess && approverSuccess) {
-        toast.success('Assignments updated successfully');
+
+      const outcome = summarizeAssignmentResult(resolver, approver);
+      if (outcome.kind === 'success') {
+        toast.success(outcome.message);
         setSelectedResolver('');
         setSelectedApprover('');
         onAssignmentComplete();
-      } else if (resolverSuccess) {
-        toast.error('Only resolver assignments succeeded');
-      } else if (approverSuccess) {
-        toast.error('Only approver assignments succeeded');
       } else {
-        toast.error('Failed to assign tickets');
+        toast.error(outcome.message);
       }
     } catch (error) {
       console.error('❌ Error saving assignments:', error);
-      toast.error('Failed to assign tickets');
+      toast.error(`Failed to assign tickets: ${getErrorMessage(error)}`);
     } finally {
       setLoading(false);
     }

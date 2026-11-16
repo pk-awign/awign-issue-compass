@@ -58,6 +58,7 @@ import {
   tabsListClass,
 } from '@/components/layout/mobileLayout';
 import { cn } from '@/lib/utils';
+import { getErrorMessage } from '@/utils/errorMessage';
 
 const PAGE_LIMIT = 50;
 const SEARCH_DEBOUNCE_MS = 400;
@@ -134,6 +135,7 @@ export const ResolutionApproverPage: React.FC = () => {
   const [lastCommentAuthor, setLastCommentAuthor] = useState<string>('');
   const [recentlySentForApproval, setRecentlySentForApproval] = useState(false);
   const [recentlySentRange, setRecentlySentRange] = useState<DateRange | undefined>();
+  const [showArchived, setShowArchived] = useState(false);
   const [approvedDates, setApprovedDates] = useState<Map<string, Date>>(new Map());
 
   const userId = user?.id;
@@ -234,6 +236,7 @@ export const ResolutionApproverPage: React.FC = () => {
         cityFilter,
         resourceIdFilter,
         dateRange,
+        showArchived,
         constrainToTicketIds,
       };
 
@@ -286,7 +289,7 @@ export const ResolutionApproverPage: React.FC = () => {
       } else {
         // Keep the previously loaded list/counts so a transient failure does not blank the panel.
         console.error('Failed to load approver tickets:', error);
-        const message = `Failed to load tickets: ${error instanceof Error && error.message ? error.message : 'unknown error'}. Showing the last loaded list.`;
+        const message = `Failed to load tickets: ${getErrorMessage(error)}. Showing the last loaded list.`;
         setListError(message);
         toast.error(message);
       }
@@ -296,13 +299,14 @@ export const ResolutionApproverPage: React.FC = () => {
     userId, queryRole, activeTab, page, statusFilter, severityFilter, categoryFilter, cityFilter,
     resourceIdFilter, dateRange, debouncedSearch, lastStatusFilter, lastCommentMode,
     lastCommentAuthor, lastCommentByInvigilator, recentlySentForApproval, recentlySentRange, sentFromMs, sentToMs,
+    showArchived,
   ]);
 
   // Any filter / tab change goes back to page 1 without firing a wasted fetch for the old page.
   const resetKey = JSON.stringify([
     userId, queryRole, activeTab, debouncedSearch, statusFilter, severityFilter, categoryFilter, cityFilter,
     resourceIdKey, dateFromMs, dateToMs, lastStatusFilter, lastCommentMode, lastCommentAuthor,
-    lastCommentByInvigilator, recentlySentForApproval, sentFromMs, sentToMs,
+    lastCommentByInvigilator, recentlySentForApproval, sentFromMs, sentToMs, showArchived,
   ]);
   const lastResetKeyRef = useRef(resetKey);
 
@@ -523,7 +527,10 @@ export const ResolutionApproverPage: React.FC = () => {
     return (
       <Card
         key={ticket.id}
-        className="min-w-0 border-l-4 border-l-orange-400 transition-shadow hover:shadow-md"
+        className={cn(
+          'min-w-0 border-l-4 border-l-orange-400 transition-shadow hover:shadow-md',
+          ticket.archiveStatus === 'Yes' && 'border-red-200 bg-red-50'
+        )}
       >
         <CardContent className="p-3 sm:p-4">
           <div className="space-y-2 sm:space-y-3">
@@ -539,6 +546,11 @@ export const ResolutionApproverPage: React.FC = () => {
                   <Badge className={getStatusColor(ticket.status)}>
                     {getStatusLabel(ticket.status)}
                   </Badge>
+                  {ticket.archiveStatus === 'Yes' && (
+                    <Badge variant="outline" className="border-red-500 bg-red-50 text-red-700">
+                      Archived
+                    </Badge>
+                  )}
                 </div>
               </div>
               <Button
@@ -662,7 +674,13 @@ export const ResolutionApproverPage: React.FC = () => {
   };
 
   const renderTicketCard = (ticket: Issue) => (
-    <Card key={ticket.id} className="min-w-0 transition-shadow hover:shadow-md">
+    <Card
+      key={ticket.id}
+      className={cn(
+        'min-w-0 transition-shadow hover:shadow-md',
+        ticket.archiveStatus === 'Yes' && 'border-red-200 bg-red-50'
+      )}
+    >
       <CardContent className="p-3 sm:p-4">
         <div className="space-y-2 sm:space-y-3">
           {/* Header */}
@@ -679,6 +697,11 @@ export const ResolutionApproverPage: React.FC = () => {
                   <Badge className={getStatusColor(ticket.status)}>
                     {getStatusLabel(ticket.status)}
                   </Badge>
+                  {ticket.archiveStatus === 'Yes' && (
+                    <Badge variant="outline" className="border-red-500 bg-red-50 text-red-700">
+                      Archived
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -911,6 +934,8 @@ export const ResolutionApproverPage: React.FC = () => {
             uniqueCategories={uniqueCategories}
             onExportTickets={handleExportTickets}
             isExporting={isExporting}
+            showArchived={showArchived}
+            setShowArchived={setShowArchived}
           />
 
           {/* Tickets Tabs */}

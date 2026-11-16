@@ -55,6 +55,9 @@ interface TicketFiltersProps {
   uniqueCategories?: string[];
   onExportTickets?: () => void;
   isExporting?: boolean;
+  /** When provided, shows the archived-tickets toggle (resolver/approver). */
+  showArchived?: boolean;
+  setShowArchived?: (enabled: boolean) => void;
 }
 
 export const TicketFilters: React.FC<TicketFiltersProps> = ({
@@ -92,6 +95,8 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   uniqueResourceIds = [],
   uniqueSeverities = [],
   uniqueCategories = [],
+  showArchived = false,
+  setShowArchived,
 }) => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [datePreset, setDatePreset] = useState<DateRangePresetId>('all');
@@ -465,6 +470,19 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
                 />
                 <label htmlFor="recently-sent-for-approval" className="text-sm font-medium">
                   Recently sent for approval
+                </label>
+              </div>
+            ) : null}
+
+            {setShowArchived ? (
+              <div className="flex h-11 items-center space-x-2 self-end">
+                <Switch
+                  id="show-archived-tickets"
+                  checked={showArchived}
+                  onCheckedChange={setShowArchived}
+                />
+                <label htmlFor="show-archived-tickets" className="text-sm font-medium">
+                  {showArchived ? 'Showing archived tickets' : 'Show archived tickets'}
                 </label>
               </div>
             ) : null}

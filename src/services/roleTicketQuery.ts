@@ -26,6 +26,11 @@ export interface RoleTicketListFilters {
   cityFilter?: string;
   resourceIdFilter?: string[];
   dateRange?: DateRange;
+  /**
+   * When false/undefined, only non-archived tickets are returned.
+   * When true, archived tickets are included (still scoped to the role).
+   */
+  showArchived?: boolean;
   /** Optional: ticket IDs pre-resolved for last-status / last-comment / recently-sent */
   constrainToTicketIds?: string[] | null;
 }

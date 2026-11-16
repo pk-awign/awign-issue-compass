@@ -1399,68 +1399,36 @@ export class AdminService {
 
   static async bulkAssignTickets(ticketIds: string[], resolverId: string): Promise<boolean> {
     try {
-      // console.log(`🔄 Starting bulk assignment for ${ticketIds.length} tickets to resolver ${resolverId}`);
-      
-      // Use individual updates instead of bulk upsert
-      const updatePromises = ticketIds.map(async ticketId => {
-        try {
-          // 1. Update ticket status to in_progress ONLY if currently open
-          const { data: current, error: fetchError } = await supabase
-            .from('tickets')
-            .select('status')
-            .eq('id', ticketId)
-            .single();
+      const SUPER_ADMIN_ID = (import.meta as any).env?.VITE_SUPER_ADMIN_ID as string | undefined;
+      const DEFAULT_SUPER_ADMIN_ID = '33f6f645-55ff-48c5-875a-53b0c8b99cfe';
+      const performerId = SUPER_ADMIN_ID || DEFAULT_SUPER_ADMIN_ID;
 
-          if (fetchError) {
-            console.error(`❌ Failed to fetch current status for ticket ${ticketId}:`, fetchError);
-            return { success: false, error: fetchError };
-          }
-
-          if (current?.status === 'open') {
-          const { error: updateError } = await supabase
-            .from('tickets')
-              .update({ status: 'in_progress' })
-            .eq('id', ticketId);
-          if (updateError) {
-            console.error(`❌ Failed to update ticket ${ticketId}:`, updateError);
-            return { success: false, error: updateError };
-            }
-          } else {
-            // console.log(`ℹ️ Skipping status change for ticket ${ticketId} (current status: ${current?.status})`);
-          }
-          
-          // 2. Add to ticket_assignees (new flow)
+      // Assign first. Do not fail the assignment if open→in_progress audit logging is blocked
+      // (ticket_timeline RLS); addAssignee already attempts that status move as best-effort.
+      const results = await Promise.all(
+        ticketIds.map(async ticketId => {
           try {
-            const SUPER_ADMIN_ID = (import.meta as any).env?.VITE_SUPER_ADMIN_ID as string | undefined;
-            const DEFAULT_SUPER_ADMIN_ID = '33f6f645-55ff-48c5-875a-53b0c8b99cfe';
-            await TicketService.addAssignee(ticketId, resolverId, 'resolver', SUPER_ADMIN_ID || DEFAULT_SUPER_ADMIN_ID, 'System', 'super_admin');
-            // console.log(`✅ Successfully assigned ticket ${ticketId} to resolver ${resolverId}`);
-            return { success: true, error: null };
-          } catch (assigneeError) {
-            console.error(`❌ Failed to add assignee for ticket ${ticketId}:`, assigneeError);
-            return { success: false, error: assigneeError };
+            const { error: assigneeError } = await TicketService.addAssignee(
+              ticketId,
+              resolverId,
+              'resolver',
+              performerId,
+              'System',
+              'super_admin'
+            );
+            if (assigneeError) {
+              console.error(`❌ Failed to add assignee for ticket ${ticketId}:`, assigneeError);
+              return false;
+            }
+            return true;
+          } catch (ticketError) {
+            console.error(`❌ Error processing ticket ${ticketId}:`, ticketError);
+            return false;
           }
-        } catch (ticketError) {
-          console.error(`❌ Error processing ticket ${ticketId}:`, ticketError);
-          return { success: false, error: ticketError };
-        }
-      });
+        })
+      );
 
-      const results = await Promise.all(updatePromises);
-      
-      // Check results
-      const successfulAssignments = results.filter(r => r.success).length;
-      const failedAssignments = results.filter(r => !r.success).length;
-      
-      // console.log(`📊 Bulk assignment results: ${successfulAssignments} successful, ${failedAssignments} failed`);
-      
-      if (failedAssignments > 0) {
-        // console.error('❌ Some bulk assignments failed');
-        return false;
-      }
-
-      // console.log('✅ Bulk assigned tickets successfully');
-      return true;
+      return results.every(Boolean);
     } catch (error) {
       console.error('❌ Error in bulkAssignTickets:', error);
       return false;

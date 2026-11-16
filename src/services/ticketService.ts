@@ -1535,16 +1535,39 @@ export class TicketService {
   }
 
   /**
-   * Apply scope + list filters (everything except the status tab) to a tickets query.
+   * Apply list filters (everything except the status tab) to a tickets query.
    * Date filtering uses `submitted_at` (not `created_at` as Admin does) for resolver/approver pages;
    * the range is widened to the start of the `from` day and end of the `to` day (inclusive).
+   *
+   * Prefer assignee join scoping over a giant `.in('id', …)` list — thousands of UUIDs blow
+   * PostgREST URL limits and surface as opaque load failures on resolver/approver panels.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private static applyRoleTicketFilters(query: any, scopeIds: string[] | null, filters: RoleTicketListFilters): any {
+  private static applyRoleTicketFilters(
+    query: any,
+    filters: RoleTicketListFilters,
+    options?: {
+      /** Explicit id allow-list (advanced filters, capped). `null`/`undefined` = no id filter. */
+      scopeIds?: string[] | null;
+      /** Join-based assignee scope for resolver/approver (avoids materializing all ticket ids). */
+      assignee?: { userId: string; role: 'resolver' | 'approver' } | null;
+    }
+  ): any {
     let q = query.eq('deleted', false);
 
-    if (scopeIds !== null) {
-      q = q.in('id', scopeIds);
+    if (options?.scopeIds && options.scopeIds.length > 0) {
+      q = q.in('id', options.scopeIds);
+    }
+
+    if (options?.assignee) {
+      q = q
+        .eq('ticket_assignees.user_id', options.assignee.userId)
+        .eq('ticket_assignees.role', options.assignee.role);
+    }
+
+    // Default: hide archived (same as Admin tickets). Opt in via showArchived.
+    if (!filters.showArchived) {
+      q = q.eq('archive_status', 'No');
     }
 
     if (filters.searchQuery) {
@@ -1579,14 +1602,34 @@ export class TicketService {
     return q;
   }
 
-  private static async countRoleTickets(
-    scopeIds: string[] | null,
-    filters: RoleTicketListFilters,
-    status: Issue['status'] | 'all'
-  ): Promise<number> {
+  /** Use join scope for resolver/approver unless advanced filters already produced an id list. */
+  private static roleTicketAssignee(
+    role: RoleTicketRole,
+    userId: string,
+    scopeIds: string[] | null
+  ): { userId: string; role: 'resolver' | 'approver' } | null {
+    if (scopeIds !== null) return null;
+    if (role === 'resolver' || role === 'approver') {
+      return { userId, role };
+    }
+    return null;
+  }
+
+  private static async countRoleTickets(params: {
+    role: RoleTicketRole;
+    userId: string;
+    filters: RoleTicketListFilters;
+    status: Issue['status'] | 'all';
+    scopeIds: string[] | null;
+  }): Promise<number> {
+    const { role, userId, filters, status, scopeIds } = params;
+    const assignee = TicketService.roleTicketAssignee(role, userId, scopeIds);
+    const select = assignee
+      ? 'id, ticket_assignees!inner(user_id, role)'
+      : 'id';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query: any = supabase.from('tickets').select('id', { count: 'exact', head: true });
-    query = TicketService.applyRoleTicketFilters(query, scopeIds, filters);
+    let query: any = supabase.from('tickets').select(select, { count: 'exact', head: true });
+    query = TicketService.applyRoleTicketFilters(query, filters, { scopeIds, assignee });
     if (status !== 'all') {
       query = query.eq('status', status);
     }
@@ -1612,7 +1655,12 @@ export class TicketService {
   }): Promise<{ tickets: Issue[]; total: number }> {
     const { role, userId, statusTab, exactStatus, filters, page = 1, limit = 50 } = params;
     try {
-      const scopeIds = await TicketService.resolveRoleTicketScope(role, userId, filters.constrainToTicketIds);
+      // Only materialize assignee ids when advanced filters already produced a (capped) id list.
+      // Default resolver/approver loads use an inner join instead — avoids URL-limit failures.
+      const scopeIds =
+        filters.constrainToTicketIds != null
+          ? await TicketService.resolveRoleTicketScope(role, userId, filters.constrainToTicketIds)
+          : null;
       if (scopeIds !== null && scopeIds.length === 0) {
         return { tickets: [], total: 0 };
       }
@@ -1622,15 +1670,19 @@ export class TicketService {
         ? approverTabToStatus(statusTab as ApproverStatusTab)
         : resolverTabToStatus(statusTab as ResolverStatusTab));
 
-      const total = await TicketService.countRoleTickets(scopeIds, filters, status);
+      const total = await TicketService.countRoleTickets({ role, userId, filters, status, scopeIds });
       if (total === 0) {
         return { tickets: [], total: 0 };
       }
 
       const { from, to } = pageRange(page, limit);
+      const assignee = TicketService.roleTicketAssignee(role, userId, scopeIds);
+      const select = assignee
+        ? 'ticket_number, ticket_assignees!inner(user_id, role)'
+        : 'ticket_number';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let listQuery: any = supabase.from('tickets').select('ticket_number');
-      listQuery = TicketService.applyRoleTicketFilters(listQuery, scopeIds, filters);
+      let listQuery: any = supabase.from('tickets').select(select);
+      listQuery = TicketService.applyRoleTicketFilters(listQuery, filters, { scopeIds, assignee });
       if (status !== 'all') {
         listQuery = listQuery.eq('status', status);
       }
@@ -1665,7 +1717,10 @@ export class TicketService {
     const { role, userId, panel, filters } = params;
     const empty = panel === 'approver' ? emptyApproverCounts() : emptyResolverCounts();
     try {
-      const scopeIds = await TicketService.resolveRoleTicketScope(role, userId, filters.constrainToTicketIds);
+      const scopeIds =
+        filters.constrainToTicketIds != null
+          ? await TicketService.resolveRoleTicketScope(role, userId, filters.constrainToTicketIds)
+          : null;
       if (scopeIds !== null && scopeIds.length === 0) {
         return empty;
       }
@@ -1676,7 +1731,7 @@ export class TicketService {
           const status = panel === 'approver'
             ? approverTabToStatus(tab as ApproverStatusTab)
             : resolverTabToStatus(tab as ResolverStatusTab);
-          return TicketService.countRoleTickets(scopeIds, filters, status);
+          return TicketService.countRoleTickets({ role, userId, filters, status, scopeIds });
         })
       );
 

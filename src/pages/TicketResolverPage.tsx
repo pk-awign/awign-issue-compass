@@ -44,6 +44,7 @@ import {
   tabsListClass,
 } from '@/components/layout/mobileLayout';
 import { cn } from '@/lib/utils';
+import { getErrorMessage } from '@/utils/errorMessage';
 
 const PAGE_LIMIT = 50;
 const SEARCH_DEBOUNCE_MS = 400;
@@ -112,6 +113,7 @@ export const TicketResolverPage: React.FC = () => {
   const [lastCommentByInvigilator, setLastCommentByInvigilator] = useState(false);
   const [lastCommentMode, setLastCommentMode] = useState<'any' | 'by' | 'not_by'>('any');
   const [lastCommentAuthor, setLastCommentAuthor] = useState<string>('');
+  const [showArchived, setShowArchived] = useState(false);
 
   const userId = user?.id;
   const userRole = user?.role;
@@ -163,6 +165,7 @@ export const TicketResolverPage: React.FC = () => {
         cityFilter,
         resourceIdFilter,
         dateRange,
+        showArchived,
         constrainToTicketIds,
       };
 
@@ -211,7 +214,7 @@ export const TicketResolverPage: React.FC = () => {
       } else {
         // Keep the previously loaded list/counts so a transient failure does not blank the panel.
         console.error('Failed to load resolver tickets:', error);
-        const message = `Failed to load tickets: ${error instanceof Error && error.message ? error.message : 'unknown error'}. Showing the last loaded list.`;
+        const message = `Failed to load tickets: ${getErrorMessage(error)}. Showing the last loaded list.`;
         setListError(message);
         toast.error(message);
       }
@@ -220,13 +223,14 @@ export const TicketResolverPage: React.FC = () => {
   }, [
     userId, queryRole, activeTab, page, statusFilter, severityFilter, categoryFilter, cityFilter,
     resourceIdFilter, dateRange, debouncedSearch, lastStatusFilter, lastCommentMode,
-    lastCommentAuthor, lastCommentByInvigilator,
+    lastCommentAuthor, lastCommentByInvigilator, showArchived,
   ]);
 
   // Any filter / tab change goes back to page 1 without firing a wasted fetch for the old page.
   const resetKey = JSON.stringify([
     userId, queryRole, activeTab, debouncedSearch, statusFilter, severityFilter, categoryFilter, cityFilter,
     resourceIdKey, dateFromMs, dateToMs, lastStatusFilter, lastCommentMode, lastCommentAuthor, lastCommentByInvigilator,
+    showArchived,
   ]);
   const lastResetKeyRef = useRef(resetKey);
 
@@ -371,7 +375,8 @@ export const TicketResolverPage: React.FC = () => {
       key={ticket.id}
       className={cn(
         'min-w-0 p-3 transition-shadow hover:shadow-md sm:p-4',
-        ticket.comments[0]?.isFromInvigilator ? 'border border-green-400' : ''
+        ticket.comments[0]?.isFromInvigilator ? 'border border-green-400' : '',
+        ticket.archiveStatus === 'Yes' && 'border-red-200 bg-red-50'
       )}
     >
       <CardContent className="p-0">
@@ -393,6 +398,11 @@ export const TicketResolverPage: React.FC = () => {
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <Badge className={getSeverityColor(ticket.severity)}>{ticket.severity.toUpperCase()}</Badge>
             <Badge className={getStatusColor(ticket.status)}>{getStatusLabel(ticket.status)}</Badge>
+            {ticket.archiveStatus === 'Yes' && (
+              <Badge variant="outline" className="border-red-500 bg-red-50 text-red-700">
+                Archived
+              </Badge>
+            )}
           </div>
           <h3 className={cn(cardTitleMobileClass, 'text-sm')}>{formatCategory(ticket.issueCategory)}</h3>
           <p className="line-clamp-2 text-xs text-muted-foreground">{ticket.issueDescription}</p>
@@ -628,6 +638,8 @@ export const TicketResolverPage: React.FC = () => {
             uniqueCategories={uniqueCategories}
             onExportTickets={handleExportTickets}
             isExporting={isExporting}
+            showArchived={showArchived}
+            setShowArchived={setShowArchived}
           />
 
           {/* Tickets Tabs */}
